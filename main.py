@@ -13,10 +13,12 @@ import subprocess
 import sys
 import os
 import time
+from datetime import datetime
 
 from src import OnShelfAISystem, SystemConfig
 from src.websocket import websocket_manager
 from src.agent.models import AgentResult
+from supabase import create_client
 
 
 # Create FastAPI app
@@ -29,16 +31,21 @@ async def lifespan(app: FastAPI):
     # Start WebSocket heartbeat
     asyncio.create_task(websocket_manager.send_heartbeat())
     
+    # Start automatic queue processing
+    print("🔄 Starting automatic queue processing...")
+    asyncio.create_task(system.start_queue_processing(polling_interval=30))
+    
     yield
     
     # Shutdown
     print("👋 Shutting down OnShelf AI Agent System...")
+    system.stop_queue_processing()
 
 
 app = FastAPI(
     title="OnShelf AI Agent API",
-    description="Revolutionary self-debugging AI extraction system for retail shelf analysis",
-    version="1.0.0",
+    description="Revolutionary self-debugging AI extraction system for retail shelf analysis with automatic queue processing",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -218,7 +225,6 @@ async def test_demo():
         
         # Create a mock result for demonstration
         import uuid
-        from datetime import datetime
         
         demo_result = {
             "success": True,
@@ -246,6 +252,48 @@ async def test_demo():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Demo failed: {str(e)}")
+
+
+@app.post("/api/v1/test/queue/add")
+async def add_test_queue_item(ready_media_id: str = "06701796-e1f5-4951-abe8-f229a166997b"):
+    """TEST ENDPOINT: Add a test item to the extraction queue"""
+    try:
+        # Use system config to get Supabase credentials
+        config = SystemConfig()
+        supabase = create_client(config.supabase_url, config.supabase_service_key)
+        
+        # Create test queue item
+        test_item = {
+            "ready_media_id": ready_media_id,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+            "priority": "medium"
+        }
+        
+        result = supabase.table("ai_extraction_queue").insert(test_item).execute()
+        
+        return {
+            "success": True,
+            "message": f"Test queue item added with ready_media_id: {ready_media_id}",
+            "queue_item": result.data[0] if result.data else None
+        }
+        
+    except Exception as e:
+        print(f"❌ Failed to add test queue item: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add test queue item: {str(e)}")
+
+
+@app.get("/api/v1/queue/status")
+async def get_queue_status():
+    """Get current queue status"""
+    try:
+        return {
+            "queue_processor_running": system.queue_processor.is_running,
+            "items_processed": system.queue_processor.processing_count,
+            "system_stats": system.get_system_stats()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =====================================================

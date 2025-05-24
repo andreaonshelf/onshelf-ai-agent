@@ -4,7 +4,7 @@ Convert JSON extraction data to visual planogram
 """
 
 import json
-from typing import List, Union, Dict, Optional
+from typing import Any, List, Union, Dict, Optional
 from datetime import datetime
 
 from ..extraction.models import CompleteShelfExtraction, ProductExtraction
@@ -218,7 +218,7 @@ class PlanogramGenerator:
             severity=severity
         )
     
-    def validate_planogram(self, planogram: VisualPlanogram, extraction: CompleteShelfExtraction) -> Dict[str, any]:
+    def validate_planogram(self, planogram: VisualPlanogram, extraction: CompleteShelfExtraction) -> Dict[str, Any]:
         """Validate planogram against extraction data"""
         validation_results = {
             'is_valid': True,

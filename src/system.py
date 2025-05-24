@@ -10,6 +10,7 @@ from .config import SystemConfig
 from .agent.agent import OnShelfAIAgent
 from .agent.models import AgentResult
 from .websocket.manager import websocket_manager
+from .queue.processor import AIExtractionQueueProcessor
 
 
 class OnShelfAISystem:
@@ -30,10 +31,22 @@ class OnShelfAISystem:
         # Initialize agent with WebSocket support
         self.agent = OnShelfAIAgent(self.config, websocket_manager)
         
+        # Initialize queue processor for automatic processing
+        self.queue_processor = AIExtractionQueueProcessor(self.config)
+        
         print("🚀 OnShelf AI System initialized")
         print(f"   Target accuracy: {self.config.target_accuracy:.0%}")
         print(f"   Max iterations: {self.config.max_iterations}")
         print(f"   Models configured: {len(self.config.models)}")
+        print(f"   🔄 Queue processor ready")
+    
+    async def start_queue_processing(self, polling_interval: int = 30):
+        """Start automatic queue processing"""
+        await self.queue_processor.start_processing(polling_interval)
+    
+    def stop_queue_processing(self):
+        """Stop automatic queue processing"""
+        self.queue_processor.stop_processing()
     
     async def process_upload(self, upload_id: str) -> AgentResult:
         """Process an upload through the complete AI system (LEGACY)
@@ -148,7 +161,8 @@ class OnShelfAISystem:
             'agent': {
                 'current_state': self.agent.current_state.value if self.agent.current_state else 'idle',
                 'active_agent_id': self.agent.agent_id
-            }
+            },
+            'queue_processor': self.queue_processor.get_stats()
         }
 
 

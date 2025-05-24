@@ -5,7 +5,7 @@ Data structures for mismatch analysis and agent results
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import uuid
 
@@ -43,7 +43,7 @@ class MismatchIssue(BaseModel):
     # Additional context
     expected_value: Optional[str] = None
     actual_value: Optional[str] = None
-    visual_evidence: Optional[Dict[str, any]] = None
+    visual_evidence: Optional[Dict[str, Any]] = None
 
 
 class MismatchAnalysis(BaseModel):
@@ -124,7 +124,7 @@ class AgentResult(BaseModel):
     # Metadata
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
-    state_history: List[Dict[str, any]] = Field(default_factory=list)
+    state_history: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentIteration(BaseModel):
