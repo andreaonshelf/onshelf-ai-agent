@@ -36,7 +36,7 @@ class OnShelfAISystem:
         print(f"   Models configured: {len(self.config.models)}")
     
     async def process_upload(self, upload_id: str) -> AgentResult:
-        """Process an upload through the complete AI system
+        """Process an upload through the complete AI system (LEGACY)
         
         Args:
             upload_id: OnShelf upload ID to process
@@ -44,7 +44,7 @@ class OnShelfAISystem:
         Returns:
             AgentResult with extraction, planogram, and accuracy metrics
         """
-        print(f"\n📋 Processing upload: {upload_id}")
+        print(f"\n📋 Processing upload: {upload_id} (LEGACY MODE)")
         print("="*50)
         
         try:
@@ -63,6 +63,41 @@ class OnShelfAISystem:
             
         except Exception as e:
             print(f"\n❌ Processing failed: {e}")
+            raise
+
+    async def process_enhanced_media(self, ready_media_id: str) -> AgentResult:
+        """Process admin-approved, enhanced images (PRODUCTION)
+        
+        Args:
+            ready_media_id: ID of processed media in media_processing_pipeline table
+            
+        Returns:
+            AgentResult with extraction, planogram, and accuracy metrics
+        """
+        print(f"\n🔥 Processing enhanced media: {ready_media_id} (PRODUCTION MODE)")
+        print("="*60)
+        print("   ✅ Admin approved")
+        print("   ✅ Quality enhanced") 
+        print("   ✅ Preprocessed")
+        print("="*60)
+        
+        try:
+            # Run the AI agent with enhanced image processing
+            result = await self.agent.achieve_target_accuracy_enhanced(ready_media_id)
+            
+            # Enhanced logging for production
+            print("\n🎯 ENHANCED PROCESSING COMPLETE")
+            print(f"   Final accuracy: {result.accuracy:.2%}")
+            print(f"   Iterations: {result.iterations_completed}")
+            print(f"   Duration: {result.processing_duration:.1f}s")
+            print(f"   API cost: £{result.total_api_cost:.2f}")
+            print(f"   Human review: {'Required' if result.human_review_required else 'Not required'}")
+            print(f"   Enhanced features: Admin approved, Quality enhanced")
+            
+            return result
+            
+        except Exception as e:
+            print(f"\n❌ Enhanced processing failed: {e}")
             raise
     
     async def process_bulk(self, upload_ids: list[str], max_concurrent: int = 3) -> dict[str, AgentResult]:

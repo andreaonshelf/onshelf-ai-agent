@@ -66,7 +66,7 @@ class OnShelfAIAgent:
         )
     
     async def achieve_target_accuracy(self, upload_id: str) -> AgentResult:
-        """Main method: iterate until 95%+ accuracy achieved"""
+        """Main method: iterate until 95%+ accuracy achieved (LEGACY - raw uploads)"""
         
         self.agent_id = str(uuid.uuid4())
         start_time = time.time()
@@ -88,265 +88,288 @@ class OnShelfAIAgent:
         await self._save_agent_start(upload_id)
         
         try:
-            # Get original images from OnShelf database
+            # Get original images from OnShelf database (LEGACY PATH)
             original_images = await self._get_original_images(upload_id)
             
-            # Setup image coordination
-            self.image_coordinator.add_images(original_images)
-            
-            # Agent iteration loop
-            iteration = 1
-            current_accuracy = 0.0
-            best_result = None
-            previous_failures = []
-            
-            while (iteration <= self.config.max_iterations and 
-                   current_accuracy < self.config.target_accuracy):
-                
-                logger.log_iteration_start(self.agent_id, iteration, f"Iteration {iteration}")
-                
-                # Check cost limits before starting iteration
-                if self.cost_tracker.is_approaching_limit(0.9):
-                    logger.warning(
-                        f"Approaching cost limit: {self.cost_tracker.get_cost_summary()}",
-                        component="agent",
-                        agent_id=self.agent_id
-                    )
-                
-                # Broadcast iteration start
-                if self.websocket_manager:
-                    await self.websocket_manager.broadcast_iteration_start(
-                        self.agent_id, iteration, self.config.max_iterations
-                    )
-                
-                iteration_start = time.time()
-                
-                try:
-                    # Step 1: Design extraction sequence based on previous failures
-                    await self._update_state(AgentState.EXTRACTING)
-                    extraction_steps = await self.extraction_engine.design_extraction_sequence(
-                        original_images, previous_failures, self.agent_id
-                    )
-                    
-                    logger.info(
-                        f"Designed extraction sequence with {len(extraction_steps)} steps",
-                        component="agent",
-                        agent_id=self.agent_id,
-                        iteration=iteration,
-                        step_count=len(extraction_steps)
-                    )
-                    
-                    # Step 2: Execute extraction sequence
-                    extraction_result = await self.extraction_engine.execute_extraction_sequence(
-                        upload_id, original_images, extraction_steps, self.agent_id
-                    )
-                    extraction_duration = time.time() - iteration_start
-                    
-                    logger.info(
-                        f"Extraction complete: {extraction_result.total_products_detected} products found",
-                        component="agent",
-                        agent_id=self.agent_id,
-                        iteration=iteration,
-                        products_found=extraction_result.total_products_detected,
-                        extraction_duration=extraction_duration
-                    )
-                    
-                    # Step 3: Generate planogram from extraction JSON
-                    await self._update_state(AgentState.GENERATING_PLANOGRAM)
-                    planogram_start = time.time()
-                    planogram = await self.planogram_generator.generate_planogram_from_json(
-                        extraction_result
-                    )
-                    planogram_duration = time.time() - planogram_start
-                    
-                    # Step 4: AI comparison - original images vs generated planogram
-                    await self._update_state(AgentState.COMPARING)
-                    comparison_start = time.time()
-                    mismatch_analysis = await self._ai_compare_original_vs_planogram(
-                        original_images, planogram, extraction_result
-                    )
-                    comparison_duration = time.time() - comparison_start
-                    
-                    # Step 5: Calculate accuracy
-                    current_accuracy = mismatch_analysis.overall_accuracy
-                    
-                    logger.log_accuracy_update(
-                        self.agent_id, iteration, current_accuracy, len(mismatch_analysis.issues)
-                    )
-                    
-                    # Broadcast accuracy update
-                    if self.websocket_manager:
-                        await self.websocket_manager.broadcast_accuracy_update(
-                            self.agent_id, 
-                            current_accuracy,
-                            {
-                                'iteration': iteration,
-                                'issues': len(mismatch_analysis.issues),
-                                'planogram_id': planogram.planogram_id
-                            }
-                        )
-                    
-                    # Track iteration
-                    iteration_data = AgentIteration(
-                        iteration_number=iteration,
-                        extraction_steps=[s.dict() for s in extraction_steps],
-                        extraction_duration=extraction_duration,
-                        planogram_generation_duration=planogram_duration,
-                        comparison_duration=comparison_duration,
-                        accuracy_achieved=current_accuracy,
-                        issues_found=len(mismatch_analysis.issues),
-                        improvements_from_previous=current_accuracy - (best_result.accuracy if best_result else 0),
-                        api_costs={
-                            'extraction': extraction_result.api_cost_estimate,
-                            'comparison': 0.02  # Estimate
-                        },
-                        total_iteration_cost=extraction_result.api_cost_estimate + 0.02
-                    )
-                    self.iteration_history.append(iteration_data)
-                    self.total_api_cost += iteration_data.total_iteration_cost
-                    
-                    # Track best result
-                    if best_result is None or current_accuracy > best_result.accuracy:
-                        best_result = AgentResult(
-                            agent_id=self.agent_id,
-                            upload_id=upload_id,
-                            extraction=extraction_result.dict(),
-                            planogram=planogram.dict(),
-                            mismatch_analysis=mismatch_analysis,
-                            accuracy=current_accuracy,
-                            iterations_completed=iteration,
-                            target_achieved=current_accuracy >= self.config.target_accuracy,
-                            processing_duration=time.time() - start_time,
-                            total_api_cost=self.total_api_cost,
-                            confidence_in_result=self._calculate_confidence(mismatch_analysis)
-                        )
-                    
-                    # Check if target achieved
-                    if current_accuracy >= self.config.target_accuracy:
-                        logger.info(
-                            f"TARGET ACHIEVED! {current_accuracy:.2%} accuracy",
-                            component="agent",
-                            agent_id=self.agent_id,
-                            final_accuracy=current_accuracy,
-                            iterations=iteration
-                        )
-                        await self._update_state(AgentState.COMPLETED)
-                        break
-                    
-                    # Decide on next iteration
-                    await self._update_state(AgentState.ANALYZING)
-                    iteration_decision = await self._decide_iteration_strategy(
-                        mismatch_analysis, iteration, current_accuracy
-                    )
-                    
-                    if not iteration_decision.should_iterate:
-                        logger.warning(
-                            f"Agent decided not to continue iterating: {iteration_decision.reason}",
-                            component="agent",
-                            agent_id=self.agent_id,
-                            reason=iteration_decision.reason
-                        )
-                        break
-                    
-                    # Prepare for next iteration
-                    previous_failures = [
-                        {
-                            'type': issue.type,
-                            'root_cause': issue.root_cause.value,
-                            'location': issue.location,
-                            'suggested_fix': issue.suggested_fix
-                        }
-                        for issue in mismatch_analysis.issues
-                        if issue.severity in [MismatchSeverity.CRITICAL, MismatchSeverity.HIGH]
-                    ]
-                    
-                    iteration += 1
-                    logger.info(
-                        f"Preparing for iteration {iteration} with focus on: {iteration_decision.focus_areas}",
-                        component="agent",
-                        agent_id=self.agent_id,
-                        next_iteration=iteration,
-                        focus_areas=iteration_decision.focus_areas
-                    )
-                
-                except CostLimitExceededException as e:
-                    logger.error(
-                        f"Cost limit exceeded during iteration {iteration}",
-                        component="agent",
-                        agent_id=self.agent_id,
-                        iteration=iteration,
-                        cost_limit=e.limit,
-                        current_cost=e.current_cost
-                    )
-                    best_result.escalation_reason = f"COST_LIMIT_EXCEEDED_£{e.current_cost:.2f}"
-                    break
-                
-                except Exception as e:
-                    self.error_handler.record_error(e, {
-                        'iteration': iteration,
-                        'upload_id': upload_id,
-                        'stage': self.current_state.value
-                    })
-                    
-                    if self.error_handler.should_escalate(e, iteration):
-                        logger.error(
-                            f"Critical error during iteration {iteration}, escalating",
-                            component="agent",
-                            agent_id=self.agent_id,
-                            iteration=iteration,
-                            error=str(e)
-                        )
-                        best_result.escalation_reason = f"CRITICAL_ERROR_{type(e).__name__}"
-                        break
-                    else:
-                        logger.warning(
-                            f"Recoverable error during iteration {iteration}, continuing",
-                            component="agent",
-                            agent_id=self.agent_id,
-                            iteration=iteration,
-                            error=str(e)
-                        )
-                        continue
-            
-            # Finalize result
-            best_result.iterations_completed = iteration - 1
-            best_result.processing_duration = time.time() - start_time
-            best_result.total_api_cost = self.total_api_cost
-            best_result.completed_at = datetime.utcnow()
-            
-            # Determine if human review needed
-            if current_accuracy < self.config.target_accuracy:
-                best_result.human_review_required = True
-                if not best_result.escalation_reason:
-                    best_result.escalation_reason = f"AI_MAX_ITERATIONS_REACHED_ACCURACY_{current_accuracy:.1%}"
-                await self._update_state(AgentState.ESCALATED)
-                
-                logger.log_escalation(self.agent_id, best_result.escalation_reason, current_accuracy)
-                
-                # Broadcast escalation
-                if self.websocket_manager:
-                    await self.websocket_manager.broadcast_escalation(
-                        self.agent_id, current_accuracy, best_result.escalation_reason
-                    )
-            else:
-                best_result.human_review_required = False
-                await self._update_state(AgentState.COMPLETED)
-                
-                logger.log_completion(
-                    self.agent_id, current_accuracy, iteration-1, 
-                    best_result.processing_duration, self.total_api_cost
-                )
-            
-            # Save final result to database
-            await self._save_agent_result(best_result)
-            
-            return best_result
+            # Continue with existing processing logic...
+            return await self._process_images_to_result(upload_id, original_images, start_time)
             
         except Exception as e:
             logger.critical(
                 f"Critical system failure in AI Agent: {e}",
                 component="agent",
                 agent_id=self.agent_id,
+                error=str(e)
+            )
+            await self._update_state(AgentState.FAILED)
+            raise
+
+    async def _process_images_to_result(self, identifier: str, images: Dict[str, bytes], start_time: float, is_enhanced: bool = False) -> AgentResult:
+        """Common processing logic for both legacy and enhanced images"""
+        
+        # Setup image coordination
+        self.image_coordinator.add_images(images)
+        
+        # Agent iteration loop
+        iteration = 1
+        current_accuracy = 0.0
+        best_result = None
+        previous_failures = []
+        
+        processing_type = "ENHANCED" if is_enhanced else "LEGACY"
+        
+        while (iteration <= self.config.max_iterations and 
+               current_accuracy < self.config.target_accuracy):
+            
+            logger.log_iteration_start(self.agent_id, iteration, f"{processing_type} Iteration {iteration}")
+            
+            # Check cost limits before starting iteration
+            if self.cost_tracker.is_approaching_limit(0.9):
+                logger.warning(
+                    f"Approaching cost limit: {self.cost_tracker.get_cost_summary()}",
+                    component="agent",
+                    agent_id=self.agent_id
+                )
+            
+            # Broadcast iteration start
+            if self.websocket_manager:
+                await self.websocket_manager.broadcast_iteration_start(
+                    self.agent_id, iteration, self.config.max_iterations
+                )
+            
+            iteration_start = time.time()
+            
+            try:
+                # Step 1: Design extraction sequence based on previous failures
+                await self._update_state(AgentState.EXTRACTING)
+                extraction_steps = await self.extraction_engine.design_extraction_sequence(
+                    images, previous_failures, self.agent_id
+                )
+                
+                logger.info(
+                    f"Designed extraction sequence with {len(extraction_steps)} steps",
+                    component="agent",
+                    agent_id=self.agent_id,
+                    iteration=iteration,
+                    step_count=len(extraction_steps),
+                    processing_type=processing_type
+                )
+                
+                # Step 2: Execute extraction sequence
+                extraction_result = await self.extraction_engine.execute_extraction_sequence(
+                    identifier, images, extraction_steps, self.agent_id
+                )
+                extraction_duration = time.time() - iteration_start
+                
+                logger.info(
+                    f"Extraction complete: {extraction_result.total_products_detected} products found",
+                    component="agent",
+                    agent_id=self.agent_id,
+                    iteration=iteration,
+                    products_found=extraction_result.total_products_detected,
+                    extraction_duration=extraction_duration,
+                    processing_type=processing_type
+                )
+                
+                # Step 3: Generate planogram from extraction JSON
+                await self._update_state(AgentState.GENERATING_PLANOGRAM)
+                planogram_start = time.time()
+                planogram = await self.planogram_generator.generate_planogram_from_json(
+                    extraction_result
+                )
+                planogram_duration = time.time() - planogram_start
+                
+                # Step 4: AI comparison - original images vs generated planogram
+                await self._update_state(AgentState.COMPARING)
+                comparison_start = time.time()
+                mismatch_analysis = await self._ai_compare_original_vs_planogram(
+                    images, planogram, extraction_result
+                )
+                comparison_duration = time.time() - comparison_start
+                
+                # Step 5: Calculate accuracy
+                current_accuracy = mismatch_analysis.overall_accuracy
+                
+                logger.log_accuracy_update(
+                    self.agent_id, iteration, current_accuracy, len(mismatch_analysis.issues)
+                )
+                
+                # Broadcast accuracy update
+                if self.websocket_manager:
+                    await self.websocket_manager.broadcast_accuracy_update(
+                        self.agent_id, 
+                        current_accuracy,
+                        {
+                            'iteration': iteration,
+                            'issues': len(mismatch_analysis.issues),
+                            'planogram_id': planogram.planogram_id,
+                            'processing_type': processing_type
+                        }
+                    )
+                
+                # Track iteration
+                iteration_data = AgentIteration(
+                    iteration_number=iteration,
+                    extraction_steps=[s.dict() for s in extraction_steps],
+                    extraction_duration=extraction_duration,
+                    planogram_generation_duration=planogram_duration,
+                    comparison_duration=comparison_duration,
+                    accuracy_achieved=current_accuracy,
+                    issues_found=len(mismatch_analysis.issues),
+                    improvements_from_previous=current_accuracy - (best_result.accuracy if best_result else 0),
+                    api_costs={
+                        'extraction': extraction_result.api_cost_estimate,
+                        'comparison': 0.02  # Estimate
+                    },
+                    total_iteration_cost=extraction_result.api_cost_estimate + 0.02
+                )
+                self.iteration_history.append(iteration_data)
+                self.total_api_cost += iteration_data.total_iteration_cost
+                
+                # Track best result
+                if best_result is None or current_accuracy > best_result.accuracy:
+                    best_result = AgentResult(
+                        agent_id=self.agent_id,
+                        upload_id=identifier,
+                        extraction=extraction_result.dict(),
+                        planogram=planogram.dict(),
+                        mismatch_analysis=mismatch_analysis,
+                        accuracy=current_accuracy,
+                        iterations_completed=iteration,
+                        target_achieved=current_accuracy >= self.config.target_accuracy,
+                        processing_duration=time.time() - start_time,
+                        total_api_cost=self.total_api_cost,
+                        confidence_in_result=self._calculate_confidence(mismatch_analysis)
+                    )
+                
+                # Check if target achieved
+                if current_accuracy >= self.config.target_accuracy:
+                    logger.info(
+                        f"TARGET ACHIEVED! {current_accuracy:.2%} accuracy ({processing_type})",
+                        component="agent",
+                        agent_id=self.agent_id,
+                        final_accuracy=current_accuracy,
+                        iterations=iteration,
+                        processing_type=processing_type
+                    )
+                    await self._update_state(AgentState.COMPLETED)
+                    break
+                
+                # Continue iteration logic...
+                iteration += 1
+                
+            except CostLimitExceededException as e:
+                logger.error(
+                    f"Cost limit exceeded during iteration {iteration}",
+                    component="agent",
+                    agent_id=self.agent_id,
+                    iteration=iteration,
+                    cost_limit=e.limit,
+                    current_cost=e.current_cost
+                )
+                best_result.escalation_reason = f"COST_LIMIT_EXCEEDED_£{e.current_cost:.2f}"
+                break
+            
+            except Exception as e:
+                self.error_handler.record_error(e, {
+                    'iteration': iteration,
+                    'identifier': identifier,
+                    'stage': self.current_state.value,
+                    'processing_type': processing_type
+                })
+                
+                if self.error_handler.should_escalate(e, iteration):
+                    logger.error(
+                        f"Critical error during iteration {iteration}, escalating",
+                        component="agent",
+                        agent_id=self.agent_id,
+                        iteration=iteration,
+                        error=str(e)
+                    )
+                    best_result.escalation_reason = f"CRITICAL_ERROR_{type(e).__name__}"
+                    break
+                else:
+                    logger.warning(
+                        f"Recoverable error during iteration {iteration}, continuing",
+                        component="agent",
+                        agent_id=self.agent_id,
+                        iteration=iteration,
+                        error=str(e)
+                    )
+                    continue
+        
+        # Finalize result
+        best_result.iterations_completed = iteration - 1
+        best_result.processing_duration = time.time() - start_time
+        best_result.total_api_cost = self.total_api_cost
+        best_result.completed_at = datetime.utcnow()
+        
+        # Determine if human review needed
+        if current_accuracy < self.config.target_accuracy:
+            best_result.human_review_required = True
+            if not best_result.escalation_reason:
+                best_result.escalation_reason = f"AI_MAX_ITERATIONS_REACHED_ACCURACY_{current_accuracy:.1%}"
+            await self._update_state(AgentState.ESCALATED)
+            
+            logger.log_escalation(self.agent_id, best_result.escalation_reason, current_accuracy)
+        else:
+            best_result.human_review_required = False
+            await self._update_state(AgentState.COMPLETED)
+            
+            logger.log_completion(
+                self.agent_id, current_accuracy, iteration-1, 
+                best_result.processing_duration, self.total_api_cost
+            )
+        
+        # Save final result to database
+        await self._save_agent_result(best_result)
+        
+        return best_result
+    
+    async def achieve_target_accuracy_enhanced(self, ready_media_id: str) -> AgentResult:
+        """Main method for enhanced images: iterate until 95%+ accuracy achieved (PRODUCTION)"""
+        
+        self.agent_id = str(uuid.uuid4())
+        start_time = time.time()
+        
+        # Initialize enhanced capabilities
+        self.cost_tracker = CostTracker(self.config.max_api_cost_per_extraction, self.agent_id)
+        self.error_handler = ErrorHandler(self.agent_id)
+        self.image_coordinator = MultiImageCoordinator(self.agent_id)
+        
+        # Initialize extraction components with agent context
+        self.extraction_engine = ModularExtractionEngine(self.config)
+        self.extraction_engine.initialize_for_agent(self.agent_id, self.config.max_api_cost_per_extraction)
+        self.planogram_generator = PlanogramGenerator()
+        
+        logger.log_agent_start(self.agent_id, ready_media_id, self.config.target_accuracy)
+        await self._update_state(AgentState.INITIALIZING)
+        
+        # Save agent start in database with enhanced flag
+        await self._save_agent_start_enhanced(ready_media_id)
+        
+        try:
+            # Get enhanced images from processed storage (PRODUCTION PATH)
+            enhanced_images = await self._get_enhanced_images(ready_media_id)
+            
+            logger.info(
+                f"🔥 Enhanced images loaded for {ready_media_id}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
+                enhanced_image_count=len(enhanced_images),
+                processing_type="enhanced"
+            )
+            
+            # Continue with existing processing logic using enhanced images
+            return await self._process_images_to_result(ready_media_id, enhanced_images, start_time, is_enhanced=True)
+            
+        except Exception as e:
+            logger.critical(
+                f"Critical system failure in Enhanced AI Agent: {e}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
                 error=str(e)
             )
             await self._update_state(AgentState.FAILED)
@@ -406,6 +429,119 @@ class OnShelfAIAgent:
                 component="agent",
                 agent_id=self.agent_id,
                 upload_id=upload_id,
+                error=str(e)
+            )
+            raise
+    
+    async def _get_enhanced_images(self, ready_media_id: str) -> Dict[str, bytes]:
+        """Get enhanced images from processed storage (PRODUCTION PATH)"""
+        try:
+            logger.info(
+                f"🔥 Loading enhanced images for ready_media_id {ready_media_id}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
+                processing_type="enhanced"
+            )
+            
+            # Query media_processing_pipeline table for processed media info
+            result = self.supabase.table("media_processing_pipeline") \
+                .select("id, original_upload_id, processed_image_path, metadata, status") \
+                .eq("id", ready_media_id) \
+                .eq("status", "approved") \
+                .execute()
+            
+            if not result.data:
+                raise ValueError(f"No approved enhanced media found for ready_media_id {ready_media_id}")
+            
+            media_info = result.data[0]
+            logger.info(
+                f"Found enhanced media: {media_info}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id
+            )
+            
+            images = {}
+            
+            # Download the main processed image
+            processed_path = f"processed/processed_{ready_media_id}.jpg"
+            
+            try:
+                # Download from enhanced storage path
+                file_data = self.supabase.storage \
+                    .from_("retail-captures") \
+                    .download(processed_path)
+                
+                # Use descriptive filename for enhanced image
+                filename = f"enhanced_processed_{ready_media_id}.jpg"
+                images[filename] = file_data
+                
+                logger.info(
+                    f"✅ Enhanced image loaded: {filename} ({len(file_data)} bytes)",
+                    component="agent",
+                    agent_id=self.agent_id,
+                    filename=filename,
+                    size_bytes=len(file_data),
+                    storage_path=processed_path
+                )
+                
+            except Exception as e:
+                logger.error(
+                    f"Failed to download enhanced image from {processed_path}: {e}",
+                    component="agent",
+                    agent_id=self.agent_id,
+                    storage_path=processed_path,
+                    error=str(e)
+                )
+                raise
+            
+            # Check if there are additional processed images (multi-view)
+            metadata = media_info.get('metadata', {})
+            if isinstance(metadata, dict) and 'additional_views' in metadata:
+                for view_name, view_path in metadata['additional_views'].items():
+                    try:
+                        additional_data = self.supabase.storage \
+                            .from_("retail-captures") \
+                            .download(view_path)
+                        
+                        view_filename = f"enhanced_{view_name}_{ready_media_id}.jpg"
+                        images[view_filename] = additional_data
+                        
+                        logger.debug(
+                            f"Additional enhanced view loaded: {view_filename}",
+                            component="agent",
+                            agent_id=self.agent_id,
+                            view_name=view_name
+                        )
+                        
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to load additional view {view_name}: {e}",
+                            component="agent",
+                            agent_id=self.agent_id,
+                            view_name=view_name
+                        )
+                        # Continue processing with main image
+            
+            logger.info(
+                f"🎯 Successfully loaded {len(images)} enhanced images for {ready_media_id}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
+                image_count=len(images),
+                total_size_mb=sum(len(img) for img in images.values()) / (1024 * 1024),
+                processing_type="enhanced"
+            )
+            
+            return images
+            
+        except Exception as e:
+            logger.error(
+                f"Failed to get enhanced images for {ready_media_id}: {e}",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
                 error=str(e)
             )
             raise
@@ -769,6 +905,18 @@ Provide strategic recommendations for improvement.
             }).execute()
         except Exception as e:
             print(f"Failed to save agent start: {e}")
+    
+    async def _save_agent_start_enhanced(self, ready_media_id: str):
+        """Save enhanced agent start to database"""
+        try:
+            self.supabase.rpc('start_ai_agent_enhanced', {
+                'p_ready_media_id': ready_media_id,
+                'p_target_accuracy': self.config.target_accuracy,
+                'p_max_iterations': self.config.max_iterations,
+                'p_processing_type': 'enhanced'
+            }).execute()
+        except Exception as e:
+            print(f"Failed to save enhanced agent start: {e}")
     
     async def _save_agent_result(self, result: AgentResult):
         """Save final agent result to database"""

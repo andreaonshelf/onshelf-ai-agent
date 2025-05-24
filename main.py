@@ -5,13 +5,14 @@ Run the complete system with API, WebSocket, and Dashboard
 
 import asyncio
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import threading
 import subprocess
 import sys
 import os
+import time
 
 from src import OnShelfAISystem, SystemConfig
 from src.websocket import websocket_manager
@@ -71,7 +72,7 @@ async def root():
 
 @app.post("/api/v1/process/{upload_id}")
 async def process_upload(upload_id: str):
-    """Process a single upload through the AI system"""
+    """Process a single upload through the AI system (LEGACY - raw uploads)"""
     try:
         result = await system.process_upload(upload_id)
         return {
@@ -85,6 +86,35 @@ async def process_upload(upload_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/process/enhanced/{ready_media_id}")
+async def process_enhanced_media(ready_media_id: str):
+    """Process admin-approved, enhanced images (PRODUCTION ENDPOINT)"""
+    try:
+        print(f"🔥 ENHANCED PROCESSING: Starting ready_media_id {ready_media_id}")
+        
+        # Use the new enhanced processing method
+        result = await system.process_enhanced_media(ready_media_id)
+        return {
+            "success": True,
+            "processing_type": "enhanced",
+            "ready_media_id": ready_media_id,
+            "agent_id": result.agent_id,
+            "accuracy": result.accuracy,
+            "iterations": result.iterations_completed,
+            "human_review_required": result.human_review_required,
+            "duration_seconds": result.processing_duration,
+            "api_cost": result.total_api_cost,
+            "enhanced_features": {
+                "admin_approved": True,
+                "preprocessed": True,
+                "quality_enhanced": True
+            }
+        }
+    except Exception as e:
+        print(f"❌ Enhanced processing failed for {ready_media_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced processing failed: {str(e)}")
 
 
 @app.post("/api/v1/process/bulk")
@@ -120,6 +150,102 @@ async def get_agent_status(agent_id: str):
         "current_accuracy": 0.87,
         "estimated_completion": 120  # seconds
     }
+
+
+@app.post("/api/v1/test/process-images")
+async def test_process_images(images: list[UploadFile] = File(...)):
+    """TEST ENDPOINT: Process images directly without Supabase (for testing)"""
+    try:
+        # Convert uploaded files to the format expected by the system
+        test_images = {}
+        for i, image_file in enumerate(images):
+            # Read file content
+            content = await image_file.read()
+            # Use original filename or create one
+            filename = image_file.filename or f"test_image_{i+1}.jpg"
+            test_images[filename] = content
+        
+        print(f"🧪 TEST MODE: Processing {len(test_images)} uploaded images")
+        
+        # Create a test agent with modified behavior for direct images
+        from src.agent.agent import OnShelfAIAgent
+        from src.config import SystemConfig
+        
+        config = SystemConfig()
+        test_agent = OnShelfAIAgent(config)
+        
+        # Override the image loading method for testing
+        async def mock_get_images(upload_id):
+            return test_images
+        
+        # Temporarily replace the method
+        original_method = test_agent._get_original_images
+        test_agent._get_original_images = mock_get_images
+        
+        # Process using test upload ID
+        test_upload_id = f"test_{int(time.time())}"
+        result = await test_agent.achieve_target_accuracy(test_upload_id)
+        
+        # Restore original method
+        test_agent._get_original_images = original_method
+        
+        return {
+            "success": True,
+            "test_mode": True,
+            "images_processed": len(test_images),
+            "agent_id": result.agent_id,
+            "accuracy": result.accuracy,
+            "iterations": result.iterations_completed,
+            "human_review_required": result.human_review_required,
+            "duration_seconds": result.processing_duration,
+            "api_cost": result.total_api_cost,
+            "extraction_summary": {
+                "products_found": len(result.extraction.get("products", [])) if result.extraction else 0,
+                "shelves_detected": result.extraction.get("shelf_structure", {}).get("number_of_shelves", 0) if result.extraction else 0,
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Test processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Test processing failed: {str(e)}")
+
+
+@app.get("/api/v1/test/demo")
+async def test_demo():
+    """TEST ENDPOINT: Demo processing with sample data (no images required)"""
+    try:
+        print("🧪 DEMO MODE: Creating mock extraction result")
+        
+        # Create a mock result for demonstration
+        import uuid
+        from datetime import datetime
+        
+        demo_result = {
+            "success": True,
+            "demo_mode": True,
+            "agent_id": str(uuid.uuid4()),
+            "accuracy": 0.92,
+            "iterations": 2,
+            "human_review_required": False,
+            "duration_seconds": 45.3,
+            "api_cost": 0.15,
+            "extraction_summary": {
+                "products_found": 12,
+                "shelves_detected": 3,
+                "confidence": "HIGH"
+            },
+            "planogram_generated": True,
+            "comparison_completed": True,
+            "issues_found": [
+                {"type": "minor_positioning", "shelf": 2, "severity": "low"},
+                {"type": "facing_count", "product": "Coca Cola", "severity": "medium"}
+            ]
+        }
+        
+        return demo_result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demo failed: {str(e)}")
 
 
 # =====================================================
