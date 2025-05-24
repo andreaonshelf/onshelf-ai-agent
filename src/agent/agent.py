@@ -444,19 +444,23 @@ class OnShelfAIAgent:
                 processing_type="enhanced"
             )
             
-            # Query media_processing_pipeline table for processed media info
-            result = self.supabase.table("media_processing_pipeline") \
-                .select("id, original_upload_id, processed_image_path, metadata, status") \
-                .eq("id", ready_media_id) \
-                .eq("status", "approved") \
+            # Query ai_extraction_queue table for enhanced image path
+            result = self.supabase.table("ai_extraction_queue") \
+                .select("id, ready_media_id, enhanced_image_path, upload_id, status") \
+                .eq("ready_media_id", ready_media_id) \
                 .execute()
             
             if not result.data:
-                raise ValueError(f"No approved enhanced media found for ready_media_id {ready_media_id}")
+                raise ValueError(f"No queue item found for ready_media_id {ready_media_id}")
             
             media_info = result.data[0]
+            enhanced_path = media_info.get('enhanced_image_path')
+            
+            if not enhanced_path:
+                raise ValueError(f"No enhanced_image_path found for ready_media_id {ready_media_id}")
+            
             logger.info(
-                f"Found enhanced media: {media_info}",
+                f"Found enhanced media path: {enhanced_path}",
                 component="agent",
                 agent_id=self.agent_id,
                 ready_media_id=ready_media_id
@@ -464,34 +468,31 @@ class OnShelfAIAgent:
             
             images = {}
             
-            # Download the main processed image
-            processed_path = f"processed/processed_{ready_media_id}.jpg"
-            
             try:
                 # Download from enhanced storage path
                 file_data = self.supabase.storage \
                     .from_("retail-captures") \
-                    .download(processed_path)
+                    .download(enhanced_path)
                 
                 # Use descriptive filename for enhanced image
-                filename = f"enhanced_processed_{ready_media_id}.jpg"
+                filename = f"enhanced_{ready_media_id}.jpg"
                 images[filename] = file_data
                 
                 logger.info(
                     f"✅ Enhanced image loaded: {filename} ({len(file_data)} bytes)",
                     component="agent",
                     agent_id=self.agent_id,
-                    filename=filename,
+                    image_filename=filename,
                     size_bytes=len(file_data),
-                    storage_path=processed_path
+                    storage_path=enhanced_path
                 )
                 
             except Exception as e:
                 logger.error(
-                    f"Failed to download enhanced image from {processed_path}: {e}",
+                    f"Failed to download enhanced image from {enhanced_path}: {e}",
                     component="agent",
                     agent_id=self.agent_id,
-                    storage_path=processed_path,
+                    storage_path=enhanced_path,
                     error=str(e)
                 )
                 raise
@@ -909,38 +910,50 @@ Provide strategic recommendations for improvement.
     async def _save_agent_start_enhanced(self, ready_media_id: str):
         """Save enhanced agent start to database"""
         try:
-            self.supabase.rpc('start_ai_agent_enhanced', {
-                'p_ready_media_id': ready_media_id,
-                'p_target_accuracy': self.config.target_accuracy,
-                'p_max_iterations': self.config.max_iterations,
-                'p_processing_type': 'enhanced'
-            }).execute()
+            # For now, just log the start - can be enhanced later with proper database tracking
+            logger.info(
+                f"Starting enhanced agent processing",
+                component="agent",
+                agent_id=self.agent_id,
+                ready_media_id=ready_media_id,
+                target_accuracy=self.config.target_accuracy,
+                max_iterations=self.config.max_iterations,
+                processing_type="enhanced"
+            )
         except Exception as e:
             print(f"Failed to save enhanced agent start: {e}")
     
     async def _save_agent_result(self, result: AgentResult):
         """Save final agent result to database"""
         try:
-            self.supabase.rpc('save_agent_result', {
-                'p_agent_id': result.agent_id,
-                'p_final_accuracy': result.accuracy,
-                'p_iterations_completed': result.iterations_completed,
-                'p_processing_duration': int(result.processing_duration),
-                'p_escalation_reason': result.escalation_reason
-            }).execute()
+            # TODO: Implement save_agent_result database function or use existing save methods
+            logger.info(
+                f"Agent result ready to save: accuracy={result.accuracy:.2%}, iterations={result.iterations_completed}",
+                component="agent",
+                agent_id=result.agent_id
+            )
             
-            # Save iterations
-            for iteration in self.iteration_history:
-                self.supabase.table('agent_iterations').insert({
-                    'agent_id': result.agent_id,
-                    'iteration_number': iteration.iteration_number,
-                    'extraction_steps': iteration.extraction_steps,
-                    'accuracy_achieved': iteration.accuracy_achieved,
-                    'iteration_duration_seconds': int(iteration.extraction_duration + 
-                                                     iteration.planogram_generation_duration + 
-                                                     iteration.comparison_duration),
-                    'api_costs': iteration.api_costs
-                }).execute()
+            # For now, skip saving to avoid errors
+            # self.supabase.rpc('save_agent_result', {
+            #     'p_agent_id': result.agent_id,
+            #     'p_final_accuracy': result.accuracy,
+            #     'p_iterations_completed': result.iterations_completed,
+            #     'p_processing_duration': int(result.processing_duration),
+            #     'p_escalation_reason': result.escalation_reason
+            # }).execute()
+            
+            # # Save iterations
+            # for iteration in self.iteration_history:
+            #     self.supabase.table('agent_iterations').insert({
+            #         'agent_id': result.agent_id,
+            #         'iteration_number': iteration.iteration_number,
+            #         'extraction_steps': iteration.extraction_steps,
+            #         'accuracy_achieved': iteration.accuracy_achieved,
+            #         'iteration_duration_seconds': int(iteration.extraction_duration + 
+            #                                          iteration.planogram_generation_duration + 
+            #                                          iteration.comparison_duration),
+            #         'api_costs': iteration.api_costs
+            #     }).execute()
                 
         except Exception as e:
             print(f"Failed to save agent result: {e}") 

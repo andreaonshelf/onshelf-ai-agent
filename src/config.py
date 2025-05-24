@@ -27,11 +27,11 @@ class SystemConfig:
     
     # Model assignment (configurable)
     models: Dict[str, str] = field(default_factory=lambda: {
-        'structure_analysis': 'claude-3-sonnet-20240229',
+        'structure_analysis': 'claude-3-5-sonnet-20241022',
         'product_extraction': 'gpt-4o-2024-11-20', 
         'ocr_enhancement': 'gemini-2.0-flash-exp',
         'image_comparison': 'gpt-4o-2024-11-20',
-        'planning': 'claude-3-sonnet-20240229'
+        'planning': 'claude-3-5-sonnet-20241022'
     })
     
     # Agent parameters

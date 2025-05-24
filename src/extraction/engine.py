@@ -285,12 +285,19 @@ class ModularExtractionEngine:
                 models_used.add(step.model)
                 
                 # Store in history for debugging
+                # Convert output to serializable format
+                serializable_output = step_output
+                if hasattr(step_output, 'model_dump'):
+                    serializable_output = step_output.model_dump()
+                elif isinstance(step_output, list) and step_output and hasattr(step_output[0], 'model_dump'):
+                    serializable_output = [item.model_dump() for item in step_output]
+                
                 self.step_history.append({
                     'step_id': step.step_id,
                     'model': step.model.value,
-                    'output': step_output,
+                    'output': serializable_output,
                     'cost': cost,
-                    'timestamp': datetime.utcnow()
+                    'timestamp': datetime.utcnow().isoformat()
                 })
                 
                 logger.info(
@@ -397,10 +404,18 @@ class ModularExtractionEngine:
             if key.endswith("_data"):
                 placeholder = "{" + key + "}"
                 if placeholder in prompt:
-                    if isinstance(value, (dict, list)):
-                        prompt = prompt.replace(placeholder, json.dumps(value, indent=2))
+                    # Convert Pydantic models to dicts for serialization
+                    serializable_value = value
+                    if hasattr(value, 'model_dump'):
+                        serializable_value = value.model_dump()
+                    elif isinstance(value, list) and value and hasattr(value[0], 'model_dump'):
+                        serializable_value = [item.model_dump() for item in value]
+                    
+                    if isinstance(serializable_value, (dict, list)):
+                        # Use default=str to handle datetime and other non-serializable types
+                        prompt = prompt.replace(placeholder, json.dumps(serializable_value, indent=2, default=str))
                     else:
-                        prompt = prompt.replace(placeholder, str(value))
+                        prompt = prompt.replace(placeholder, str(serializable_value))
         
         # Choose the right model
         if step.model == AIModelType.CLAUDE_3_SONNET:
@@ -409,6 +424,46 @@ class ModularExtractionEngine:
             return await self._execute_with_gpt4o(prompt, inputs["images"], step.output_schema, agent_id)
         elif step.model == AIModelType.GEMINI_2_FLASH:
             return await self._execute_with_gemini(prompt, inputs["images"], step.output_schema, agent_id)
+    
+    def _compress_image_for_model(self, img_data: bytes, model_type: str, img_name: str = "image") -> bytes:
+        """Compress image only if needed for specific model limits"""
+        MODEL_LIMITS = {
+            'claude': 5 * 1024 * 1024,      # 5 MB
+            'gpt4': 20 * 1024 * 1024,       # 20 MB  
+            'gemini': 20 * 1024 * 1024,     # 20 MB
+        }
+        
+        # Base64 encoding increases size by ~33%
+        limit = MODEL_LIMITS.get(model_type, 20 * 1024 * 1024)
+        safe_limit = limit * 0.75  # Safety margin for base64 encoding
+        
+        if len(img_data) <= safe_limit:
+            return img_data  # No compression needed
+        
+        # Only compress if necessary
+        from PIL import Image
+        import io
+        
+        img = Image.open(io.BytesIO(img_data))
+        
+        # Calculate resize ratio to fit within limit
+        resize_ratio = (safe_limit / len(img_data)) ** 0.5
+        new_size = (int(img.width * resize_ratio), int(img.height * resize_ratio))
+        
+        logger.info(
+            f"Compressing {img_name} for {model_type}: {img.width}x{img.height} -> {new_size[0]}x{new_size[1]}",
+            component="extraction_engine",
+            original_size=len(img_data),
+            target_size=safe_limit,
+            model=model_type
+        )
+        
+        # Resize with high quality
+        img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
+        output = io.BytesIO()
+        img_resized.save(output, format='JPEG', quality=90, optimize=True)
+        
+        return output.getvalue()
     
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
     async def _execute_with_claude(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
@@ -438,12 +493,15 @@ class ModularExtractionEngine:
             
             # Add multiple images if available
             for img_name, img_data in images.items():
+                # Compress only for Claude if needed
+                compressed_img = self._compress_image_for_model(img_data, 'claude', img_name)
+                
                 content.append({
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": "image/jpeg",
-                        "data": base64.b64encode(img_data).decode()
+                        "data": base64.b64encode(compressed_img).decode()
                     }
                 })
                 # For now, limit to 2 images to manage costs
@@ -455,21 +513,21 @@ class ModularExtractionEngine:
             # Execute based on schema
             if output_schema == "ShelfStructure":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model="claude-3-5-sonnet-20241022",
                     max_tokens=4000,
                     messages=messages,
                     response_model=ShelfStructure
                 )
             elif output_schema == "List[ProductExtraction]":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model="claude-3-5-sonnet-20241022",
                     max_tokens=6000,
                     messages=messages,
                     response_model=List[ProductExtraction]
                 )
             elif output_schema == "CompleteShelfExtraction":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model="claude-3-5-sonnet-20241022",
                     max_tokens=8000,
                     messages=messages,
                     response_model=CompleteShelfExtraction
@@ -477,7 +535,7 @@ class ModularExtractionEngine:
             else:
                 # Generic text response
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model="claude-3-5-sonnet-20241022",
                     max_tokens=4000,
                     messages=messages
                 )

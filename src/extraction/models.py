@@ -30,7 +30,7 @@ class ValidationFlag(str, Enum):
 
 class AIModelType(str, Enum):
     """Available AI models for extraction"""
-    CLAUDE_3_SONNET = "claude-3-sonnet-20240229"
+    CLAUDE_3_SONNET = "claude-3-5-sonnet-20241022"
     GPT4O_LATEST = "gpt-4o-2024-11-20"
     GEMINI_2_FLASH = "gemini-2.0-flash-exp"
 

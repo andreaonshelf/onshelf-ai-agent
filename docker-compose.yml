@@ -15,6 +15,10 @@ services:
       - "8501:8501"  # Dashboard
     volumes:
       - ./logs:/app/logs
+      - ./src:/app/src
+      - ./main.py:/app/main.py
+      - ./dashboard.py:/app/dashboard.py
+      - ./.streamlit:/app/.streamlit
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]

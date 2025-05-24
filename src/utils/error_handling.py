@@ -262,8 +262,8 @@ class GracefulDegradation:
             return None
         
         # Prefer Claude for robustness
-        if 'claude-3-sonnet-20240229' in working_models:
-            return 'claude-3-sonnet-20240229'
+        if 'claude-3-5-sonnet-20241022' in working_models:
+            return 'claude-3-5-sonnet-20241022'
         
         # Fallback to first available
         return working_models[0]

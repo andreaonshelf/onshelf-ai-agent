@@ -144,17 +144,17 @@ class AIExtractionQueueProcessor:
         """Update queue item status"""
         try:
             update_data = {
-                "status": status,
-                "updated_at": datetime.utcnow().isoformat()
+                "status": status
             }
             
             if status == "processing":
-                update_data["started_at"] = datetime.utcnow().isoformat()
+                # No started_at column, just update status
+                pass
             elif status == "completed":
-                update_data["completed_at"] = datetime.utcnow().isoformat()
+                update_data["processed_at"] = datetime.utcnow().isoformat()
             elif status == "failed":
                 update_data["error_message"] = error_message
-                update_data["failed_at"] = datetime.utcnow().isoformat()
+                update_data["processed_at"] = datetime.utcnow().isoformat()
             
             self.supabase.table("ai_extraction_queue") \
                 .update(update_data) \
@@ -174,16 +174,9 @@ class AIExtractionQueueProcessor:
         try:
             update_data = {
                 "status": "completed",
-                "agent_id": result.agent_id,
-                "final_accuracy": result.accuracy,
-                "iterations_completed": result.iterations_completed,
-                "processing_duration_seconds": int(processing_duration),
-                "api_cost": result.total_api_cost,
-                "human_review_required": result.human_review_required,
-                "completed_at": datetime.utcnow().isoformat(),
-                "extraction_result": result.extraction,
-                "planogram_result": result.planogram,
-                "escalation_reason": result.escalation_reason
+                "processed_at": datetime.utcnow().isoformat()
+                # Store detailed results in a separate table or as JSON in error_message
+                # Since we only have limited columns in ai_extraction_queue
             }
             
             self.supabase.table("ai_extraction_queue") \

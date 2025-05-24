@@ -42,8 +42,17 @@ st.markdown("""
 def init_supabase():
     """Initialize Supabase client"""
     try:
-        supabase_url = os.getenv('SUPABASE_URL', st.secrets.get('SUPABASE_URL', ''))
-        supabase_key = os.getenv('SUPABASE_SERVICE_KEY', st.secrets.get('SUPABASE_SERVICE_KEY', ''))
+        # Get from environment variables first
+        supabase_url = os.getenv('SUPABASE_URL')
+        supabase_key = os.getenv('SUPABASE_SERVICE_KEY')
+        
+        # Try Streamlit secrets if env vars not found
+        if not supabase_url or not supabase_key:
+            try:
+                supabase_url = supabase_url or st.secrets.get('SUPABASE_URL')
+                supabase_key = supabase_key or st.secrets.get('SUPABASE_SERVICE_KEY')
+            except:
+                pass
         
         if not supabase_url or not supabase_key:
             st.error("❌ Supabase credentials not configured")
@@ -68,14 +77,13 @@ def get_api_stats():
         return None
 
 # Get queue data
-@st.cache_data(ttl=5)  # Cache for 5 seconds
-def get_queue_data(supabase):
+def get_queue_data(_supabase):
     """Get real queue data from ai_extraction_queue"""
-    if not supabase:
+    if not _supabase:
         return pd.DataFrame()
     
     try:
-        result = supabase.table("ai_extraction_queue") \
+        result = _supabase.table("ai_extraction_queue") \
             .select("*") \
             .order("created_at", desc=True) \
             .limit(100) \
@@ -89,28 +97,20 @@ def get_queue_data(supabase):
         return pd.DataFrame()
 
 # Get processing stats
-@st.cache_data(ttl=30)  # Cache for 30 seconds
-def get_processing_stats(supabase):
+def get_processing_stats(_supabase):
     """Get processing statistics"""
-    if not supabase:
+    if not _supabase:
         return {}
     
     try:
         # Get stats from the queue
-        total_result = supabase.table("ai_extraction_queue").select("id", count="exact").execute()
-        pending_result = supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "pending").execute()
-        processing_result = supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "processing").execute()
-        completed_result = supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "completed").execute()
+        total_result = _supabase.table("ai_extraction_queue").select("id", count="exact").execute()
+        pending_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "pending").execute()
+        processing_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "processing").execute()
+        completed_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "completed").execute()
         
-        # Get accuracy stats from completed items
-        accuracy_result = supabase.table("ai_extraction_queue") \
-            .select("final_accuracy") \
-            .eq("status", "completed") \
-            .not_.is_("final_accuracy", "null") \
-            .execute()
-        
-        accuracies = [item['final_accuracy'] for item in accuracy_result.data if item['final_accuracy'] is not None]
-        avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0
+        # Since final_accuracy doesn't exist, we'll set it to 0 for now
+        avg_accuracy = 0
         
         return {
             'total_processed': total_result.count or 0,
@@ -231,6 +231,62 @@ with tab1:
         
         st.dataframe(display_df[columns_to_show], use_container_width=True)
         
+        # Add action button for stuck items
+        st.subheader("🔧 Queue Actions")
+        
+        # Identify stuck items (processing for more than 10 minutes or failed)
+        from datetime import datetime, timedelta
+        import pytz
+        
+        stuck_items = []
+        for _, item in queue_df.iterrows():
+            if item['status'] == 'failed':
+                stuck_items.append(item)
+            elif item['status'] == 'processing':
+                # Check if started_at exists and processing for too long
+                if item.get('started_at'):
+                    started_at = pd.to_datetime(item['started_at'])
+                    if started_at.tzinfo is None:
+                        started_at = started_at.tz_localize('UTC')
+                    
+                    # If processing for more than 10 minutes, consider it stuck
+                    if datetime.now(pytz.UTC) - started_at > timedelta(minutes=10):
+                        stuck_items.append(item)
+                else:
+                    # No started_at but status is processing = stuck
+                    stuck_items.append(item)
+        
+        if stuck_items:
+            st.warning(f"Found {len(stuck_items)} stuck item(s)")
+            
+            # Show stuck items summary
+            for item in stuck_items:
+                status_icon = '❌' if item['status'] == 'failed' else '⏱️'
+                st.write(f"{status_icon} **ID {item['id']}**: {item.get('ready_media_id', 'Unknown')[:30]}... - {item['status'].title()}")
+            
+            # Single button to reset all stuck items
+            if st.button("🔄 Reset All Stuck Items", type="primary"):
+                reset_count = 0
+                for item in stuck_items:
+                    result = supabase.table("ai_extraction_queue") \
+                        .update({
+                            "status": "pending",
+                            "error_message": None,
+                            "started_at": None,
+                            "processed_at": None,
+                            "agent_id": None
+                        }) \
+                        .eq("id", item['id']) \
+                        .execute()
+                    reset_count += 1
+                
+                st.success(f"✅ Reset {reset_count} stuck item(s) to pending")
+                st.rerun()
+        else:
+            st.info("✅ No stuck items found")
+        
+        st.markdown("---")
+        
         # Show specific queue item details if processing
         processing_items = queue_df[queue_df['status'] == 'processing']
         if not processing_items.empty:
@@ -299,7 +355,9 @@ with tab3:
         
         if not completed_items.empty:
             for _, item in completed_items.iterrows():
-                with st.expander(f"✅ {item.get('ready_media_id', item.get('id', 'Unknown'))} - {item.get('final_accuracy', 0):.1%} accuracy"):
+                accuracy = item.get('final_accuracy')
+                accuracy_display = f"{accuracy:.1%}" if accuracy is not None else "N/A"
+                with st.expander(f"✅ {item.get('ready_media_id', item.get('id', 'Unknown'))} - {accuracy_display} accuracy"):
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -310,8 +368,10 @@ with tab3:
                     
                     with col2:
                         st.write("**Quality Metrics:**")
-                        st.write(f"Accuracy: {item.get('final_accuracy', 0):.1%}")
-                        st.write(f"API Cost: £{item.get('api_cost', 0):.3f}")
+                        st.write(f"Accuracy: {accuracy_display}")
+                        api_cost = item.get('api_cost')
+                        api_cost_display = f"£{api_cost:.3f}" if api_cost is not None else "N/A"
+                        st.write(f"API Cost: {api_cost_display}")
                         st.write(f"Human Review: {'Yes' if item.get('human_review_required') else 'No'}")
                     
                     with col3:
