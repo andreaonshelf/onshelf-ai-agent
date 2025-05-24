@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  onshelf-ai-agent:
+    build: .
+    container_name: onshelf-ai-agent
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    ports:
+      - "8000:8000"  # API
+      - "8501:8501"  # Dashboard
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - onshelf-network
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: onshelf-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - onshelf-network
+    restart: unless-stopped
+
+networks:
+  onshelf-network:
+    driver: bridge 
