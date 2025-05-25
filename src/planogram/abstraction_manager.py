@@ -4,7 +4,7 @@ Manages three levels of planogram abstraction: Brand, Product, and SKU views
 """
 
 from typing import List, Dict, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..models.extraction_models import ProductExtraction
 from ..utils import logger
@@ -102,12 +102,12 @@ class PlanogramAbstractionManager:
                 }
             
             # Accumulate brand data
-            brand_groups[brand]["total_facings"] += product.position.facing_count
+            brand_groups[brand]["total_facings"] += product.quantity.total_facings
             brand_groups[brand]["confidence"].append(product.extraction_confidence)
             brand_groups[brand]["products"].append(product)
             
             # Track shelf distribution
-            shelf = product.position.shelf_number
+            shelf = product.section.horizontal
             if shelf not in brand_groups[brand]["shelves"]:
                 brand_groups[brand]["shelves"][shelf] = {
                     "positions": [],
@@ -115,9 +115,9 @@ class PlanogramAbstractionManager:
                 }
             
             brand_groups[brand]["shelves"][shelf]["positions"].append(
-                product.position.position_on_shelf
+                product.position.l_position_on_section
             )
-            brand_groups[brand]["shelves"][shelf]["total_facings"] += product.position.facing_count
+            brand_groups[brand]["shelves"][shelf]["total_facings"] += product.quantity.total_facings
         
         # Generate visual blocks
         brand_blocks = []
@@ -165,12 +165,12 @@ class PlanogramAbstractionManager:
             product_block = ProductBlock(
                 product_name=f"{product.brand} {product.name}",
                 brand=product.brand,
-                shelf_number=product.position.shelf_number,
-                position_on_shelf=product.position.position_on_shelf,
-                facing_count=product.position.facing_count,
+                shelf_number=product.section.horizontal,
+                position_on_shelf=product.position.l_position_on_section,
+                facing_count=product.quantity.total_facings,
                 price=product.price,
                 confidence_color=self._get_confidence_color(product.extraction_confidence),
-                block_width_cm=product.position.facing_count * self.standard_facing_width_cm,
+                block_width_cm=product.quantity.total_facings * self.standard_facing_width_cm,
                 confidence=product.extraction_confidence
             )
             product_blocks.append(product_block)
@@ -201,13 +201,13 @@ class PlanogramAbstractionManager:
             package_size = self._extract_package_size(product.name)
             
             # For each facing, create individual SKU block
-            for facing_index in range(product.position.facing_count):
+            for facing_index in range(product.quantity.total_facings):
                 sku_block = SKUBlock(
                     sku_name=f"{product.brand} {product.name}",
                     brand=product.brand,
                     package_size=package_size,
-                    shelf_number=product.position.shelf_number,
-                    position_on_shelf=product.position.position_on_shelf,
+                    shelf_number=product.section.horizontal,
+                    position_on_shelf=product.position.l_position_on_section,
                     facing_index=facing_index + 1,
                     price=product.price,
                     confidence_color=self._get_confidence_color(product.extraction_confidence),

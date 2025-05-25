@@ -1,6 +1,6 @@
 """
-OnShelf AI - Complete Architecture Overhaul
-Main FastAPI application with progressive debugging interface
+OnShelf AI - Queue Review Dashboard
+Main FastAPI application with progressive debugging interface for reviewing extraction results
 """
 
 import uvicorn
@@ -11,12 +11,11 @@ from fastapi.responses import HTMLResponse
 import os
 
 from src.config import SystemConfig
-from src.api.progressive_debugger import router as progressive_router
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="OnShelf AI - Progressive Debugger",
-    description="Four-level orchestration system with human-in-the-loop evaluation",
+    title="OnShelf AI - Queue Review Dashboard",
+    description="Review and analysis tool for extraction results with progressive disclosure",
     version="2.0.0"
 )
 
@@ -30,19 +29,20 @@ app.add_middleware(
 )
 
 # Include API routers
+from src.api.progressive_debugger import router as progressive_router
 app.include_router(progressive_router)
 
 # Include strategic interface
 from src.api.strategic_interface import router as strategic_router
 app.include_router(strategic_router)
 
-# Include image management
-from src.api.image_management import router as image_router
-app.include_router(image_router)
-
 # Include planogram rendering
 from src.api.planogram_renderer import router as planogram_router
 app.include_router(planogram_router)
+
+# Include queue management API
+from src.api.queue_management import router as queue_router
+app.include_router(queue_router)
 
 # Serve static files (for the UI)
 if os.path.exists("static"):
@@ -50,733 +50,982 @@ if os.path.exists("static"):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the progressive debugger interface"""
+    """Main dashboard interface with progressive disclosure"""
     return """
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <title>OnShelf AI - Progressive Debugger</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>OnShelf AI - Extraction Dashboard</title>
         <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
             
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: #0a0a0a;
-                color: white;
-                overflow-x: hidden;
+                background: #f8fafc;
+                color: #1e293b;
+                line-height: 1.6;
             }
             
-            /* Top Header */
-            .top-header {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #111827;
-                border-bottom: 1px solid #374151;
-                padding: 15px 20px;
-                z-index: 1000;
+            /* Layout Structure */
+            .app-container {
                 display: flex;
-                justify-content: space-between;
-                align-items: center;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                transition: left 0.3s ease;
-            }
-            
-            .header-left {
-                display: flex;
-                align-items: center;
-                gap: 15px;
-            }
-            
-            .sidebar-toggle {
-                background: #374151;
-                border: 1px solid #4b5563;
-                color: white;
-                padding: 8px 12px;
-                border-radius: 6px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                font-size: 16px;
-            }
-            
-            .sidebar-toggle:hover {
-                background: #4b5563;
-                border-color: #3b82f6;
-            }
-            
-            .header-left h1 {
-                margin: 0;
-                font-size: 1.5rem;
-                font-weight: 700;
-                color: #3b82f6;
-            }
-            
-            .breadcrumb {
-                font-size: 13px;
-                color: #9ca3af;
-                font-weight: 500;
-            }
-            
-            /* Sidebar */
-            .sidebar {
-                position: fixed;
-                top: 0;
-                left: -400px;
-                width: 400px;
                 height: 100vh;
-                background: #1f2937;
-                border-right: 1px solid #374151;
-                z-index: 1100;
-                transition: left 0.3s ease;
+                overflow: hidden;
+            }
+            
+            /* Left Sidebar - Image Selection */
+            .left-sidebar {
+                width: 400px;
+                background: white;
+                border-right: 1px solid #e2e8f0;
                 display: flex;
                 flex-direction: column;
-                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+                transition: transform 0.3s ease;
+                z-index: 100;
             }
             
-            .sidebar.open {
-                left: 0;
+            .left-sidebar.collapsed {
+                transform: translateX(-380px);
+                width: 20px;
             }
             
             .sidebar-header {
                 padding: 20px;
-                border-bottom: 1px solid #374151;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #111827;
+                border-bottom: 1px solid #e2e8f0;
+                background: #f8fafc;
             }
             
-            .sidebar-header h3 {
-                margin: 0;
-                color: #3b82f6;
-                font-size: 1.25rem;
-            }
-            
-            .btn-icon {
-                background: none;
-                border: none;
-                color: #9ca3af;
-                font-size: 18px;
-                cursor: pointer;
-                padding: 4px;
-                border-radius: 4px;
-                transition: all 0.2s ease;
-            }
-            
-            .btn-icon:hover {
-                background: #374151;
+            .sidebar-toggle {
+                position: absolute;
+                right: -20px;
+                top: 20px;
+                width: 20px;
+                height: 40px;
+                background: #3b82f6;
                 color: white;
+                border: none;
+                cursor: pointer;
+                border-radius: 0 4px 4px 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
             }
             
-            /* Sidebar Filters */
-            .sidebar-filters {
-                padding: 20px;
-                border-bottom: 1px solid #374151;
+            .filters-section {
+                padding: 15px 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .filter-group {
+                margin-bottom: 15px;
+            }
+            
+            .filter-group label {
+                display: block;
+                font-size: 12px;
+                font-weight: 600;
+                color: #64748b;
+                margin-bottom: 5px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+                padding: 8px 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
             }
             
             .search-box {
                 position: relative;
-                margin-bottom: 15px;
             }
             
             .search-box input {
-                width: 100%;
-                padding: 10px 40px 10px 12px;
-                background: #374151;
-                border: 1px solid #4b5563;
-                border-radius: 6px;
-                color: white;
-                font-size: 14px;
+                padding-left: 35px;
             }
             
-            .search-box input:focus {
-                outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            }
-            
-            .search-icon {
+            .search-box::before {
+                content: "🔍";
                 position: absolute;
-                right: 12px;
+                left: 12px;
                 top: 50%;
                 transform: translateY(-50%);
-                color: #9ca3af;
                 font-size: 14px;
-            }
-            
-            .filter-row {
-                margin-bottom: 12px;
-            }
-            
-            .filter-row select,
-            .filter-row input[type="date"] {
-                width: 100%;
-                padding: 8px 12px;
-                background: #374151;
-                border: 1px solid #4b5563;
-                border-radius: 6px;
-                color: white;
-                font-size: 13px;
-            }
-            
-            /* Image List */
-            .image-list {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-            }
-            
-            .list-header {
-                padding: 15px 20px;
-                border-bottom: 1px solid #374151;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: #111827;
-            }
-            
-            .result-count {
-                font-size: 13px;
-                color: #9ca3af;
-                font-weight: 500;
             }
             
             .view-toggle {
                 display: flex;
-                gap: 4px;
+                gap: 5px;
+                margin-top: 10px;
             }
             
-            .view-btn {
-                background: #374151;
-                border: 1px solid #4b5563;
-                color: #9ca3af;
-                padding: 6px 10px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-                transition: all 0.2s ease;
-            }
-            
-            .view-btn:hover,
-            .view-btn.active {
-                background: #3b82f6;
-                border-color: #3b82f6;
-                color: white;
-            }
-            
-            /* Image Grid */
-            .image-grid {
+            .view-toggle button {
                 flex: 1;
-                padding: 20px;
+                padding: 6px 12px;
+                border: 1px solid #d1d5db;
+                background: white;
+                border-radius: 4px;
+                font-size: 12px;
+                cursor: pointer;
+            }
+            
+            .view-toggle button.active {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+            }
+            
+            .images-container {
+                flex: 1;
                 overflow-y: auto;
+                padding: 10px;
+            }
+            
+            .image-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-                gap: 15px;
-                align-content: start;
+                gap: 10px;
+            }
+            
+            .image-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
             }
             
             .image-item {
-                background: #374151;
+                border: 2px solid transparent;
                 border-radius: 8px;
                 overflow: hidden;
                 cursor: pointer;
-                transition: all 0.3s ease;
-                border: 2px solid transparent;
+                transition: all 0.2s ease;
+                background: white;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             
             .image-item:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
                 border-color: #3b82f6;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             }
             
             .image-item.selected {
                 border-color: #10b981;
-                box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+                background: #f0fdf4;
+            }
+            
+            .image-item.grid-view {
+                aspect-ratio: 1;
+            }
+            
+            .image-item.list-view {
+                display: flex;
+                padding: 8px;
+                align-items: center;
+                gap: 10px;
             }
             
             .image-thumbnail {
                 width: 100%;
-                height: 120px;
-                background: #4b5563;
+                height: 100%;
+                object-fit: cover;
+                background: #f1f5f9;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                color: #9ca3af;
                 font-size: 24px;
             }
             
-            .image-thumbnail img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
+            .image-item.list-view .image-thumbnail {
+                width: 60px;
+                height: 60px;
+                border-radius: 4px;
+                flex-shrink: 0;
             }
             
             .image-info {
-                padding: 12px;
+                padding: 8px;
+                font-size: 12px;
+            }
+            
+            .image-item.list-view .image-info {
+                padding: 0;
+                flex: 1;
             }
             
             .image-title {
-                font-size: 12px;
                 font-weight: 600;
-                color: white;
-                margin-bottom: 4px;
-                line-height: 1.3;
+                margin-bottom: 2px;
+                color: #1e293b;
             }
             
             .image-meta {
+                color: #64748b;
                 font-size: 11px;
-                color: #9ca3af;
-                line-height: 1.2;
             }
             
-            .image-status {
+            .status-badge {
                 display: inline-block;
                 padding: 2px 6px;
-                border-radius: 3px;
+                border-radius: 12px;
                 font-size: 10px;
-                font-weight: 500;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
                 margin-top: 4px;
             }
             
-            .status-pending { background: #f59e0b; color: #000; }
-            .status-in_progress { background: #3b82f6; color: white; }
-            .status-completed { background: #10b981; color: white; }
-            .status-flagged { background: #ef4444; color: white; }
+            .status-pending { background: #fef3c7; color: #92400e; }
+            .status-processing { background: #dbeafe; color: #1e40af; }
+            .status-completed { background: #d1fae5; color: #065f46; }
+            .status-failed { background: #fee2e2; color: #991b1b; }
+            .status-review { background: #fde68a; color: #92400e; }
             
-            /* Pagination */
             .pagination {
                 padding: 15px 20px;
-                border-top: 1px solid #374151;
+                border-top: 1px solid #e2e8f0;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                background: #111827;
+                font-size: 12px;
+                color: #64748b;
             }
             
-            .page-info {
-                font-size: 13px;
-                color: #9ca3af;
-                font-weight: 500;
+            .pagination-controls {
+                display: flex;
+                gap: 5px;
             }
             
-            /* Sidebar Overlay */
-            .sidebar-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 1050;
-                opacity: 0;
-                visibility: hidden;
-                transition: all 0.3s ease;
+            .pagination-controls button {
+                padding: 4px 8px;
+                border: 1px solid #d1d5db;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
             }
             
-            .sidebar-overlay.active {
-                opacity: 1;
-                visibility: visible;
+            .pagination-controls button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
             }
             
-            /* Content shift when sidebar is open */
-            body.sidebar-open .top-header {
-                left: 400px;
+            .pagination-controls button.active {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
             }
             
-            body.sidebar-open .upload-interface,
-            body.sidebar-open .simple-mode,
-            body.sidebar-open .comparison-mode,
-            body.sidebar-open .advanced-mode {
-                margin-left: 400px;
-                width: calc(100% - 400px);
+            /* Main Content Area */
+            .main-content {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
             }
             
-            /* Mode Selector */
+            /* Header */
+            .header {
+                background: white;
+                border-bottom: 1px solid #e2e8f0;
+                padding: 20px 30px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+                font-weight: 700;
+                color: #1e293b;
+            }
+            
             .mode-selector {
                 display: flex;
-                gap: 8px;
+                gap: 10px;
             }
             
             .mode-btn {
                 padding: 8px 16px;
-                background: #1f2937;
-                border: 1px solid #374151;
-                color: #d1d5db;
+                border: 1px solid #d1d5db;
+                background: white;
                 border-radius: 6px;
                 cursor: pointer;
-                transition: all 0.3s ease;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }
+            
+            .mode-btn:hover {
+                background: #f8fafc;
+                border-color: #3b82f6;
             }
             
             .mode-btn.active {
                 background: #3b82f6;
-                border-color: #3b82f6;
                 color: white;
-            }
-            
-            /* Upload Interface */
-            .upload-interface {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                min-height: calc(100vh - 80px);
-                padding: 20px;
-                margin-top: 80px;
-            }
-            
-            .upload-area {
-                border: 2px dashed #374151;
-                border-radius: 12px;
-                padding: 60px;
-                text-align: center;
-                background: #111827;
-                max-width: 600px;
-                width: 100%;
-                transition: all 0.3s ease;
-            }
-            
-            .upload-area:hover {
                 border-color: #3b82f6;
-                background: #1f2937;
             }
             
-            .upload-area.dragover {
-                border-color: #10b981;
-                background: #064e3b;
+            /* Breadcrumb */
+            .breadcrumb {
+                padding: 15px 30px;
+                background: #f8fafc;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 14px;
+                color: #64748b;
             }
             
-            /* Simple Mode - 2 Panel Layout */
-            .simple-mode {
-                display: none;
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-                padding: 20px;
-                height: calc(100vh - 80px);
-                margin-top: 80px;
-            }
-            
-            .image-panel, .planogram-panel {
-                background: #111827;
-                border-radius: 12px;
-                padding: 20px;
+            /* Content Area */
+            .content-area {
+                flex: 1;
                 overflow: hidden;
-            }
-            
-            .image-viewer {
                 position: relative;
-                width: 100%;
-                height: 60%;
-                background: #000;
-                border-radius: 8px;
-                overflow: hidden;
             }
             
-            .image-viewer img {
-                width: 100%;
+            /* Queue Interface */
+            .queue-interface {
+                padding: 30px;
                 height: 100%;
-                object-fit: contain;
-            }
-            
-            .zoom-controls {
-                position: absolute;
-                bottom: 10px;
-                right: 10px;
-                display: flex;
-                gap: 5px;
-            }
-            
-            .zoom-btn {
-                background: rgba(0,0,0,0.7);
-                color: white;
-                border: none;
-                padding: 8px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-            }
-            
-            .rating-system {
-                margin-top: 20px;
-                padding: 20px;
-                background: #1f2937;
-                border-radius: 8px;
-            }
-            
-            .star-rating {
-                display: flex;
-                gap: 5px;
-                margin: 10px 0;
-            }
-            
-            .star {
-                font-size: 24px;
-                color: #374151;
-                cursor: pointer;
-                transition: color 0.2s;
-            }
-            
-            .star.active, .star:hover {
-                color: #fbbf24;
-            }
-            
-            /* Comparison Mode - Agent Iterations */
-            .comparison-mode {
-                display: none;
-                padding: 20px;
-                height: calc(100vh - 80px);
-                margin-top: 80px;
                 overflow-y: auto;
             }
             
-            .agent-tabs {
-                display: flex;
-                gap: 10px;
-                margin-bottom: 20px;
-                border-bottom: 1px solid #374151;
-            }
-            
-            .agent-tab {
-                padding: 14px 28px;
-                background: #1f2937;
-                border: 1px solid #374151;
-                color: #d1d5db;
-                border-radius: 12px 12px 0 0;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                font-weight: 500;
-                font-size: 15px;
-                position: relative;
-                border-bottom: none;
-            }
-            
-            .agent-tab:hover {
-                background: #374151;
-                color: #e5e7eb;
-                transform: translateY(-1px);
-            }
-            
-            .agent-tab.active {
-                background: #3b82f6;
-                color: white;
-                border-color: #3b82f6;
-                box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.3);
-            }
-            
-            .agent-tab.active::after {
-                content: '';
-                position: absolute;
-                bottom: -1px;
-                left: 0;
-                right: 0;
-                height: 2px;
-                background: #3b82f6;
-            }
-            
-            .agent-content {
-                display: none;
-                grid-template-columns: 1fr 1fr;
+            .queue-stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 20px;
-                height: calc(100vh - 120px);
+                margin-bottom: 30px;
             }
             
-            .agent-content.active {
-                display: grid;
-            }
-            
-            .agent-data, .agent-planogram {
-                background: #111827;
-                border-radius: 12px;
+            .stat-card {
+                background: white;
                 padding: 20px;
-                overflow-y: auto;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                border-left: 4px solid #3b82f6;
             }
             
-            .performance-metrics {
+            .stat-card.review { border-left-color: #f59e0b; }
+            .stat-card.processing { border-left-color: #3b82f6; }
+            .stat-card.completed { border-left-color: #10b981; }
+            .stat-card.failed { border-left-color: #ef4444; }
+            
+            .stat-number {
+                font-size: 32px;
+                font-weight: 700;
+                color: #1e293b;
+            }
+            
+            .stat-label {
+                font-size: 14px;
+                color: #64748b;
+                margin-top: 5px;
+            }
+            
+            .queue-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                gap: 15px;
-                margin-bottom: 20px;
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                gap: 20px;
             }
             
-            .metric {
-                background: #1f2937;
+            .queue-item {
+                background: white;
+                border-radius: 8px;
                 padding: 20px;
-                border-radius: 12px;
-                text-align: center;
-                border: 1px solid #374151;
-                transition: all 0.3s ease;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                border: 2px solid transparent;
+                cursor: pointer;
+                transition: all 0.2s ease;
             }
             
-            .metric:hover {
+            .queue-item:hover {
                 border-color: #3b82f6;
                 transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             }
             
-            .metric-value {
-                font-size: 28px;
-                font-weight: 700;
-                color: #3b82f6;
-                margin-bottom: 8px;
-                font-variant-numeric: tabular-nums;
+            .queue-item.selected {
+                border-color: #10b981;
+                background: #f0fdf4;
             }
             
-            .metric-label {
-                font-size: 13px;
-                color: #9ca3af;
-                font-weight: 500;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
+            .queue-item.priority {
+                border-left: 4px solid #f59e0b;
             }
             
-            /* Advanced Mode - 4 Panel Layout */
-            .advanced-mode {
-                display: none;
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: 1fr 1fr;
-                gap: 20px;
-                padding: 20px;
-                height: calc(100vh - 80px);
-                margin-top: 80px;
-            }
-            
-            .panel {
-                background: #111827;
-                border-radius: 12px;
-                padding: 20px;
-                overflow: hidden;
-            }
-            
-            .panel h3 {
-                color: #3b82f6;
+            .item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
                 margin-bottom: 15px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #374151;
             }
             
-            /* Buttons */
+            .item-title {
+                font-size: 16px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .item-status {
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+            
+            .item-meta {
+                font-size: 14px;
+                color: #64748b;
+                margin-bottom: 15px;
+                line-height: 1.5;
+            }
+            
+            .item-accuracy {
+                margin: 15px 0;
+            }
+            
+            .accuracy-bar {
+                width: 100%;
+                height: 8px;
+                background: #e2e8f0;
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 5px;
+            }
+            
+            .accuracy-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+                transition: width 0.3s ease;
+            }
+            
+            .accuracy-text {
+                font-size: 12px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .system-selection {
+                margin: 15px 0;
+                padding: 15px;
+                background: #f8fafc;
+                border-radius: 6px;
+                border: 1px solid #e2e8f0;
+            }
+            
+            .system-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #64748b;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .system-checkboxes {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .system-checkbox {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .system-checkbox input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+            }
+            
+            .system-checkbox label {
+                font-size: 14px;
+                font-weight: 500;
+                color: #1e293b;
+                cursor: pointer;
+            }
+            
+            .system-description {
+                font-size: 12px;
+                color: #64748b;
+                margin-left: 24px;
+                margin-top: -4px;
+            }
+            
+            .item-actions {
+                display: flex;
+                gap: 10px;
+                margin-top: 15px;
+            }
+            
             .btn {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                text-decoration: none;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .btn-primary {
                 background: #3b82f6;
                 color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 16px;
-                transition: background 0.3s ease;
             }
             
-            .btn:hover {
+            .btn-primary:hover {
                 background: #2563eb;
-            }
-            
-            .btn-secondary {
-                background: #6b7280;
-            }
-            
-            .btn-secondary:hover {
-                background: #4b5563;
             }
             
             .btn-success {
                 background: #10b981;
+                color: white;
             }
             
             .btn-success:hover {
                 background: #059669;
             }
             
-            /* Feedback Areas */
+            .btn-secondary {
+                background: #6b7280;
+                color: white;
+            }
+            
+            .btn-secondary:hover {
+                background: #4b5563;
+            }
+            
+            .btn-warning {
+                background: #f59e0b;
+                color: white;
+            }
+            
+            .btn-warning:hover {
+                background: #d97706;
+            }
+            
+            /* Simple Mode - 2 Panel Layout */
+            .simple-mode {
+                display: none;
+                height: 100%;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                padding: 20px;
+            }
+            
+            .simple-mode.active {
+                display: grid;
+            }
+            
+            .image-panel,
+            .planogram-panel {
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            
+            .panel-header {
+                padding: 20px;
+                border-bottom: 1px solid #e2e8f0;
+                background: #f8fafc;
+            }
+            
+            .panel-header h3 {
+                font-size: 18px;
+                font-weight: 600;
+                color: #1e293b;
+                margin: 0;
+            }
+            
+            .panel-content {
+                flex: 1;
+                padding: 20px;
+                overflow: auto;
+            }
+            
+            .image-viewer {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #f8fafc;
+                border-radius: 6px;
+                overflow: hidden;
+                position: relative;
+            }
+            
+            .image-viewer img {
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
+                transition: transform 0.3s ease;
+            }
+            
+            .image-controls {
+                position: absolute;
+                bottom: 10px;
+                right: 10px;
+                display: flex;
+                gap: 5px;
+                background: rgba(0,0,0,0.7);
+                border-radius: 6px;
+                padding: 5px;
+            }
+            
+            .control-btn {
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                padding: 5px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+            }
+            
+            .control-btn:hover {
+                background: rgba(255,255,255,0.3);
+            }
+            
+            .rating-system {
+                margin-top: 20px;
+                padding: 20px;
+                background: #f8fafc;
+                border-radius: 6px;
+            }
+            
+            .rating-system h4 {
+                font-size: 16px;
+                font-weight: 600;
+                color: #1e293b;
+                margin-bottom: 10px;
+            }
+            
+            .star-rating {
+                display: flex;
+                gap: 5px;
+                margin-bottom: 15px;
+            }
+            
+            .star {
+                font-size: 24px;
+                color: #d1d5db;
+                cursor: pointer;
+                transition: color 0.2s ease;
+            }
+            
+            .star:hover,
+            .star.active {
+                color: #fbbf24;
+            }
+            
             .feedback-area {
                 margin-top: 15px;
             }
             
+            .feedback-area label {
+                display: block;
+                font-size: 14px;
+                font-weight: 500;
+                color: #374151;
+                margin-bottom: 5px;
+            }
+            
             .feedback-area textarea {
                 width: 100%;
-                min-height: 80px;
-                background: #1f2937;
-                border: 1px solid #374151;
-                color: white;
-                padding: 12px;
-                border-radius: 6px;
-                resize: vertical;
-            }
-            
-            /* JSON Viewer */
-            .json-viewer {
-                background: #000;
-                color: #10b981;
-                padding: 15px;
-                border-radius: 6px;
-                font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-                font-size: 13px;
-                line-height: 1.4;
-                overflow-x: auto;
-                max-height: 400px;
-                overflow-y: auto;
-                border: 1px solid #374151;
-            }
-            
-            /* Enhanced Typography */
-            h2, h3, h4 {
-                font-weight: 600;
-                letter-spacing: -0.025em;
-            }
-            
-            h2 {
-                font-size: 1.875rem;
-                margin-bottom: 1.5rem;
-            }
-            
-            h3 {
-                font-size: 1.25rem;
-                margin-bottom: 1rem;
-            }
-            
-            h4 {
-                font-size: 1.125rem;
-                margin-bottom: 0.75rem;
-                margin-top: 1.5rem;
-            }
-            
-            /* Improved Lists */
-            ul {
-                padding-left: 1.25rem;
-                margin: 0.75rem 0;
-            }
-            
-            li {
-                margin-bottom: 0.5rem;
-                line-height: 1.5;
-            }
-            
-            /* Better Labels */
-            label {
-                font-weight: 500;
-                color: #e5e7eb;
-                display: block;
-                margin-bottom: 0.5rem;
-            }
-            
-            /* Enhanced Form Elements */
-            select {
-                width: 100%;
-                padding: 10px 12px;
-                background: #374151;
-                color: white;
-                border: 1px solid #4b5563;
+                padding: 10px;
+                border: 1px solid #d1d5db;
                 border-radius: 6px;
                 font-size: 14px;
-                transition: border-color 0.2s ease;
+                resize: vertical;
+                min-height: 80px;
             }
             
-            select:focus {
-                outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            /* Comparison Mode */
+            .comparison-mode {
+                display: none;
+                height: 100%;
+                padding: 20px;
+                overflow-y: auto;
+            }
+            
+            .comparison-mode.active {
+                display: block;
+            }
+            
+            .agent-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .agent-tab {
+                padding: 12px 20px;
+                border: none;
+                background: none;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                color: #64748b;
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s ease;
+            }
+            
+            .agent-tab:hover {
+                color: #3b82f6;
+            }
+            
+            .agent-tab.active {
+                color: #3b82f6;
+                border-bottom-color: #3b82f6;
+            }
+            
+            .agent-content {
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                padding: 20px;
+            }
+            
+            .agent-metrics {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            
+            .metric-card {
+                background: #f8fafc;
+                padding: 15px;
+                border-radius: 6px;
+                text-align: center;
+            }
+            
+            .metric-value {
+                font-size: 24px;
+                font-weight: 700;
+                color: #1e293b;
+            }
+            
+            .metric-label {
+                font-size: 12px;
+                color: #64748b;
+                margin-top: 5px;
+            }
+            
+            .extraction-results {
+                margin-top: 20px;
+            }
+            
+            .results-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 15px;
+            }
+            
+            .result-card {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 15px;
+            }
+            
+            .result-card h5 {
+                font-size: 14px;
+                font-weight: 600;
+                color: #1e293b;
+                margin-bottom: 10px;
+            }
+            
+            .result-details {
+                font-size: 12px;
+                color: #64748b;
+                line-height: 1.4;
+            }
+            
+            /* Advanced Mode */
+            .advanced-mode {
+                display: none;
+                height: 100%;
+                padding: 20px;
+                overflow-y: auto;
+            }
+            
+            .advanced-mode.active {
+                display: block;
+            }
+            
+            .advanced-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr 1fr;
+                gap: 20px;
+                height: 100%;
+            }
+            
+            .advanced-panel {
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            
+            .technical-analysis {
+                padding: 20px;
+                overflow-y: auto;
+            }
+            
+            .analysis-section {
+                margin-bottom: 25px;
+            }
+            
+            .analysis-section h4 {
+                font-size: 16px;
+                font-weight: 600;
+                color: #1e293b;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #e2e8f0;
+                padding-bottom: 5px;
+            }
+            
+            .analysis-data {
+                font-family: 'Monaco', 'Menlo', monospace;
+                font-size: 12px;
+                background: #f8fafc;
+                padding: 10px;
+                border-radius: 4px;
+                border: 1px solid #e2e8f0;
+                overflow-x: auto;
+            }
+            
+            .orchestrator-panel {
+                padding: 20px;
+            }
+            
+            .orchestrator-flow {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .flow-step {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px;
+                background: #f8fafc;
+                border-radius: 6px;
+                border-left: 4px solid #3b82f6;
+            }
+            
+            .flow-step.completed {
+                border-left-color: #10b981;
+                background: #f0fdf4;
+            }
+            
+            .flow-step.failed {
+                border-left-color: #ef4444;
+                background: #fef2f2;
+            }
+            
+            .step-icon {
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 600;
+                color: white;
+                background: #3b82f6;
+            }
+            
+            .flow-step.completed .step-icon {
+                background: #10b981;
+            }
+            
+            .flow-step.failed .step-icon {
+                background: #ef4444;
+            }
+            
+            .step-details {
+                flex: 1;
+            }
+            
+            .step-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .step-description {
+                font-size: 12px;
+                color: #64748b;
+            }
+            
+            .step-timing {
+                font-size: 11px;
+                color: #9ca3af;
+            }
+            
+            /* Responsive Design */
+            @media (max-width: 1200px) {
+                .left-sidebar {
+                    width: 300px;
+                }
+                
+                .advanced-grid {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: repeat(4, 1fr);
+                }
+            }
+            
+            @media (max-width: 768px) {
+                .left-sidebar {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    height: 100%;
+                    z-index: 1000;
+                    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+                }
+                
+                .simple-mode {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: 1fr 1fr;
+                }
+                
+                .queue-grid {
+                    grid-template-columns: 1fr;
+                }
+                
+                .queue-stats {
+                    grid-template-columns: repeat(2, 1fr);
+                }
             }
             
             /* Loading States */
@@ -784,606 +1033,1143 @@ async def root():
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                color: #9ca3af;
-                font-style: italic;
+                padding: 40px;
+                color: #64748b;
             }
             
             .loading::before {
-                content: "⏳ ";
-                margin-right: 0.5rem;
+                content: "";
+                width: 20px;
+                height: 20px;
+                border: 2px solid #e2e8f0;
+                border-top: 2px solid #3b82f6;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-right: 10px;
             }
             
-            /* Responsive */
-            @media (max-width: 768px) {
-                .simple-mode, .advanced-mode {
-                    grid-template-columns: 1fr;
-                }
-                
-                .agent-content {
-                    grid-template-columns: 1fr;
-                }
-                
-                .mode-selector {
-                    position: relative;
-                    top: auto;
-                    right: auto;
-                    justify-content: center;
-                    margin-bottom: 20px;
-                }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            /* Empty States */
+            .empty-state {
+                text-align: center;
+                padding: 60px 20px;
+                color: #64748b;
+            }
+            
+            .empty-state h3 {
+                font-size: 18px;
+                margin-bottom: 10px;
+                color: #374151;
+            }
+            
+            .empty-state p {
+                font-size: 14px;
+                line-height: 1.5;
             }
         </style>
     </head>
     <body>
-        <!-- Top Header -->
-        <div class="top-header">
-            <div class="header-left">
-                <button class="sidebar-toggle" onclick="toggleSidebar()">
-                    <span id="sidebar-icon">📁</span>
-                </button>
-                <h1>📊 OnShelf AI Dashboard</h1>
-                <div class="breadcrumb" id="breadcrumb">
-                    <span>No image selected</span>
-                </div>
-            </div>
-            <div class="mode-selector">
-                <button class="mode-btn active" onclick="switchMode('upload')">Upload</button>
-                <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
-                <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
-                <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
-            </div>
-        </div>
-
-        <!-- Left Sidebar - Image Selection -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h3>📁 Image Library</h3>
-                <button class="btn-icon" onclick="toggleSidebar()">✕</button>
-            </div>
-            
-            <!-- Search and Filters -->
-            <div class="sidebar-filters">
-                <div class="search-box">
-                    <input type="text" id="imageSearch" placeholder="Search images..." onkeyup="filterImages()">
-                    <span class="search-icon">🔍</span>
+        <div class="app-container">
+            <!-- Left Sidebar - Image Selection -->
+            <div class="left-sidebar" id="leftSidebar">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">◀</button>
+                
+                <div class="sidebar-header">
+                    <h3>📁 Image Library</h3>
+                    <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
+                        Select an image to analyze
+                    </p>
                 </div>
                 
-                <div class="filter-row">
-                    <select id="storeFilter" onchange="filterImages()">
-                        <option value="">All Stores</option>
-                        <option value="store_001">Store 001 - Downtown</option>
-                        <option value="store_002">Store 002 - Mall</option>
-                        <option value="store_003">Store 003 - Airport</option>
-                        <option value="store_004">Store 004 - Suburb</option>
-                    </select>
-                </div>
-                
-                <div class="filter-row">
-                    <select id="categoryFilter" onchange="filterImages()">
-                        <option value="">All Categories</option>
-                        <option value="beverages">Beverages</option>
-                        <option value="snacks">Snacks</option>
-                        <option value="dairy">Dairy</option>
-                        <option value="frozen">Frozen</option>
-                        <option value="personal_care">Personal Care</option>
-                    </select>
-                </div>
-                
-                <div class="filter-row">
-                    <select id="statusFilter" onchange="filterImages()">
-                        <option value="">All Status</option>
-                        <option value="pending">Pending Review</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="flagged">Flagged</option>
-                    </select>
-                </div>
-                
-                <div class="filter-row">
-                    <input type="date" id="dateFilter" onchange="filterImages()">
-                </div>
-            </div>
-            
-            <!-- Image List -->
-            <div class="image-list" id="imageList">
-                <div class="list-header">
-                    <span class="result-count" id="resultCount">Loading images...</span>
+                <div class="filters-section">
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <div class="search-box">
+                            <input type="text" id="searchInput" placeholder="Search images..." onkeyup="filterImages()">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Store</label>
+                        <select id="storeFilter" onchange="filterImages()">
+                            <option value="">All Stores</option>
+                            <option value="walmart">Walmart</option>
+                            <option value="target">Target</option>
+                            <option value="kroger">Kroger</option>
+                            <option value="safeway">Safeway</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Category</label>
+                        <select id="categoryFilter" onchange="filterImages()">
+                            <option value="">All Categories</option>
+                            <option value="beverages">Beverages</option>
+                            <option value="snacks">Snacks</option>
+                            <option value="dairy">Dairy</option>
+                            <option value="frozen">Frozen</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="statusFilter" onchange="filterImages()">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                            <option value="review">Needs Review</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Date</label>
+                        <input type="date" id="dateFilter" onchange="filterImages()">
+                    </div>
+                    
                     <div class="view-toggle">
-                        <button class="view-btn active" onclick="setListView('grid')" title="Grid View">⊞</button>
-                        <button class="view-btn" onclick="setListView('list')" title="List View">☰</button>
+                        <button class="active" onclick="setViewMode('grid')">Grid</button>
+                        <button onclick="setViewMode('list')">List</button>
                     </div>
                 </div>
                 
-                <div class="image-grid" id="imageGrid">
-                    <!-- Images will be loaded here -->
-                </div>
-                
-                <div class="pagination" id="pagination">
-                    <button class="btn btn-secondary" onclick="loadPreviousPage()" id="prevBtn" disabled>← Previous</button>
-                    <span class="page-info" id="pageInfo">Page 1 of 1</span>
-                    <button class="btn btn-secondary" onclick="loadNextPage()" id="nextBtn" disabled>Next →</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Sidebar Overlay -->
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-        
-        <!-- Upload Interface -->
-        <div id="upload-interface" class="upload-interface">
-            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                <h2>📷 Upload Shelf Image</h2>
-                <p>Click here or drag and drop a retail shelf image</p>
-                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="uploadFile()">
-                <button class="btn" style="margin-top: 20px;">Choose File</button>
-            </div>
-        </div>
-        
-        <!-- Simple Mode - 2 Panel Layout -->
-        <div id="simple-mode" class="simple-mode">
-            <div class="image-panel">
-                <h3>📷 Original Image</h3>
-                <div class="image-viewer">
-                    <img id="originalImage" src="" alt="Original shelf image">
-                    <div class="zoom-controls">
-                        <button class="zoom-btn" onclick="zoomImage(0.25)">25%</button>
-                        <button class="zoom-btn" onclick="zoomImage(0.5)">50%</button>
-                        <button class="zoom-btn" onclick="zoomImage(1.0)">100%</button>
-                        <button class="zoom-btn" onclick="zoomImage(2.0)">200%</button>
-                        <button class="zoom-btn" onclick="zoomImage(4.0)">400%</button>
-                        <button class="zoom-btn" onclick="toggleOverlays()">Overlays</button>
+                <div class="images-container">
+                    <div id="imageGrid" class="image-grid">
+                        <!-- Images will be loaded here -->
                     </div>
                 </div>
                 
-                <div class="rating-system">
-                    <h4>⭐ Extraction Quality</h4>
-                    <div class="star-rating" data-rating="extraction">
-                        <span class="star" data-value="1">★</span>
-                        <span class="star" data-value="2">★</span>
-                        <span class="star" data-value="3">★</span>
-                        <span class="star" data-value="4">★</span>
-                        <span class="star" data-value="5">★</span>
-                    </div>
-                    
-                    <div class="feedback-area">
-                        <label>What worked well:</label>
-                        <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
+                <div class="pagination">
+                    <span id="paginationInfo">1-20 of 156 images</span>
+                    <div class="pagination-controls">
+                        <button onclick="previousPage()" id="prevBtn">‹</button>
+                        <button class="active">1</button>
+                        <button>2</button>
+                        <button>3</button>
+                        <button onclick="nextPage()" id="nextBtn">›</button>
                     </div>
                 </div>
             </div>
             
-            <div class="planogram-panel">
-                <h3>📊 Final Planogram</h3>
-                <div id="planogramViewer" class="image-viewer">
-                    <!-- Planogram will be rendered here -->
-                </div>
-                
-                <div class="rating-system">
-                    <h4>⭐ Planogram Quality</h4>
-                    <div class="star-rating" data-rating="planogram">
-                        <span class="star" data-value="1">★</span>
-                        <span class="star" data-value="2">★</span>
-                        <span class="star" data-value="3">★</span>
-                        <span class="star" data-value="4">★</span>
-                        <span class="star" data-value="5">★</span>
-                    </div>
-                    
-                    <div class="feedback-area">
-                        <label>Needs improvement:</label>
-                        <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
-                    </div>
-                    
-                    <div style="margin-top: 20px; display: flex; gap: 10px;">
-                        <button class="btn" onclick="switchMode('comparison')">Show Details</button>
-                        <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Comparison Mode - Agent Iterations -->
-        <div id="comparison-mode" class="comparison-mode">
-            <h2>🔄 Agent Iteration Comparison</h2>
-            
-            <div class="agent-tabs">
-                <button class="agent-tab active" onclick="switchAgent(1)">Agent 1</button>
-                <button class="agent-tab" onclick="switchAgent(2)">Agent 2</button>
-                <button class="agent-tab" onclick="switchAgent(3)">Agent 3</button>
-            </div>
-            
-            <div id="agent-1" class="agent-content active">
-                <div class="agent-data">
-                    <div class="performance-metrics">
-                        <div class="metric">
-                            <div class="metric-value" id="agent1-accuracy">73%</div>
-                            <div class="metric-label">Accuracy</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="agent1-products">21</div>
-                            <div class="metric-label">Products Found</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="agent1-time">45s</div>
-                            <div class="metric-label">Processing Time</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="agent1-model">GPT-4o</div>
-                            <div class="metric-label">Model Used</div>
-                        </div>
-                    </div>
-                    
-                    <h4>✅ Improvements</h4>
-                    <ul id="agent1-improvements">
-                        <li>Basic shelf structure detection</li>
-                        <li>Initial product identification</li>
-                    </ul>
-                    
-                    <h4>❌ Issues</h4>
-                    <ul id="agent1-issues">
-                        <li>Missing 4 products</li>
-                        <li>Price extraction errors</li>
-                        <li>Poor positioning accuracy</li>
-                    </ul>
-                    
-                    <h4>📋 JSON Data</h4>
-                    <div class="json-viewer loading" id="agent1-json">
-                        Loading agent data...
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Header -->
+                <div class="header">
+                    <h1>🤖 OnShelf AI Dashboard</h1>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
+                        <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
+                        <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
+                        <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
                     </div>
                 </div>
                 
-                <div class="agent-planogram">
-                    <h4>📊 Visual Planogram</h4>
-                    <div id="agent1-planogram" class="image-viewer">
-                        <!-- Agent 1 planogram will be rendered here -->
-                    </div>
-                </div>
-            </div>
-            
-            <div id="agent-2" class="agent-content">
-                <div class="agent-data">
-                    <div class="performance-metrics">
-                        <div class="metric">
-                            <div class="metric-value">89%</div>
-                            <div class="metric-label">Accuracy</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">24</div>
-                            <div class="metric-label">Products Found</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">38s</div>
-                            <div class="metric-label">Processing Time</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">Claude</div>
-                            <div class="metric-label">Model Used</div>
-                        </div>
-                    </div>
-                    
-                    <h4>✅ Improvements</h4>
-                    <ul>
-                        <li>Found 3 additional products</li>
-                        <li>Fixed price extraction</li>
-                        <li>Improved confidence scores</li>
-                    </ul>
-                    
-                    <h4>❌ Issues</h4>
-                    <ul>
-                        <li>Minor positioning errors</li>
-                        <li>2 products still missing</li>
-                    </ul>
-                    
-                    <h4>📋 JSON Data</h4>
-                    <div class="json-viewer loading">
-                        Loading agent data...
-                    </div>
+                <!-- Breadcrumb -->
+                <div class="breadcrumb">
+                    <span id="breadcrumb">Extraction Queue</span>
                 </div>
                 
-                <div class="agent-planogram">
-                    <h4>📊 Visual Planogram</h4>
-                    <div class="image-viewer">
-                        <!-- Agent 2 planogram will be rendered here -->
-                    </div>
-                </div>
-            </div>
-            
-            <div id="agent-3" class="agent-content">
-                <div class="agent-data">
-                    <div class="performance-metrics">
-                        <div class="metric">
-                            <div class="metric-value">94%</div>
-                            <div class="metric-label">Accuracy</div>
+                <!-- Content Area -->
+                <div class="content-area">
+                    <!-- Queue Interface -->
+                    <div id="queue-interface" class="queue-interface">
+                        <div class="queue-stats">
+                            <div class="stat-card review">
+                                <div class="stat-number" id="reviewCount">0</div>
+                                <div class="stat-label">Needs Review</div>
+                            </div>
+                            <div class="stat-card processing">
+                                <div class="stat-number" id="processingCount">0</div>
+                                <div class="stat-label">Processing</div>
+                            </div>
+                            <div class="stat-card completed">
+                                <div class="stat-number" id="completedCount">0</div>
+                                <div class="stat-label">Completed</div>
+                            </div>
+                            <div class="stat-card failed">
+                                <div class="stat-number" id="failedCount">0</div>
+                                <div class="stat-label">Failed</div>
+                            </div>
                         </div>
-                        <div class="metric">
-                            <div class="metric-value">25</div>
-                            <div class="metric-label">Products Found</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">22s</div>
-                            <div class="metric-label">Processing Time</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value">Hybrid</div>
-                            <div class="metric-label">Model Used</div>
+                        
+                        <div id="queueGrid" class="queue-grid">
+                            <!-- Queue items will be loaded here -->
                         </div>
                     </div>
                     
-                    <h4>✅ Improvements</h4>
-                    <ul>
-                        <li>Found all products</li>
-                        <li>Enhanced spatial positioning</li>
-                        <li>Cross-validation complete</li>
-                    </ul>
-                    
-                    <h4>❌ Issues</h4>
-                    <ul>
-                        <li>Minor confidence variations</li>
-                    </ul>
-                    
-                    <h4>📋 JSON Data</h4>
-                    <div class="json-viewer loading">
-                        Loading agent data...
+                    <!-- Simple Mode - 2 Panel Layout -->
+                    <div id="simple-mode" class="simple-mode">
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <h3>📷 Original Image</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div class="image-viewer">
+                                    <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
+                                    <div id="imageLoading" class="loading">Loading image...</div>
+                                    <div class="image-controls">
+                                        <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
+                                        <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
+                                        <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
+                                        <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="planogram-panel">
+                            <div class="panel-header">
+                                <h3>📊 Generated Planogram</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div id="planogramViewer" class="image-viewer">
+                                    <div class="loading">Loading planogram...</div>
+                                </div>
+                                
+                                <div class="rating-system">
+                                    <h4>⭐ Extraction Quality</h4>
+                                    <div class="star-rating" data-rating="extraction">
+                                        <span class="star" data-value="1">★</span>
+                                        <span class="star" data-value="2">★</span>
+                                        <span class="star" data-value="3">★</span>
+                                        <span class="star" data-value="4">★</span>
+                                        <span class="star" data-value="5">★</span>
+                                    </div>
+                                    
+                                    <div class="feedback-area">
+                                        <label>What worked well:</label>
+                                        <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
+                                    </div>
+                                    
+                                    <h4 style="margin-top: 20px;">⭐ Planogram Quality</h4>
+                                    <div class="star-rating" data-rating="planogram">
+                                        <span class="star" data-value="1">★</span>
+                                        <span class="star" data-value="2">★</span>
+                                        <span class="star" data-value="3">★</span>
+                                        <span class="star" data-value="4">★</span>
+                                        <span class="star" data-value="5">★</span>
+                                    </div>
+                                    
+                                    <div class="feedback-area">
+                                        <label>Needs improvement:</label>
+                                        <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
+                                    </div>
+                                    
+                                    <div style="margin-top: 20px; display: flex; gap: 10px;">
+                                        <button class="btn btn-primary" onclick="switchMode('comparison')">Show Details</button>
+                                        <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
+                                        <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="agent-planogram">
-                    <h4>📊 Visual Planogram</h4>
-                    <div class="image-viewer">
-                        <!-- Agent 3 planogram will be rendered here -->
+                    
+                    <!-- Comparison Mode - System Comparison -->
+                    <div id="comparison-mode" class="comparison-mode">
+                        <div class="agent-tabs">
+                            <button class="agent-tab active" onclick="switchAgent('agent1')">Agent 1: Custom Consensus</button>
+                            <button class="agent-tab" onclick="switchAgent('agent2')">Agent 2: LangGraph</button>
+                            <button class="agent-tab" onclick="switchAgent('agent3')">Agent 3: Hybrid</button>
+                        </div>
+                        
+                        <div id="agent1" class="agent-content">
+                            <div class="agent-metrics">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent1Accuracy">87%</div>
+                                    <div class="metric-label">Accuracy</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent1Speed">2.3s</div>
+                                    <div class="metric-label">Processing Time</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent1Cost">£0.12</div>
+                                    <div class="metric-label">API Cost</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent1Products">5</div>
+                                    <div class="metric-label">Products Found</div>
+                                </div>
+                            </div>
+                            
+                            <div class="extraction-results">
+                                <h4>Extraction Results</h4>
+                                <div id="agent1Results" class="results-grid">
+                                    <!-- Results will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="agent2" class="agent-content" style="display: none;">
+                            <div class="agent-metrics">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent2Accuracy">92%</div>
+                                    <div class="metric-label">Accuracy</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent2Speed">4.1s</div>
+                                    <div class="metric-label">Processing Time</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent2Cost">£0.18</div>
+                                    <div class="metric-label">API Cost</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent2Products">6</div>
+                                    <div class="metric-label">Products Found</div>
+                                </div>
+                            </div>
+                            
+                            <div class="extraction-results">
+                                <h4>Extraction Results</h4>
+                                <div id="agent2Results" class="results-grid">
+                                    <!-- Results will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="agent3" class="agent-content" style="display: none;">
+                            <div class="agent-metrics">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent3Accuracy">95%</div>
+                                    <div class="metric-label">Accuracy</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent3Speed">3.7s</div>
+                                    <div class="metric-label">Processing Time</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent3Cost">£0.15</div>
+                                    <div class="metric-label">API Cost</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value" id="agent3Products">7</div>
+                                    <div class="metric-label">Products Found</div>
+                                </div>
+                            </div>
+                            
+                            <div class="extraction-results">
+                                <h4>Extraction Results</h4>
+                                <div id="agent3Results" class="results-grid">
+                                    <!-- Results will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="switchMode('simple')">Simple View</button>
+                            <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
+                            <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Advanced Mode - 4 Panel Layout -->
-        <div id="advanced-mode" class="advanced-mode">
-            <div class="panel">
-                <h3>📷 Original Image</h3>
-                <div class="image-viewer">
-                    <img id="advancedOriginalImage" src="" alt="Original shelf image">
-                </div>
-            </div>
-            
-            <div class="panel">
-                <h3>🤖 Agent Deep Dive</h3>
-                <div style="margin-bottom: 15px;">
-                    <select id="agentSelector" onchange="loadAgentDeepDive()">
-                        <option value="1">Agent 1 - Initial Extraction</option>
-                        <option value="2">Agent 2 - Enhanced Detection</option>
-                        <option value="3">Agent 3 - Final Optimization</option>
-                    </select>
-                </div>
-                <div id="agentDeepDive" class="json-viewer loading">
-                    Loading agent details...
-                </div>
-                <button class="btn btn-secondary" onclick="openPromptEditor()" style="margin-top: 15px;">
-                    ✏️ Edit Prompts
-                </button>
-            </div>
-            
-            <div class="panel">
-                <h3>📊 Planogram Analysis</h3>
-                <div id="planogramAnalysis">
-                    <h4>Quality Evaluation</h4>
-                    <div class="star-rating" data-rating="advanced-planogram">
-                        <span class="star" data-value="1">★</span>
-                        <span class="star" data-value="2">★</span>
-                        <span class="star" data-value="3">★</span>
-                        <span class="star" data-value="4">★</span>
-                        <span class="star" data-value="5">★</span>
-                    </div>
                     
-                    <h4>Issue Detection</h4>
-                    <div style="margin: 15px 0;">
-                        <label><input type="checkbox"> Poor spatial layout</label><br>
-                        <label><input type="checkbox"> Missing products</label><br>
-                        <label><input type="checkbox"> Incorrect positioning</label><br>
-                        <label><input type="checkbox"> Price extraction errors</label><br>
-                        <label><input type="checkbox"> Visual clarity issues</label>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <h3>🧠 Orchestrator Reasoning</h3>
-                <div id="orchestratorInsights">
-                    <h4>Decision Logic</h4>
-                    <p>Master orchestrator chose 3-iteration approach based on initial complexity assessment.</p>
-                    
-                    <h4>Iteration Strategy</h4>
-                    <ul>
-                        <li>Agent 1: Broad detection with GPT-4o</li>
-                        <li>Agent 2: Refinement with Claude</li>
-                        <li>Agent 3: Validation with hybrid approach</li>
-                    </ul>
-                    
-                    <h4>Focus Areas</h4>
-                    <ul>
-                        <li>Product detection accuracy</li>
-                        <li>Spatial positioning</li>
-                        <li>Price extraction</li>
-                    </ul>
-                    
-                    <h4>Learning Progress</h4>
-                    <div class="metric">
-                        <div class="metric-value">+21%</div>
-                        <div class="metric-label">Accuracy Improvement</div>
+                    <!-- Advanced Mode - 4 Panel Technical Deep Dive -->
+                    <div id="advanced-mode" class="advanced-mode">
+                        <div class="advanced-grid">
+                            <!-- Original Image Panel -->
+                            <div class="advanced-panel">
+                                <div class="panel-header">
+                                    <h3>📷 Original Image Analysis</h3>
+                                </div>
+                                <div class="panel-content">
+                                    <div class="image-viewer">
+                                        <img id="advancedOriginalImage" src="" alt="Original image">
+                                        <div class="image-controls">
+                                            <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
+                                            <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
+                                            <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
+                                            <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Agent Deep Dive Panel -->
+                            <div class="advanced-panel">
+                                <div class="panel-header">
+                                    <h3>🔍 Agent Deep Dive</h3>
+                                </div>
+                                <div class="technical-analysis">
+                                    <div class="analysis-section">
+                                        <h4>Model Performance</h4>
+                                        <div class="analysis-data" id="modelPerformance">
+                                            Loading performance data...
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="analysis-section">
+                                        <h4>Confidence Scores</h4>
+                                        <div class="analysis-data" id="confidenceScores">
+                                            Loading confidence data...
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="analysis-section">
+                                        <h4>Error Analysis</h4>
+                                        <div class="analysis-data" id="errorAnalysis">
+                                            Loading error analysis...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Planogram Analysis Panel -->
+                            <div class="advanced-panel">
+                                <div class="panel-header">
+                                    <h3>📊 Planogram Analysis</h3>
+                                </div>
+                                <div class="panel-content">
+                                    <div id="advancedPlanogramViewer" class="image-viewer">
+                                        <div class="loading">Loading planogram...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Orchestrator Panel -->
+                            <div class="advanced-panel">
+                                <div class="panel-header">
+                                    <h3>⚙️ System Orchestrator</h3>
+                                </div>
+                                <div class="orchestrator-panel">
+                                    <div class="orchestrator-flow" id="orchestratorFlow">
+                                        <!-- Flow steps will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="switchMode('simple')">Simple View</button>
+                            <button class="btn btn-secondary" onclick="switchMode('comparison')">Comparison Mode</button>
+                            <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <script>
-            let currentMode = 'upload';
-            let currentAgent = 1;
-            let currentUploadId = null;
+            // Global state
+            let currentMode = 'queue';
+            let selectedItemId = null;
+            let queueData = [];
+            let imageData = [];
+            let filteredImages = [];
+            let currentPage = 1;
+            let itemsPerPage = 20;
+            let viewMode = 'grid';
+            let sidebarCollapsed = false;
             let zoomLevel = 1.0;
             let overlaysVisible = false;
-            let sidebarOpen = false;
-            let currentPage = 1;
-            let totalPages = 1;
-            let imagesPerPage = 20;
-            let allImages = [];
-            let filteredImages = [];
-            let selectedImageId = null;
+            let currentAgent = 'agent1';
+            
+            // Initialize application
+            document.addEventListener('DOMContentLoaded', function() {
+                // Collapse sidebar by default on queue page
+                sidebarCollapsed = true;
+                const sidebar = document.getElementById('leftSidebar');
+                const toggle = sidebar.querySelector('.sidebar-toggle');
+                sidebar.classList.add('collapsed');
+                toggle.innerHTML = '▶';
+                
+                loadQueue();
+                loadImages();
+            });
+            
+            // Sidebar management
+            function toggleSidebar() {
+                const sidebar = document.getElementById('leftSidebar');
+                const toggle = sidebar.querySelector('.sidebar-toggle');
+                
+                sidebarCollapsed = !sidebarCollapsed;
+                
+                if (sidebarCollapsed) {
+                    sidebar.classList.add('collapsed');
+                    toggle.innerHTML = '▶';
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    toggle.innerHTML = '◀';
+                }
+            }
             
             // Mode switching
             function switchMode(mode) {
                 // Hide all modes
-                document.getElementById('upload-interface').style.display = 'none';
-                document.getElementById('simple-mode').style.display = 'none';
-                document.getElementById('comparison-mode').style.display = 'none';
-                document.getElementById('advanced-mode').style.display = 'none';
+                document.getElementById('queue-interface').style.display = 'none';
+                document.getElementById('simple-mode').classList.remove('active');
+                document.getElementById('comparison-mode').classList.remove('active');
+                document.getElementById('advanced-mode').classList.remove('active');
                 
                 // Update mode buttons
                 document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
                 event.target.classList.add('active');
                 
+                // Manage sidebar based on mode
+                const sidebar = document.getElementById('leftSidebar');
+                const toggle = sidebar.querySelector('.sidebar-toggle');
+                
                 // Show selected mode
-                if (mode === 'upload') {
-                    document.getElementById('upload-interface').style.display = 'flex';
+                if (mode === 'queue') {
+                    document.getElementById('queue-interface').style.display = 'block';
+                    updateBreadcrumb('Extraction Queue');
+                    
+                    // Collapse sidebar for queue mode (not needed)
+                    if (!sidebarCollapsed) {
+                        sidebarCollapsed = true;
+                        sidebar.classList.add('collapsed');
+                        toggle.innerHTML = '▶';
+                    }
                 } else if (mode === 'simple') {
-                    document.getElementById('simple-mode').style.display = 'grid';
+                    document.getElementById('simple-mode').classList.add('active');
+                    updateBreadcrumb(`Extraction #${selectedItemId} - Simple Analysis`);
+                    loadSimpleModeData();
+                    
+                    // Expand sidebar for analysis modes (image selection needed)
+                    if (sidebarCollapsed) {
+                        sidebarCollapsed = false;
+                        sidebar.classList.remove('collapsed');
+                        toggle.innerHTML = '◀';
+                    }
                 } else if (mode === 'comparison') {
-                    document.getElementById('comparison-mode').style.display = 'block';
+                    document.getElementById('comparison-mode').classList.add('active');
+                    updateBreadcrumb(`Extraction #${selectedItemId} - System Comparison`);
+                    loadComparisonModeData();
+                    
+                    // Expand sidebar for analysis modes
+                    if (sidebarCollapsed) {
+                        sidebarCollapsed = false;
+                        sidebar.classList.remove('collapsed');
+                        toggle.innerHTML = '◀';
+                    }
                 } else if (mode === 'advanced') {
-                    document.getElementById('advanced-mode').style.display = 'grid';
+                    document.getElementById('advanced-mode').classList.add('active');
+                    updateBreadcrumb(`Extraction #${selectedItemId} - Advanced Analysis`);
+                    loadAdvancedModeData();
+                    
+                    // Expand sidebar for analysis modes
+                    if (sidebarCollapsed) {
+                        sidebarCollapsed = false;
+                        sidebar.classList.remove('collapsed');
+                        toggle.innerHTML = '◀';
+                    }
                 }
                 
                 currentMode = mode;
             }
             
+            function updateBreadcrumb(text) {
+                document.getElementById('breadcrumb').innerHTML = `<span>${text}</span>`;
+            }
+            
+            // Load queue data
+            async function loadQueue() {
+                try {
+                    console.log('🔄 Loading queue data from API...');
+                    const response = await fetch('/api/queue/items');
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    queueData = data.items || [];
+                    
+                    console.log(`✅ Successfully loaded ${queueData.length} real queue items from database`);
+                    console.log('Queue items:', queueData.map(item => `#${item.id} (${item.status})`).join(', '));
+                    
+                    updateQueueStats();
+                    renderQueue();
+                    
+                } catch (error) {
+                    console.error('❌ Failed to load queue data:', error);
+                    
+                    // Show error state instead of mock data
+                    queueData = [];
+                    updateQueueStats();
+                    renderQueueError(error.message);
+                }
+            }
+            
+            // Load images for sidebar
+            async function loadImages() {
+                try {
+                    console.log('🔄 Loading image data from API...');
+                    const response = await fetch('/api/queue/items');
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    imageData = data.items || [];
+                    filteredImages = [...imageData];
+                    
+                    console.log(`✅ Successfully loaded ${imageData.length} real images for sidebar`);
+                    renderImages();
+                    
+                } catch (error) {
+                    console.error('❌ Failed to load image data:', error);
+                    
+                    // Show error state instead of mock data
+                    imageData = [];
+                    filteredImages = [];
+                    renderImagesError(error.message);
+                }
+            }
+            
+
+            
+            // Update queue statistics
+            function updateQueueStats() {
+                const stats = {
+                    review: queueData.filter(item => item.human_review_required).length,
+                    processing: queueData.filter(item => item.status === 'processing').length,
+                    completed: queueData.filter(item => item.status === 'completed').length,
+                    failed: queueData.filter(item => item.status === 'failed').length
+                };
+                
+                document.getElementById('reviewCount').textContent = stats.review;
+                document.getElementById('processingCount').textContent = stats.processing;
+                document.getElementById('completedCount').textContent = stats.completed;
+                document.getElementById('failedCount').textContent = stats.failed;
+            }
+            
+            // Render queue error
+            function renderQueueError(errorMessage) {
+                const grid = document.getElementById('queueGrid');
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <h3>❌ Failed to Load Queue</h3>
+                        <p>Error: ${errorMessage}</p>
+                        <button class="btn btn-primary" onclick="loadQueue()" style="margin-top: 15px;">🔄 Retry</button>
+                    </div>
+                `;
+            }
+            
+            // Render queue items
+            function renderQueue() {
+                const grid = document.getElementById('queueGrid');
+                
+                if (queueData.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1 / -1;">
+                            <h3>📭 No Queue Items</h3>
+                            <p>No extraction items found in the queue. Upload some images to get started.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = queueData.map(item => `
+                    <div class="queue-item ${item.human_review_required ? 'priority' : ''} ${selectedItemId === item.id ? 'selected' : ''}" 
+                         onclick="selectQueueItem(${item.id})" 
+                         data-item-id="${item.id}">
+                        <div class="item-header">
+                            <div class="item-title">Extraction #${item.id}</div>
+                            <div class="item-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</div>
+                        </div>
+                        
+                        <div class="item-meta">
+                            Created: ${new Date(item.created_at).toLocaleDateString()}<br>
+                            ${item.comparison_group_id ? `Group: ${item.comparison_group_id}` : 'Not processed'}
+                            ${item.human_review_required ? '<br><strong>⚠️ Needs Human Review</strong>' : ''}
+                        </div>
+                        
+                        ${item.final_accuracy !== null ? `
+                            <div class="item-accuracy">
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: ${item.final_accuracy * 100}%"></div>
+                                </div>
+                                <div class="accuracy-text">${Math.round(item.final_accuracy * 100)}%</div>
+                            </div>
+                        ` : ''}
+                        
+                        ${item.status === 'pending' ? `
+                            <div class="system-selection">
+                                <div class="system-label">Select Extraction Systems:</div>
+                                <div class="system-checkboxes">
+                                    <div class="system-checkbox">
+                                        <input type="checkbox" id="custom_${item.id}" value="custom_consensus" 
+                                               onchange="updateSystemSelection(${item.id})" checked>
+                                        <label for="custom_${item.id}">Custom Consensus</label>
+                                    </div>
+                                    <div class="system-description">Direct API calls with weighted voting</div>
+                                    
+                                    <div class="system-checkbox">
+                                        <input type="checkbox" id="langgraph_${item.id}" value="langgraph" 
+                                               onchange="updateSystemSelection(${item.id})">
+                                        <label for="langgraph_${item.id}">LangGraph</label>
+                                    </div>
+                                    <div class="system-description">Professional workflow orchestration</div>
+                                    
+                                    <div class="system-checkbox">
+                                        <input type="checkbox" id="hybrid_${item.id}" value="hybrid" 
+                                               onchange="updateSystemSelection(${item.id})">
+                                        <label for="hybrid_${item.id}">Hybrid</label>
+                                    </div>
+                                    <div class="system-description">Combines both approaches</div>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="item-actions">
+                            ${item.status === 'pending' ? `
+                                <button class="btn btn-primary" onclick="startProcessing(${item.id})">Start Processing</button>
+                            ` : `
+                                <button class="btn btn-success" onclick="viewResults(${item.id})">View Results</button>
+                            `}
+                            ${item.status === 'completed' ? `
+                                <button class="btn btn-secondary" onclick="reprocess(${item.id})">Reprocess</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            // Render images error
+            function renderImagesError(errorMessage) {
+                const container = document.getElementById('imageGrid');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>❌ Failed to Load Images</h3>
+                        <p>Error: ${errorMessage}</p>
+                        <button class="btn btn-primary" onclick="loadImages()" style="margin-top: 15px;">🔄 Retry</button>
+                    </div>
+                `;
+            }
+            
+            // Render images in sidebar
+            function renderImages() {
+                const container = document.getElementById('imageGrid');
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const pageImages = filteredImages.slice(startIndex, endIndex);
+                
+                container.className = viewMode === 'grid' ? 'image-grid' : 'image-list';
+                
+                if (pageImages.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>📭 No Images</h3>
+                            <p>No images available. Upload some images to get started.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = pageImages.map(image => `
+                    <div class="image-item ${viewMode}-view ${selectedItemId === image.id ? 'selected' : ''}" 
+                         onclick="selectImage(${image.id})">
+                        <div class="image-thumbnail">
+                            <img src="/api/queue/image/${image.id}" alt="Queue item ${image.id}" 
+                                 style="width: 100%; height: 100%; object-fit: cover;" 
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='📷';">
+                        </div>
+                        <div class="image-info">
+                            <div class="image-title">Extraction #${image.id}</div>
+                            <div class="image-meta">
+                                ${image.ready_media_id ? `Media: ${image.ready_media_id.substring(0, 8)}...` : 'No media ID'}<br>
+                                ${new Date(image.created_at).toLocaleDateString()}
+                                <div class="status-badge status-${image.status}">${image.status}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                updatePagination();
+            }
+            
+            // Image selection
+            function selectImage(imageId) {
+                selectedItemId = imageId;
+                
+                // Update visual selection in sidebar
+                document.querySelectorAll('.image-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                event.target.closest('.image-item').classList.add('selected');
+                
+                // Auto-switch to simple mode and load the image
+                switchMode('simple');
+                
+                // Close sidebar on mobile
+                if (window.innerWidth <= 768) {
+                    toggleSidebar();
+                }
+            }
+            
+            // Load data for different modes
+            async function loadSimpleModeData() {
+                if (!selectedItemId) return;
+                
+                try {
+                    // Load original image
+                    const imageElement = document.getElementById('originalImage');
+                    const loadingElement = document.getElementById('imageLoading');
+                    
+                    imageElement.onload = function() {
+                        loadingElement.style.display = 'none';
+                        imageElement.style.display = 'block';
+                    };
+                    
+                    imageElement.onerror = function() {
+                        loadingElement.innerHTML = 'Failed to load image';
+                    };
+                    
+                    imageElement.src = `/api/queue/image/${selectedItemId}`;
+                    
+                    // Load planogram
+                    const planogramViewer = document.getElementById('planogramViewer');
+                    try {
+                        const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=product_view`);
+                        if (planogramResponse.ok) {
+                            const svgContent = await planogramResponse.text();
+                            planogramViewer.innerHTML = svgContent;
+                        } else {
+                            planogramViewer.innerHTML = '<div class="loading">Planogram not available</div>';
+                        }
+                    } catch (error) {
+                        planogramViewer.innerHTML = '<div class="loading">Failed to load planogram</div>';
+                    }
+                    
+                } catch (error) {
+                    console.error('Error loading simple mode data:', error);
+                }
+            }
+            
+            async function loadComparisonModeData() {
+                if (!selectedItemId) return;
+                
+                // Load comparison data for each agent
+                try {
+                    // This would normally fetch real comparison data
+                    // For now, we'll use the existing mock data structure
+                    console.log('Loading comparison data for item:', selectedItemId);
+                    
+                    // Load results for each agent
+                    await loadAgentResults('agent1');
+                    await loadAgentResults('agent2');
+                    await loadAgentResults('agent3');
+                    
+                } catch (error) {
+                    console.error('Error loading comparison data:', error);
+                }
+            }
+            
+            async function loadAdvancedModeData() {
+                if (!selectedItemId) return;
+                
+                try {
+                    // Load original image in advanced mode
+                    const advancedImage = document.getElementById('advancedOriginalImage');
+                    advancedImage.src = `/api/queue/image/${selectedItemId}`;
+                    
+                    // Load planogram in advanced mode
+                    const advancedPlanogram = document.getElementById('advancedPlanogramViewer');
+                    try {
+                        const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
+                        if (planogramResponse.ok) {
+                            const svgContent = await planogramResponse.text();
+                            advancedPlanogram.innerHTML = svgContent;
+                        } else {
+                            advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                        }
+                    } catch (error) {
+                        advancedPlanogram.innerHTML = '<div class="loading">Failed to load planogram</div>';
+                    }
+                    
+                    // Load technical analysis data
+                    await loadTechnicalAnalysis();
+                    await loadOrchestratorFlow();
+                    
+                } catch (error) {
+                    console.error('Error loading advanced mode data:', error);
+                }
+            }
+            
+            async function loadAgentResults(agentId) {
+                const resultsContainer = document.getElementById(`${agentId}Results`);
+                
+                if (!selectedItemId) {
+                    resultsContainer.innerHTML = '<div class="loading">No item selected</div>';
+                    return;
+                }
+                
+                try {
+                    // Try to load real comparison results
+                    const response = await fetch(`/api/queue/comparison/${selectedItemId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Process real comparison data here
+                        resultsContainer.innerHTML = '<div class="loading">Real comparison data loaded</div>';
+                    } else {
+                        resultsContainer.innerHTML = '<div class="loading">No comparison data available yet</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load agent results:', error);
+                    resultsContainer.innerHTML = '<div class="loading">Failed to load comparison data</div>';
+                }
+            }
+            
+            async function loadTechnicalAnalysis() {
+                if (!selectedItemId) {
+                    document.getElementById('modelPerformance').innerHTML = 'No item selected';
+                    document.getElementById('confidenceScores').innerHTML = 'No item selected';
+                    document.getElementById('errorAnalysis').innerHTML = 'No item selected';
+                    return;
+                }
+                
+                try {
+                    // Try to load real technical analysis data
+                    const response = await fetch(`/api/queue/analysis/${selectedItemId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Process real analysis data here
+                        document.getElementById('modelPerformance').innerHTML = 'Real performance data loaded';
+                        document.getElementById('confidenceScores').innerHTML = 'Real confidence data loaded';
+                        document.getElementById('errorAnalysis').innerHTML = 'Real error analysis loaded';
+                    } else {
+                        document.getElementById('modelPerformance').innerHTML = 'No analysis data available yet';
+                        document.getElementById('confidenceScores').innerHTML = 'No confidence data available yet';
+                        document.getElementById('errorAnalysis').innerHTML = 'No error analysis available yet';
+                    }
+                } catch (error) {
+                    console.error('Failed to load technical analysis:', error);
+                    document.getElementById('modelPerformance').innerHTML = 'Failed to load performance data';
+                    document.getElementById('confidenceScores').innerHTML = 'Failed to load confidence data';
+                    document.getElementById('errorAnalysis').innerHTML = 'Failed to load error analysis';
+                }
+            }
+            
+            async function loadOrchestratorFlow() {
+                const flowContainer = document.getElementById('orchestratorFlow');
+                
+                if (!selectedItemId) {
+                    flowContainer.innerHTML = '<div class="loading">No item selected</div>';
+                    return;
+                }
+                
+                try {
+                    // Try to load real orchestrator flow data
+                    const response = await fetch(`/api/queue/flow/${selectedItemId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Process real flow data here
+                        flowContainer.innerHTML = '<div class="loading">Real orchestrator flow loaded</div>';
+                    } else {
+                        flowContainer.innerHTML = '<div class="loading">No flow data available yet</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load orchestrator flow:', error);
+                    flowContainer.innerHTML = '<div class="loading">Failed to load flow data</div>';
+                }
+            }
+            
             // Agent switching in comparison mode
-            function switchAgent(agentNumber) {
+            function switchAgent(agentId) {
                 // Hide all agent content
                 document.querySelectorAll('.agent-content').forEach(content => {
-                    content.classList.remove('active');
+                    content.style.display = 'none';
                 });
                 
-                // Update agent tabs
+                // Update tab states
                 document.querySelectorAll('.agent-tab').forEach(tab => {
                     tab.classList.remove('active');
                 });
                 
                 // Show selected agent
-                document.getElementById(`agent-${agentNumber}`).classList.add('active');
+                document.getElementById(agentId).style.display = 'block';
                 event.target.classList.add('active');
                 
-                currentAgent = agentNumber;
+                currentAgent = agentId;
             }
             
-            // File upload
-            async function uploadFile() {
-                const fileInput = document.getElementById('fileInput');
-                const file = fileInput.files[0];
+            // Helper functions
+            function getStatusClass(status) {
+                const classes = {
+                    'pending': 'status-pending',
+                    'processing': 'status-processing',
+                    'completed': 'status-completed',
+                    'failed': 'status-failed'
+                };
+                return classes[status] || 'status-pending';
+            }
+            
+            function getStatusText(status) {
+                const texts = {
+                    'pending': 'Pending',
+                    'processing': 'Processing',
+                    'completed': 'Completed',
+                    'failed': 'Failed'
+                };
+                return texts[status] || 'Unknown';
+            }
+            
+            // Queue item selection
+            function selectQueueItem(itemId) {
+                selectedItemId = itemId;
                 
-                if (!file) return;
+                // Update visual selection
+                document.querySelectorAll('.queue-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                document.querySelector(`[data-item-id="${itemId}"]`).classList.add('selected');
+                
+                // Update breadcrumb
+                updateBreadcrumb(`Extraction #${itemId} Selected`);
+            }
+            
+            // System selection update
+            function updateSystemSelection(itemId) {
+                const checkboxes = document.querySelectorAll(`input[onchange="updateSystemSelection(${itemId})"]`);
+                const selectedSystems = Array.from(checkboxes)
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value);
+                
+                // Update the item data
+                const item = queueData.find(item => item.id === itemId);
+                if (item) {
+                    item.selected_systems = selectedSystems;
+                }
+                
+                console.log(`Updated systems for item ${itemId}:`, selectedSystems);
+            }
+            
+            // Processing actions
+            async function startProcessing(itemId) {
+                const item = queueData.find(item => item.id === itemId);
+                if (!item || item.selected_systems.length === 0) {
+                    alert('Please select at least one extraction system');
+                    return;
+                }
                 
                 try {
-                    // Show processing message
-                    document.querySelector('.upload-area h2').textContent = '🔄 Processing...';
-                    document.querySelector('.upload-area p').textContent = 'This may take a few minutes';
-                    
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('target_accuracy', '0.95');
-                    formData.append('max_iterations', '3');
-                    formData.append('abstraction_level', 'product_view');
-                    
-                    // First upload the image to the library
-                    const uploadFormData = new FormData();
-                    uploadFormData.append('file', file);
-                    uploadFormData.append('store_id', 'store_001'); // Default store
-                    uploadFormData.append('category', 'unknown'); // Default category
-                    uploadFormData.append('description', 'Uploaded via dashboard');
-                    
-                    const uploadResponse = await fetch('/api/images/upload', {
+                    const response = await fetch(`/api/queue/process/${itemId}`, {
                         method: 'POST',
-                        body: uploadFormData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ systems: item.selected_systems })
                     });
-                    
-                    const uploadResult = await uploadResponse.json();
-                    
-                    if (!uploadResponse.ok) {
-                        throw new Error(uploadResult.detail || 'Upload failed');
-                    }
-                    
-                    // Then process with iterations (keeping existing functionality)
-                    const response = await fetch('/api/v2/process-with-iterations', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
                     
                     if (response.ok) {
-                        currentUploadId = result.upload_id;
-                        loadProcessingResults(result);
-                        switchMode('simple');
+                        // Update item status
+                        item.status = 'processing';
+                        renderQueue();
+                        updateQueueStats();
                     } else {
-                        throw new Error(result.detail || 'Processing failed');
+                        throw new Error('Failed to start processing');
                     }
                 } catch (error) {
-                    alert(`❌ Error: ${error.message}`);
-                    // Reset upload area
-                    document.querySelector('.upload-area h2').textContent = '📷 Upload Shelf Image';
-                    document.querySelector('.upload-area p').textContent = 'Click here or drag and drop a retail shelf image';
+                    console.error('Error starting processing:', error);
+                    alert('Failed to start processing. Please try again.');
                 }
             }
             
-            // Load processing results into UI
-            function loadProcessingResults(result) {
-                // Set original image (if from file upload)
-                if (document.getElementById('fileInput').files && document.getElementById('fileInput').files[0]) {
-                    const imageUrl = URL.createObjectURL(document.getElementById('fileInput').files[0]);
-                    document.getElementById('originalImage').src = imageUrl;
-                    document.getElementById('advancedOriginalImage').src = imageUrl;
-                }
-                
-                // Load planogram
-                if (result.upload_id || result.image_id) {
-                    const imageId = result.image_id || result.upload_id;
-                    loadPlanogram(imageId);
-                }
-                
-                // Load agent iteration data
-                if (result.agent_iterations) {
-                    result.agent_iterations.forEach((agent, index) => {
-                        const agentNum = index + 1;
+            async function viewResults(itemId) {
+                selectedItemId = itemId;
+                switchMode('simple');
+            }
+            
+            async function reprocess(itemId) {
+                if (confirm('Are you sure you want to reprocess this extraction?')) {
+                    try {
+                        const response = await fetch(`/api/queue/reprocess/${itemId}`, {
+                            method: 'POST'
+                        });
                         
-                        // Update metrics
-                        const accuracyEl = document.getElementById(`agent${agentNum}-accuracy`);
-                        const productsEl = document.getElementById(`agent${agentNum}-products`);
-                        const timeEl = document.getElementById(`agent${agentNum}-time`);
-                        const modelEl = document.getElementById(`agent${agentNum}-model`);
-                        
-                        if (accuracyEl) accuracyEl.textContent = `${Math.round(agent.accuracy * 100)}%`;
-                        if (productsEl) productsEl.textContent = agent.products_found;
-                        if (timeEl) timeEl.textContent = `${agent.duration}`;
-                        if (modelEl) modelEl.textContent = agent.model_used;
-                        
-                        // Update improvements and issues
-                        const improvementsEl = document.getElementById(`agent${agentNum}-improvements`);
-                        const issuesEl = document.getElementById(`agent${agentNum}-issues`);
-                        
-                        if (improvementsEl && agent.improvements) {
-                            improvementsEl.innerHTML = agent.improvements.map(imp => `<li>${imp}</li>`).join('');
+                        if (response.ok) {
+                            loadQueue(); // Reload queue
+                        } else {
+                            throw new Error('Failed to start reprocessing');
                         }
-                        
-                        if (issuesEl && agent.issues) {
-                            issuesEl.innerHTML = agent.issues.map(issue => `<li>${issue}</li>`).join('');
-                        }
-                        
-                        // Update JSON data
-                        const jsonEl = document.getElementById(`agent${agentNum}-json`);
-                        if (jsonEl && agent.json_data) {
-                            jsonEl.classList.remove('loading');
-                            jsonEl.textContent = JSON.stringify(agent.json_data, null, 2);
-                        }
-                    });
+                    } catch (error) {
+                        console.error('Error reprocessing:', error);
+                        alert('Failed to start reprocessing. Please try again.');
+                    }
                 }
             }
             
-            // Zoom controls
+            // Image filtering
+            function filterImages() {
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                const storeFilter = document.getElementById('storeFilter').value;
+                const categoryFilter = document.getElementById('categoryFilter').value;
+                const statusFilter = document.getElementById('statusFilter').value;
+                const dateFilter = document.getElementById('dateFilter').value;
+                
+                filteredImages = imageData.filter(image => {
+                    // Search filter
+                    if (searchTerm && !image.title.toLowerCase().includes(searchTerm)) return false;
+                    
+                    // Store filter
+                    if (storeFilter && image.store !== storeFilter) return false;
+                    
+                    // Category filter
+                    if (categoryFilter && image.category !== categoryFilter) return false;
+                    
+                    // Status filter
+                    if (statusFilter && image.status !== statusFilter) return false;
+                    
+                    // Date filter
+                    if (dateFilter) {
+                        const imageDate = new Date(image.created_at).toISOString().split('T')[0];
+                        if (imageDate !== dateFilter) return false;
+                    }
+                    
+                    return true;
+                });
+                
+                currentPage = 1;
+                renderImages();
+            }
+            
+            // View mode switching
+            function setViewMode(mode) {
+                viewMode = mode;
+                
+                // Update button states
+                document.querySelectorAll('.view-toggle button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+                
+                renderImages();
+            }
+            
+            // Pagination
+            function updatePagination() {
+                const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+                const startItem = (currentPage - 1) * itemsPerPage + 1;
+                const endItem = Math.min(currentPage * itemsPerPage, filteredImages.length);
+                
+                document.getElementById('paginationInfo').textContent = 
+                    `${startItem}-${endItem} of ${filteredImages.length} images`;
+                
+                document.getElementById('prevBtn').disabled = currentPage === 1;
+                document.getElementById('nextBtn').disabled = currentPage === totalPages;
+            }
+            
+            function previousPage() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderImages();
+                }
+            }
+            
+            function nextPage() {
+                const totalPages = Math.ceil(filteredImages.length / itemsPerPage);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderImages();
+                }
+            }
+            
+            // Image controls
             function zoomImage(level) {
                 zoomLevel = level;
                 const images = document.querySelectorAll('.image-viewer img');
@@ -1394,8 +2180,8 @@ async def root():
             
             function toggleOverlays() {
                 overlaysVisible = !overlaysVisible;
-                // TODO: Implement overlay toggle
                 console.log('Overlays toggled:', overlaysVisible);
+                // This would toggle overlay visibility in a real implementation
             }
             
             // Star rating system
@@ -1414,358 +2200,9 @@ async def root():
                         }
                     });
                     
-                    // Store rating
                     console.log(`Rating for ${ratingGroup}: ${rating} stars`);
                 }
             });
-            
-            // Prompt editor
-            function openPromptEditor() {
-                // TODO: Implement prompt editor modal
-                alert('Prompt editor will open here');
-            }
-            
-            // Agent deep dive
-            function loadAgentDeepDive() {
-                const agentNumber = document.getElementById('agentSelector').value;
-                // TODO: Load detailed agent data
-                console.log('Loading deep dive for agent:', agentNumber);
-            }
-            
-            // Load planogram
-            async function loadPlanogram(imageId) {
-                try {
-                    // Load SVG planogram
-                    const planogramUrl = `/api/planogram/${imageId}/render?format=svg&abstraction_level=product_view`;
-                    
-                    const response = await fetch(planogramUrl);
-                    if (response.ok) {
-                        const svgContent = await response.text();
-                        
-                        // Display in planogram viewer
-                        const planogramViewer = document.getElementById('planogramViewer');
-                        planogramViewer.innerHTML = svgContent;
-                        
-                        // Also update agent planogram views
-                        document.querySelectorAll('[id^="agent"][id$="-planogram"]').forEach(viewer => {
-                            viewer.innerHTML = svgContent;
-                        });
-                    } else {
-                        throw new Error('Failed to load planogram');
-                    }
-                } catch (error) {
-                    console.error('Error loading planogram:', error);
-                    
-                    // Fallback placeholder
-                    const planogramViewer = document.getElementById('planogramViewer');
-                    planogramViewer.innerHTML = `
-                        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; flex-direction: column;">
-                            <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
-                            <div>Planogram will be generated here</div>
-                        </div>
-                    `;
-                }
-            }
-            
-            // Sidebar functionality
-            function toggleSidebar() {
-                sidebarOpen = !sidebarOpen;
-                const sidebar = document.getElementById('sidebar');
-                const overlay = document.getElementById('sidebarOverlay');
-                const sidebarIcon = document.getElementById('sidebar-icon');
-                
-                if (sidebarOpen) {
-                    sidebar.classList.add('open');
-                    overlay.classList.add('active');
-                    document.body.classList.add('sidebar-open');
-                    sidebarIcon.textContent = '✕';
-                    loadImages();
-                } else {
-                    sidebar.classList.remove('open');
-                    overlay.classList.remove('active');
-                    document.body.classList.remove('sidebar-open');
-                    sidebarIcon.textContent = '📁';
-                }
-            }
-            
-            // Load images from API
-            async function loadImages() {
-                try {
-                    document.getElementById('resultCount').textContent = 'Loading images...';
-                    
-                    const response = await fetch('/api/images/library?page=1&limit=100');
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        allImages = data.images || [];
-                        filteredImages = [...allImages];
-                        updateImageGrid();
-                        updateResultCount();
-                        updatePagination();
-                    } else {
-                        throw new Error(data.detail || 'Failed to load images');
-                    }
-                } catch (error) {
-                    console.error('Error loading images:', error);
-                    document.getElementById('resultCount').textContent = 'Error loading images';
-                    // Fallback to mock data for development
-                    allImages = generateMockImages();
-                    filteredImages = [...allImages];
-                    updateImageGrid();
-                    updateResultCount();
-                }
-            }
-            
-            // Generate mock images for demonstration
-            function generateMockImages() {
-                const stores = ['store_001', 'store_002', 'store_003', 'store_004'];
-                const categories = ['beverages', 'snacks', 'dairy', 'frozen', 'personal_care'];
-                const statuses = ['pending', 'in_progress', 'completed', 'flagged'];
-                const storeNames = {
-                    'store_001': 'Downtown',
-                    'store_002': 'Mall',
-                    'store_003': 'Airport',
-                    'store_004': 'Suburb'
-                };
-                
-                const images = [];
-                for (let i = 1; i <= 150; i++) {
-                    const store = stores[Math.floor(Math.random() * stores.length)];
-                    const category = categories[Math.floor(Math.random() * categories.length)];
-                    const status = statuses[Math.floor(Math.random() * statuses.length)];
-                    const date = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
-                    
-                    images.push({
-                        id: `img_${i.toString().padStart(3, '0')}`,
-                        title: `${category.charAt(0).toUpperCase() + category.slice(1)} Shelf ${i}`,
-                        store: store,
-                        storeName: storeNames[store],
-                        category: category,
-                        status: status,
-                        date: date.toISOString().split('T')[0],
-                        timestamp: date.toLocaleString(),
-                        thumbnail: null // Will be placeholder
-                    });
-                }
-                
-                return images.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            }
-            
-            // Filter images based on search and filters
-            function filterImages() {
-                const searchTerm = document.getElementById('imageSearch').value.toLowerCase();
-                const storeFilter = document.getElementById('storeFilter').value;
-                const categoryFilter = document.getElementById('categoryFilter').value;
-                const statusFilter = document.getElementById('statusFilter').value;
-                const dateFilter = document.getElementById('dateFilter').value;
-                
-                filteredImages = allImages.filter(image => {
-                    const matchesSearch = !searchTerm || 
-                        image.title.toLowerCase().includes(searchTerm) ||
-                        image.storeName.toLowerCase().includes(searchTerm) ||
-                        image.category.toLowerCase().includes(searchTerm);
-                    
-                    const matchesStore = !storeFilter || image.store === storeFilter;
-                    const matchesCategory = !categoryFilter || image.category === categoryFilter;
-                    const matchesStatus = !statusFilter || image.status === statusFilter;
-                    const matchesDate = !dateFilter || image.date === dateFilter;
-                    
-                    return matchesSearch && matchesStore && matchesCategory && matchesStatus && matchesDate;
-                });
-                
-                currentPage = 1;
-                updateImageGrid();
-                updateResultCount();
-                updatePagination();
-            }
-            
-            // Update image grid display
-            function updateImageGrid() {
-                const grid = document.getElementById('imageGrid');
-                const startIndex = (currentPage - 1) * imagesPerPage;
-                const endIndex = startIndex + imagesPerPage;
-                const pageImages = filteredImages.slice(startIndex, endIndex);
-                
-                grid.innerHTML = pageImages.map(image => `
-                    <div class="image-item ${selectedImageId === image.id ? 'selected' : ''}" 
-                         onclick="selectImage('${image.id}')" 
-                         data-image-id="${image.id}">
-                        <div class="image-thumbnail">
-                            ${image.thumbnail_url ? 
-                                `<img src="${image.thumbnail_url}" alt="${image.title}" onerror="this.style.display='none'; this.parentElement.innerHTML='📷';">` : 
-                                '📷'
-                            }
-                        </div>
-                        <div class="image-info">
-                            <div class="image-title">${image.title}</div>
-                            <div class="image-meta">
-                                ${image.storeName} • ${image.category}<br>
-                                ${new Date(image.timestamp).toLocaleString()}
-                            </div>
-                            <div class="image-status status-${image.status}">
-                                ${image.status.replace('_', ' ')}
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            }
-            
-            // Select an image
-            function selectImage(imageId) {
-                selectedImageId = imageId;
-                const image = allImages.find(img => img.id === imageId);
-                
-                if (image) {
-                    // Update breadcrumb
-                    document.getElementById('breadcrumb').innerHTML = `
-                        <span>${image.storeName} → ${image.category} → ${image.title}</span>
-                    `;
-                    
-                    // Update visual selection
-                    document.querySelectorAll('.image-item').forEach(item => {
-                        item.classList.remove('selected');
-                    });
-                    document.querySelector(`[data-image-id="${imageId}"]`).classList.add('selected');
-                    
-                    // Load image data (mock for now)
-                    loadImageData(image);
-                    
-                    // Switch to simple mode and close sidebar
-                    switchMode('simple');
-                    toggleSidebar();
-                }
-            }
-            
-            // Load image data and switch to analysis mode
-            async function loadImageData(image) {
-                try {
-                    // Load real analysis data
-                    const response = await fetch(`/api/images/${image.id}/analysis`);
-                    const analysisData = await response.json();
-                    
-                    if (response.ok) {
-                        // Set the actual image in the viewers
-                        document.getElementById('originalImage').src = image.image_url;
-                        document.getElementById('advancedOriginalImage').src = image.image_url;
-                        
-                        loadProcessingResults(analysisData);
-                    } else {
-                        throw new Error(analysisData.detail || 'Failed to load analysis');
-                    }
-                } catch (error) {
-                    console.error('Error loading image analysis:', error);
-                    
-                    // Fallback to mock data
-                    const mockResult = {
-                        upload_id: image.id,
-                        agent_iterations: [
-                            {
-                                accuracy: 0.73,
-                                products_found: 21,
-                                duration: '45s',
-                                model_used: 'GPT-4o',
-                                improvements: ['Basic shelf structure detection', 'Initial product identification'],
-                                issues: ['Missing 4 products', 'Price extraction errors', 'Poor positioning accuracy'],
-                                json_data: { products: [], structure: {} }
-                            },
-                            {
-                                accuracy: 0.89,
-                                products_found: 24,
-                                duration: '38s',
-                                model_used: 'Claude',
-                                improvements: ['Found 3 additional products', 'Fixed price extraction', 'Improved confidence scores'],
-                                issues: ['Minor positioning errors', '2 products still missing'],
-                                json_data: { products: [], structure: {} }
-                            },
-                            {
-                                accuracy: 0.94,
-                                products_found: 25,
-                                duration: '22s',
-                                model_used: 'Hybrid',
-                                improvements: ['Found all products', 'Enhanced spatial positioning', 'Cross-validation complete'],
-                                issues: ['Minor confidence variations'],
-                                json_data: { products: [], structure: {} }
-                            }
-                        ]
-                    };
-                    
-                    // Set placeholder image
-                    document.getElementById('originalImage').src = image.image_url || '';
-                    document.getElementById('advancedOriginalImage').src = image.image_url || '';
-                    
-                    loadProcessingResults(mockResult);
-                }
-            }
-            
-            // Update result count
-            function updateResultCount() {
-                const count = filteredImages.length;
-                const total = allImages.length;
-                document.getElementById('resultCount').textContent = 
-                    `${count} of ${total} images`;
-            }
-            
-            // Pagination
-            function updatePagination() {
-                totalPages = Math.ceil(filteredImages.length / imagesPerPage);
-                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
-                document.getElementById('prevBtn').disabled = currentPage <= 1;
-                document.getElementById('nextBtn').disabled = currentPage >= totalPages;
-            }
-            
-            function loadPreviousPage() {
-                if (currentPage > 1) {
-                    currentPage--;
-                    updateImageGrid();
-                    updatePagination();
-                }
-            }
-            
-            function loadNextPage() {
-                if (currentPage < totalPages) {
-                    currentPage++;
-                    updateImageGrid();
-                    updatePagination();
-                }
-            }
-            
-            // View toggle
-            function setListView(viewType) {
-                document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
-                event.target.classList.add('active');
-                
-                const grid = document.getElementById('imageGrid');
-                if (viewType === 'list') {
-                    grid.style.gridTemplateColumns = '1fr';
-                } else {
-                    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(160px, 1fr))';
-                }
-            }
-            
-            // Drag and drop support
-            const uploadArea = document.querySelector('.upload-area');
-            
-            if (uploadArea) {
-                uploadArea.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    uploadArea.classList.add('dragover');
-                });
-                
-                uploadArea.addEventListener('dragleave', () => {
-                    uploadArea.classList.remove('dragover');
-                });
-                
-                uploadArea.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    uploadArea.classList.remove('dragover');
-                    
-                    const files = e.dataTransfer.files;
-                    if (files.length > 0) {
-                        document.getElementById('fileInput').files = files;
-                        uploadFile();
-                    }
-                });
-            }
         </script>
     </body>
     </html>
@@ -1777,12 +2214,12 @@ async def health_check():
     return {
         "status": "healthy",
         "version": "2.0.0",
-        "architecture": "four_level_orchestration",
+        "architecture": "queue_review_dashboard",
         "features": [
-            "cumulative_learning",
-            "planogram_abstraction",
-            "human_evaluation",
-            "progressive_disclosure"
+            "queue_management",
+            "multi_system_selection",
+            "progressive_disclosure",
+            "human_evaluation"
         ]
     }
 
@@ -1791,11 +2228,10 @@ async def api_status():
     """API status and capabilities"""
     return {
         "api_version": "2.0.0",
-        "orchestration_levels": 4,
-        "abstraction_levels": ["brand_view", "product_view", "sku_view"],
-        "interface_modes": ["simple", "comparison", "advanced"],
+        "interface_modes": ["queue", "simple", "comparison", "advanced"],
+        "extraction_systems": ["custom_consensus", "langgraph", "hybrid"],
         "evaluation_system": "human_in_the_loop",
-        "feedback_system": "cumulative_learning"
+        "database": "supabase_integration"
     }
 
 if __name__ == "__main__":
@@ -1806,4 +2242,5 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         log_level="info"
-    ) 
+    )
+

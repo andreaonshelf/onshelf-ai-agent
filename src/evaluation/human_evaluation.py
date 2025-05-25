@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 import numpy as np
 
 from ..config import SystemConfig
-from ..orchestrator.master_orchestrator import MasterResult
+from ..orchestrator.models import MasterResult
 from ..utils import logger
 
 

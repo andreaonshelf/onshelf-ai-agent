@@ -144,17 +144,17 @@ class AIExtractionQueueProcessor:
         """Update queue item status"""
         try:
             update_data = {
-                "status": status
+                "status": status,
+                "updated_at": datetime.utcnow().isoformat()
             }
             
             if status == "processing":
-                # No started_at column, just update status
-                pass
+                update_data["started_at"] = datetime.utcnow().isoformat()
             elif status == "completed":
-                update_data["processed_at"] = datetime.utcnow().isoformat()
+                update_data["completed_at"] = datetime.utcnow().isoformat()
             elif status == "failed":
                 update_data["error_message"] = error_message
-                update_data["processed_at"] = datetime.utcnow().isoformat()
+                update_data["failed_at"] = datetime.utcnow().isoformat()
             
             self.supabase.table("ai_extraction_queue") \
                 .update(update_data) \
@@ -172,11 +172,33 @@ class AIExtractionQueueProcessor:
     async def _update_queue_with_results(self, queue_id: str, result, processing_duration: float):
         """Update queue item with extraction results"""
         try:
+            # Extract results from the agent result
+            extraction_result = {
+                "products": result.products if hasattr(result, 'products') else [],
+                "shelf_structure": result.shelf_structure if hasattr(result, 'shelf_structure') else {},
+                "accuracy_score": result.accuracy if hasattr(result, 'accuracy') else 0.0,
+                "models_used": result.models_used if hasattr(result, 'models_used') else [],
+                "iterations": result.iterations if hasattr(result, 'iterations') else 1,
+                "processing_time": processing_duration
+            }
+            
+            planogram_result = {
+                "planogram_id": f"planogram_{queue_id}",
+                "shelves": result.shelves if hasattr(result, 'shelves') else [],
+                "canvas_data": result.canvas_data if hasattr(result, 'canvas_data') else None,
+                "svg_data": result.svg_data if hasattr(result, 'svg_data') else None
+            }
+            
             update_data = {
                 "status": "completed",
-                "processed_at": datetime.utcnow().isoformat()
-                # Store detailed results in a separate table or as JSON in error_message
-                # Since we only have limited columns in ai_extraction_queue
+                "completed_at": datetime.utcnow().isoformat(),
+                "extraction_result": extraction_result,
+                "planogram_result": planogram_result,
+                "final_accuracy": result.accuracy if hasattr(result, 'accuracy') else 0.0,
+                "iterations_completed": result.iterations if hasattr(result, 'iterations') else 1,
+                "processing_duration_seconds": int(processing_duration),
+                "api_cost": result.cost if hasattr(result, 'cost') else 0.0,
+                "human_review_required": (result.accuracy if hasattr(result, 'accuracy') else 0.0) < 0.85
             }
             
             self.supabase.table("ai_extraction_queue") \
@@ -188,7 +210,7 @@ class AIExtractionQueueProcessor:
                 f"Queue item {queue_id} updated with results",
                 component="queue_processor",
                 queue_id=queue_id,
-                accuracy=result.accuracy
+                accuracy=result.accuracy if hasattr(result, 'accuracy') else 0.0
             )
                 
         except Exception as e:
