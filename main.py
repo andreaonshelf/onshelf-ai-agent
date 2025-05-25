@@ -36,6 +36,14 @@ app.include_router(progressive_router)
 from src.api.strategic_interface import router as strategic_router
 app.include_router(strategic_router)
 
+# Include image management
+from src.api.image_management import router as image_router
+app.include_router(image_router)
+
+# Include planogram rendering
+from src.api.planogram_renderer import router as planogram_router
+app.include_router(planogram_router)
+
 # Serve static files (for the UI)
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -1281,6 +1289,25 @@ async def root():
                     formData.append('max_iterations', '3');
                     formData.append('abstraction_level', 'product_view');
                     
+                    // First upload the image to the library
+                    const uploadFormData = new FormData();
+                    uploadFormData.append('file', file);
+                    uploadFormData.append('store_id', 'store_001'); // Default store
+                    uploadFormData.append('category', 'unknown'); // Default category
+                    uploadFormData.append('description', 'Uploaded via dashboard');
+                    
+                    const uploadResponse = await fetch('/api/images/upload', {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+                    
+                    const uploadResult = await uploadResponse.json();
+                    
+                    if (!uploadResponse.ok) {
+                        throw new Error(uploadResult.detail || 'Upload failed');
+                    }
+                    
+                    // Then process with iterations (keeping existing functionality)
                     const response = await fetch('/api/v2/process-with-iterations', {
                         method: 'POST',
                         body: formData
@@ -1305,10 +1332,18 @@ async def root():
             
             // Load processing results into UI
             function loadProcessingResults(result) {
-                // Set original image
-                const imageUrl = URL.createObjectURL(document.getElementById('fileInput').files[0]);
-                document.getElementById('originalImage').src = imageUrl;
-                document.getElementById('advancedOriginalImage').src = imageUrl;
+                // Set original image (if from file upload)
+                if (document.getElementById('fileInput').files && document.getElementById('fileInput').files[0]) {
+                    const imageUrl = URL.createObjectURL(document.getElementById('fileInput').files[0]);
+                    document.getElementById('originalImage').src = imageUrl;
+                    document.getElementById('advancedOriginalImage').src = imageUrl;
+                }
+                
+                // Load planogram
+                if (result.upload_id || result.image_id) {
+                    const imageId = result.image_id || result.upload_id;
+                    loadPlanogram(imageId);
+                }
                 
                 // Load agent iteration data
                 if (result.agent_iterations) {
@@ -1397,6 +1432,41 @@ async def root():
                 console.log('Loading deep dive for agent:', agentNumber);
             }
             
+            // Load planogram
+            async function loadPlanogram(imageId) {
+                try {
+                    // Load SVG planogram
+                    const planogramUrl = `/api/planogram/${imageId}/render?format=svg&abstraction_level=product_view`;
+                    
+                    const response = await fetch(planogramUrl);
+                    if (response.ok) {
+                        const svgContent = await response.text();
+                        
+                        // Display in planogram viewer
+                        const planogramViewer = document.getElementById('planogramViewer');
+                        planogramViewer.innerHTML = svgContent;
+                        
+                        // Also update agent planogram views
+                        document.querySelectorAll('[id^="agent"][id$="-planogram"]').forEach(viewer => {
+                            viewer.innerHTML = svgContent;
+                        });
+                    } else {
+                        throw new Error('Failed to load planogram');
+                    }
+                } catch (error) {
+                    console.error('Error loading planogram:', error);
+                    
+                    // Fallback placeholder
+                    const planogramViewer = document.getElementById('planogramViewer');
+                    planogramViewer.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; flex-direction: column;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+                            <div>Planogram will be generated here</div>
+                        </div>
+                    `;
+                }
+            }
+            
             // Sidebar functionality
             function toggleSidebar() {
                 sidebarOpen = !sidebarOpen;
@@ -1421,14 +1491,28 @@ async def root():
             // Load images from API
             async function loadImages() {
                 try {
-                    // Mock data for now - replace with real API call
+                    document.getElementById('resultCount').textContent = 'Loading images...';
+                    
+                    const response = await fetch('/api/images/library?page=1&limit=100');
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        allImages = data.images || [];
+                        filteredImages = [...allImages];
+                        updateImageGrid();
+                        updateResultCount();
+                        updatePagination();
+                    } else {
+                        throw new Error(data.detail || 'Failed to load images');
+                    }
+                } catch (error) {
+                    console.error('Error loading images:', error);
+                    document.getElementById('resultCount').textContent = 'Error loading images';
+                    // Fallback to mock data for development
                     allImages = generateMockImages();
                     filteredImages = [...allImages];
                     updateImageGrid();
                     updateResultCount();
-                } catch (error) {
-                    console.error('Error loading images:', error);
-                    document.getElementById('resultCount').textContent = 'Error loading images';
                 }
             }
             
@@ -1507,13 +1591,16 @@ async def root():
                          onclick="selectImage('${image.id}')" 
                          data-image-id="${image.id}">
                         <div class="image-thumbnail">
-                            📷
+                            ${image.thumbnail_url ? 
+                                `<img src="${image.thumbnail_url}" alt="${image.title}" onerror="this.style.display='none'; this.parentElement.innerHTML='📷';">` : 
+                                '📷'
+                            }
                         </div>
                         <div class="image-info">
                             <div class="image-title">${image.title}</div>
                             <div class="image-meta">
                                 ${image.storeName} • ${image.category}<br>
-                                ${image.timestamp}
+                                ${new Date(image.timestamp).toLocaleString()}
                             </div>
                             <div class="image-status status-${image.status}">
                                 ${image.status.replace('_', ' ')}
@@ -1550,42 +1637,64 @@ async def root():
             }
             
             // Load image data and switch to analysis mode
-            function loadImageData(image) {
-                // Mock processing results
-                const mockResult = {
-                    upload_id: image.id,
-                    agent_iterations: [
-                        {
-                            accuracy: 0.73,
-                            products_found: 21,
-                            duration: '45s',
-                            model_used: 'GPT-4o',
-                            improvements: ['Basic shelf structure detection', 'Initial product identification'],
-                            issues: ['Missing 4 products', 'Price extraction errors', 'Poor positioning accuracy'],
-                            json_data: { products: [], structure: {} }
-                        },
-                        {
-                            accuracy: 0.89,
-                            products_found: 24,
-                            duration: '38s',
-                            model_used: 'Claude',
-                            improvements: ['Found 3 additional products', 'Fixed price extraction', 'Improved confidence scores'],
-                            issues: ['Minor positioning errors', '2 products still missing'],
-                            json_data: { products: [], structure: {} }
-                        },
-                        {
-                            accuracy: 0.94,
-                            products_found: 25,
-                            duration: '22s',
-                            model_used: 'Hybrid',
-                            improvements: ['Found all products', 'Enhanced spatial positioning', 'Cross-validation complete'],
-                            issues: ['Minor confidence variations'],
-                            json_data: { products: [], structure: {} }
-                        }
-                    ]
-                };
-                
-                loadProcessingResults(mockResult);
+            async function loadImageData(image) {
+                try {
+                    // Load real analysis data
+                    const response = await fetch(`/api/images/${image.id}/analysis`);
+                    const analysisData = await response.json();
+                    
+                    if (response.ok) {
+                        // Set the actual image in the viewers
+                        document.getElementById('originalImage').src = image.image_url;
+                        document.getElementById('advancedOriginalImage').src = image.image_url;
+                        
+                        loadProcessingResults(analysisData);
+                    } else {
+                        throw new Error(analysisData.detail || 'Failed to load analysis');
+                    }
+                } catch (error) {
+                    console.error('Error loading image analysis:', error);
+                    
+                    // Fallback to mock data
+                    const mockResult = {
+                        upload_id: image.id,
+                        agent_iterations: [
+                            {
+                                accuracy: 0.73,
+                                products_found: 21,
+                                duration: '45s',
+                                model_used: 'GPT-4o',
+                                improvements: ['Basic shelf structure detection', 'Initial product identification'],
+                                issues: ['Missing 4 products', 'Price extraction errors', 'Poor positioning accuracy'],
+                                json_data: { products: [], structure: {} }
+                            },
+                            {
+                                accuracy: 0.89,
+                                products_found: 24,
+                                duration: '38s',
+                                model_used: 'Claude',
+                                improvements: ['Found 3 additional products', 'Fixed price extraction', 'Improved confidence scores'],
+                                issues: ['Minor positioning errors', '2 products still missing'],
+                                json_data: { products: [], structure: {} }
+                            },
+                            {
+                                accuracy: 0.94,
+                                products_found: 25,
+                                duration: '22s',
+                                model_used: 'Hybrid',
+                                improvements: ['Found all products', 'Enhanced spatial positioning', 'Cross-validation complete'],
+                                issues: ['Minor confidence variations'],
+                                json_data: { products: [], structure: {} }
+                            }
+                        ]
+                    };
+                    
+                    // Set placeholder image
+                    document.getElementById('originalImage').src = image.image_url || '';
+                    document.getElementById('advancedOriginalImage').src = image.image_url || '';
+                    
+                    loadProcessingResults(mockResult);
+                }
             }
             
             // Update result count

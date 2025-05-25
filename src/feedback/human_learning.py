@@ -65,11 +65,10 @@ class HumanFeedbackLearningSystem:
             self.use_database = False
             self.supabase_client = None
         
-        # Fallback to in-memory storage if database not available
-        if not self.use_database:
-            self.corrections_db = []
-            self.prompt_performance_db = []
-            self.prompt_templates_db = []
+        # Always initialize in-memory storage (used as fallback or when database is not available)
+        self.corrections_db = []
+        self.prompt_performance_db = []
+        self.prompt_templates_db = []
         
         self.prompt_optimizer = PromptOptimizer()
         
