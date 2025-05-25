@@ -482,25 +482,94 @@ class CustomConsensusSystem(BaseExtractionSystem):
     
     async def _quantity_consensus(self, image_data: bytes, positions: Dict) -> Dict[str, Any]:
         """Analyze product quantities with consensus"""
-        # Mock implementation
         quantities = {}
-        for pos_key, pos_data in positions.items():
-            quantities[pos_key] = {
-                'facing_count': 2,  # Mock data
-                'confidence': 0.88
-            }
+        
+        # Get quantity analysis prompt
+        prompt = await self.human_feedback.get_optimized_prompt('quantity_analysis', 'universal')
+        
+        # Run quantity analysis with available models
+        tasks = []
+        for model_name in ['gpt4o', 'claude', 'gemini']:
+            if self.model_clients.get(model_name):
+                tasks.append(self._analyze_quantities(image_data, positions, model_name, prompt))
+        
+        if not tasks:
+            # Fallback to estimated quantities if no models available
+            for pos_key, pos_data in positions.items():
+                quantities[pos_key] = {
+                    'facing_count': 2,  # Estimated fallback
+                    'confidence': 0.5
+                }
+            return quantities
+        
+        quantity_proposals = await asyncio.gather(*tasks, return_exceptions=True)
+        valid_proposals = [p for p in quantity_proposals if not isinstance(p, Exception) and 'error' not in p]
+        
+        if valid_proposals:
+            # Use consensus voting for quantities
+            consensus_result = self._vote_on_quantities(valid_proposals)
+            if consensus_result.get('consensus_reached'):
+                quantities = consensus_result['result']
+            else:
+                # Use best single result if no consensus
+                best_proposal = max(valid_proposals, key=lambda x: x.get('confidence', 0))
+                quantities = best_proposal.get('quantities', {})
+        
+        # Ensure all positions have quantity data
+        for pos_key in positions.keys():
+            if pos_key not in quantities:
+                quantities[pos_key] = {
+                    'facing_count': 1,  # Conservative fallback
+                    'confidence': 0.6
+                }
+        
         return quantities
     
     async def _detail_consensus(self, image_data: bytes, positions: Dict, quantities: Dict) -> Dict[str, Any]:
         """Analyze product details with consensus"""
-        # Mock implementation
         details = {}
-        for pos_key, pos_data in positions.items():
-            details[pos_key] = {
-                'price': 1.99,  # Mock data
-                'size': '500ml',
-                'confidence': 0.82
-            }
+        
+        # Get detail analysis prompt
+        prompt = await self.human_feedback.get_optimized_prompt('detail_analysis', 'universal')
+        
+        # Run detail analysis with available models
+        tasks = []
+        for model_name in ['gpt4o', 'claude', 'gemini']:
+            if self.model_clients.get(model_name):
+                tasks.append(self._analyze_details(image_data, positions, quantities, model_name, prompt))
+        
+        if not tasks:
+            # Fallback to basic details if no models available
+            for pos_key, pos_data in positions.items():
+                details[pos_key] = {
+                    'price': None,  # Unknown price
+                    'size': 'Unknown',
+                    'confidence': 0.3
+                }
+            return details
+        
+        detail_proposals = await asyncio.gather(*tasks, return_exceptions=True)
+        valid_proposals = [p for p in detail_proposals if not isinstance(p, Exception) and 'error' not in p]
+        
+        if valid_proposals:
+            # Use consensus voting for details
+            consensus_result = self._vote_on_details(valid_proposals)
+            if consensus_result.get('consensus_reached'):
+                details = consensus_result['result']
+            else:
+                # Use best single result if no consensus
+                best_proposal = max(valid_proposals, key=lambda x: x.get('confidence', 0))
+                details = best_proposal.get('details', {})
+        
+        # Ensure all positions have detail data
+        for pos_key in positions.keys():
+            if pos_key not in details:
+                details[pos_key] = {
+                    'price': None,
+                    'size': 'Unknown',
+                    'confidence': 0.4
+                }
+        
         return details
     
     async def _generate_planogram(self, extraction: Dict) -> Dict[str, Any]:
@@ -1210,31 +1279,125 @@ class CustomConsensusSystem(BaseExtractionSystem):
     
     async def _test_position_prompt_gpt4o(self, image_data: bytes, prompt_content: str) -> Dict[str, Any]:
         """Test position analysis prompt with GPT-4o"""
-        # Similar implementation to structure testing but for positions
-        # For brevity, using mock implementation
-        return {
-            'positions': {'shelf_1_pos_1': {'product': 'Test Product', 'confidence': 0.85}},
-            'tokens_used': 1200,
-            'cost': 0.024
-        }
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            # Enhanced prompt for position testing
+            enhanced_prompt = f"{prompt_content}\n\nFocus on product positions. Return JSON with detailed position data."
+            
+            response = await self.model_clients['gpt4o'].chat.completions.acreate(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": enhanced_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=2000
+            )
+            
+            content = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens
+            cost = self._calculate_gpt4o_cost(tokens_used)
+            
+            # Parse the response for positions
+            positions = self._parse_position_response(content, 1)  # Default to shelf 1 for testing
+            
+            return {
+                'positions': positions,
+                'tokens_used': tokens_used,
+                'cost': cost,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'GPT-4o position test failed: {str(e)}'}
     
     async def _test_position_prompt_claude(self, image_data: bytes, prompt_content: str) -> Dict[str, Any]:
         """Test position analysis prompt with Claude"""
-        # Mock implementation
-        return {
-            'positions': {'shelf_1_pos_1': {'product': 'Test Product', 'confidence': 0.88}},
-            'tokens_used': 1100,
-            'cost': 0.018
-        }
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            # Enhanced prompt for position testing
+            enhanced_prompt = f"{prompt_content}\n\nAnalyze product positions carefully. Provide detailed JSON output with position data."
+            
+            response = await self.model_clients['claude'].messages.acreate(
+                model="claude-3-sonnet-20240229",
+                max_tokens=2000,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_b64
+                                }
+                            },
+                            {"type": "text", "text": enhanced_prompt}
+                        ]
+                    }
+                ]
+            )
+            
+            content = response.content[0].text
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            cost = self._calculate_claude_cost(response.usage.input_tokens, response.usage.output_tokens)
+            
+            # Parse the response for positions
+            positions = self._parse_position_response(content, 1)  # Default to shelf 1 for testing
+            
+            return {
+                'positions': positions,
+                'tokens_used': tokens_used,
+                'cost': cost,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Claude position test failed: {str(e)}'}
     
     async def _test_position_prompt_gemini(self, image_data: bytes, prompt_content: str) -> Dict[str, Any]:
         """Test position analysis prompt with Gemini"""
-        # Mock implementation
-        return {
-            'positions': {'shelf_1_pos_1': {'product': 'Test Product', 'confidence': 0.82}},
-            'tokens_used': 1000,
-            'cost': 0.0005
-        }
+        try:
+            import PIL.Image
+            import io
+            
+            image = PIL.Image.open(io.BytesIO(image_data))
+            
+            # Enhanced prompt for position testing
+            enhanced_prompt = f"{prompt_content}\n\nFocus on product positions. Provide structured JSON output with position details."
+            
+            response = await self.model_clients['gemini'].generate_content_async([enhanced_prompt, image])
+            
+            content = response.text
+            tokens_used = len(content.split()) * 1.3  # Rough estimation
+            cost = self._calculate_gemini_cost(int(tokens_used))
+            
+            # Parse the response for positions
+            positions = self._parse_position_response(content, 1)  # Default to shelf 1 for testing
+            
+            return {
+                'positions': positions,
+                'tokens_used': int(tokens_used),
+                'cost': cost,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Gemini position test failed: {str(e)}'}
     
     def _evaluate_prompt_result(self, result: Dict[str, Any], prompt_type: str) -> Dict[str, Any]:
         """Evaluate the quality of a prompt test result"""
@@ -1287,4 +1450,427 @@ class CustomConsensusSystem(BaseExtractionSystem):
         else:
             evaluation['quality'] = 'poor'
         
-        return evaluation 
+        return evaluation
+    
+    async def _analyze_quantities(self, image_data: bytes, positions: Dict, model_name: str, prompt: str) -> Dict[str, Any]:
+        """Analyze product quantities using specific model"""
+        
+        try:
+            # Get model-specific prompt
+            enhanced_prompt = f"{prompt}\n\nAnalyze product quantities and facings for the detected products. Focus on counting individual units side by side."
+            
+            if model_name == 'gpt4o' and self.model_clients.get('gpt4o'):
+                result = await self._analyze_quantities_gpt4o(image_data, enhanced_prompt)
+            elif model_name == 'claude' and self.model_clients.get('claude'):
+                result = await self._analyze_quantities_claude(image_data, enhanced_prompt)
+            elif model_name == 'gemini' and self.model_clients.get('gemini'):
+                result = await self._analyze_quantities_gemini(image_data, enhanced_prompt)
+            else:
+                return {'error': f'Model {model_name} not available'}
+            
+            # Add model metadata
+            result['model_used'] = model_name
+            return result
+            
+        except Exception as e:
+            logger.error(f"Quantity analysis failed for {model_name}: {e}", component="custom_consensus")
+            return {'error': str(e)}
+    
+    async def _analyze_details(self, image_data: bytes, positions: Dict, quantities: Dict, model_name: str, prompt: str) -> Dict[str, Any]:
+        """Analyze product details using specific model"""
+        
+        try:
+            # Get model-specific prompt
+            enhanced_prompt = f"{prompt}\n\nExtract detailed product information including prices, sizes, and variants. Look for price tags, labels, and promotional materials."
+            
+            if model_name == 'gpt4o' and self.model_clients.get('gpt4o'):
+                result = await self._analyze_details_gpt4o(image_data, enhanced_prompt)
+            elif model_name == 'claude' and self.model_clients.get('claude'):
+                result = await self._analyze_details_claude(image_data, enhanced_prompt)
+            elif model_name == 'gemini' and self.model_clients.get('gemini'):
+                result = await self._analyze_details_gemini(image_data, enhanced_prompt)
+            else:
+                return {'error': f'Model {model_name} not available'}
+            
+            # Add model metadata
+            result['model_used'] = model_name
+            return result
+            
+        except Exception as e:
+            logger.error(f"Detail analysis failed for {model_name}: {e}", component="custom_consensus")
+            return {'error': str(e)}
+    
+    async def _analyze_quantities_gpt4o(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze quantities using GPT-4o"""
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            response = await self.model_clients['gpt4o'].chat.completions.acreate(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1500
+            )
+            
+            content = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens
+            cost = self._calculate_gpt4o_cost(tokens_used)
+            self._track_api_call('gpt4o', cost, tokens_used)
+            
+            # Parse quantities from response
+            quantities = self._parse_quantity_response(content)
+            
+            return {
+                'quantities': quantities,
+                'confidence': 0.85,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'GPT-4o quantity analysis failed: {str(e)}'}
+    
+    async def _analyze_quantities_claude(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze quantities using Claude"""
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            response = await self.model_clients['claude'].messages.acreate(
+                model="claude-3-sonnet-20240229",
+                max_tokens=1500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_b64
+                                }
+                            },
+                            {"type": "text", "text": prompt}
+                        ]
+                    }
+                ]
+            )
+            
+            content = response.content[0].text
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            cost = self._calculate_claude_cost(response.usage.input_tokens, response.usage.output_tokens)
+            self._track_api_call('claude', cost, tokens_used)
+            
+            # Parse quantities from response
+            quantities = self._parse_quantity_response(content)
+            
+            return {
+                'quantities': quantities,
+                'confidence': 0.88,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Claude quantity analysis failed: {str(e)}'}
+    
+    async def _analyze_quantities_gemini(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze quantities using Gemini"""
+        try:
+            import PIL.Image
+            import io
+            
+            image = PIL.Image.open(io.BytesIO(image_data))
+            
+            response = await self.model_clients['gemini'].generate_content_async([prompt, image])
+            
+            content = response.text
+            tokens_used = len(content.split()) * 1.3
+            cost = self._calculate_gemini_cost(int(tokens_used))
+            self._track_api_call('gemini', cost, int(tokens_used))
+            
+            # Parse quantities from response
+            quantities = self._parse_quantity_response(content)
+            
+            return {
+                'quantities': quantities,
+                'confidence': 0.82,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Gemini quantity analysis failed: {str(e)}'}
+    
+    async def _analyze_details_gpt4o(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze details using GPT-4o"""
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            response = await self.model_clients['gpt4o'].chat.completions.acreate(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1500
+            )
+            
+            content = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens
+            cost = self._calculate_gpt4o_cost(tokens_used)
+            self._track_api_call('gpt4o', cost, tokens_used)
+            
+            # Parse details from response
+            details = self._parse_detail_response(content)
+            
+            return {
+                'details': details,
+                'confidence': 0.83,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'GPT-4o detail analysis failed: {str(e)}'}
+    
+    async def _analyze_details_claude(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze details using Claude"""
+        import base64
+        
+        image_b64 = base64.b64encode(image_data).decode('utf-8')
+        
+        try:
+            response = await self.model_clients['claude'].messages.acreate(
+                model="claude-3-sonnet-20240229",
+                max_tokens=1500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_b64
+                                }
+                            },
+                            {"type": "text", "text": prompt}
+                        ]
+                    }
+                ]
+            )
+            
+            content = response.content[0].text
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            cost = self._calculate_claude_cost(response.usage.input_tokens, response.usage.output_tokens)
+            self._track_api_call('claude', cost, tokens_used)
+            
+            # Parse details from response
+            details = self._parse_detail_response(content)
+            
+            return {
+                'details': details,
+                'confidence': 0.86,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Claude detail analysis failed: {str(e)}'}
+    
+    async def _analyze_details_gemini(self, image_data: bytes, prompt: str) -> Dict[str, Any]:
+        """Analyze details using Gemini"""
+        try:
+            import PIL.Image
+            import io
+            
+            image = PIL.Image.open(io.BytesIO(image_data))
+            
+            response = await self.model_clients['gemini'].generate_content_async([prompt, image])
+            
+            content = response.text
+            tokens_used = len(content.split()) * 1.3
+            cost = self._calculate_gemini_cost(int(tokens_used))
+            self._track_api_call('gemini', cost, int(tokens_used))
+            
+            # Parse details from response
+            details = self._parse_detail_response(content)
+            
+            return {
+                'details': details,
+                'confidence': 0.80,
+                'raw_response': content
+            }
+            
+        except Exception as e:
+            return {'error': f'Gemini detail analysis failed: {str(e)}'}
+    
+    def _parse_quantity_response(self, content: str) -> Dict[str, Any]:
+        """Parse quantity analysis response"""
+        import re
+        import json
+        
+        quantities = {}
+        
+        try:
+            # Try to extract JSON first
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                parsed_data = json.loads(json_match.group())
+                if 'quantities' in parsed_data:
+                    return parsed_data['quantities']
+                elif isinstance(parsed_data, dict):
+                    return parsed_data
+            
+            # Fallback: extract quantity information with regex
+            facing_patterns = [
+                r'facing[s]?[:\s]+(\d+)',
+                r'unit[s]?[:\s]+(\d+)',
+                r'count[:\s]+(\d+)'
+            ]
+            
+            facings_found = []
+            for pattern in facing_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                facings_found.extend([int(m) for m in matches])
+            
+            # Create quantity data
+            if facings_found:
+                avg_facing = sum(facings_found) / len(facings_found)
+                for i in range(min(8, len(facings_found))):  # Max 8 products
+                    position_key = f"shelf_1_pos_{i+1}"
+                    quantities[position_key] = {
+                        'facing_count': facings_found[i] if i < len(facings_found) else int(avg_facing),
+                        'confidence': 0.75
+                    }
+            
+            return quantities
+            
+        except Exception as e:
+            logger.error(f"Failed to parse quantity response: {e}", component="custom_consensus")
+            return {}
+    
+    def _parse_detail_response(self, content: str) -> Dict[str, Any]:
+        """Parse detail analysis response"""
+        import re
+        import json
+        
+        details = {}
+        
+        try:
+            # Try to extract JSON first
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                parsed_data = json.loads(json_match.group())
+                if 'details' in parsed_data:
+                    return parsed_data['details']
+                elif isinstance(parsed_data, dict):
+                    return parsed_data
+            
+            # Fallback: extract detail information with regex
+            price_patterns = [
+                r'[\$£€](\d+\.?\d*)',
+                r'price[:\s]+[\$£€]?(\d+\.?\d*)',
+                r'(\d+\.?\d*)\s*[\$£€]'
+            ]
+            
+            size_patterns = [
+                r'(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz|lb)',
+                r'size[:\s]+(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz|lb)'
+            ]
+            
+            prices_found = []
+            sizes_found = []
+            
+            for pattern in price_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                prices_found.extend([float(m) for m in matches if m])
+            
+            for pattern in size_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                sizes_found.extend([f"{m[0]}{m[1]}" for m in matches])
+            
+            # Create detail data
+            for i in range(min(8, max(len(prices_found), len(sizes_found), 1))):  # At least 1, max 8
+                position_key = f"shelf_1_pos_{i+1}"
+                details[position_key] = {
+                    'price': prices_found[i] if i < len(prices_found) else None,
+                    'size': sizes_found[i] if i < len(sizes_found) else 'Unknown',
+                    'confidence': 0.70
+                }
+            
+            return details
+            
+        except Exception as e:
+            logger.error(f"Failed to parse detail response: {e}", component="custom_consensus")
+            return {}
+    
+    def _vote_on_quantities(self, proposals: List[Dict]) -> Dict[str, Any]:
+        """Vote on quantity analysis from multiple models"""
+        
+        if not proposals:
+            return {'consensus_reached': False, 'reason': 'No quantity proposals'}
+        
+        # Simple consensus: use the proposal with highest confidence
+        best_proposal = max(proposals, key=lambda x: x.get('confidence', 0))
+        
+        return {
+            'consensus_reached': True,
+            'result': best_proposal.get('quantities', {}),
+            'confidence': best_proposal.get('confidence', 0.5)
+        }
+    
+    def _vote_on_details(self, proposals: List[Dict]) -> Dict[str, Any]:
+        """Vote on detail analysis from multiple models"""
+        
+        if not proposals:
+            return {'consensus_reached': False, 'reason': 'No detail proposals'}
+        
+        # Simple consensus: use the proposal with highest confidence
+        best_proposal = max(proposals, key=lambda x: x.get('confidence', 0))
+        
+        return {
+            'consensus_reached': True,
+            'result': best_proposal.get('details', {}),
+            'confidence': best_proposal.get('confidence', 0.5)
+        }
+    
+    def _calculate_cost_efficiency(self, total_cost: float, accuracy: float) -> float:
+        """Calculate cost per accuracy point"""
+        if accuracy > 0:
+            return total_cost / accuracy
+        return total_cost
+    
+    def _should_escalate_to_human(self, accuracy: float, iteration_count: int) -> bool:
+        """Determine if result should be escalated to human review"""
+        return accuracy < 0.85 or iteration_count >= 5
+    
+    def _get_human_review_priority(self, accuracy: float, consensus_rate: float) -> str:
+        """Get priority level for human review"""
+        if accuracy < 0.7 or consensus_rate < 0.5:
+            return "high"
+        elif accuracy < 0.85 or consensus_rate < 0.7:
+            return "medium"
+        else:
+            return "low" 
