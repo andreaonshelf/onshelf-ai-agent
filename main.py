@@ -60,14 +60,338 @@ async def root():
                 overflow-x: hidden;
             }
             
-            /* Mode Selector */
-            .mode-selector {
+            /* Top Header */
+            .top-header {
                 position: fixed;
-                top: 20px;
-                right: 20px;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #111827;
+                border-bottom: 1px solid #374151;
+                padding: 15px 20px;
                 z-index: 1000;
                 display: flex;
-                gap: 10px;
+                justify-content: space-between;
+                align-items: center;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                transition: left 0.3s ease;
+            }
+            
+            .header-left {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+            
+            .sidebar-toggle {
+                background: #374151;
+                border: 1px solid #4b5563;
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-size: 16px;
+            }
+            
+            .sidebar-toggle:hover {
+                background: #4b5563;
+                border-color: #3b82f6;
+            }
+            
+            .header-left h1 {
+                margin: 0;
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #3b82f6;
+            }
+            
+            .breadcrumb {
+                font-size: 13px;
+                color: #9ca3af;
+                font-weight: 500;
+            }
+            
+            /* Sidebar */
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -400px;
+                width: 400px;
+                height: 100vh;
+                background: #1f2937;
+                border-right: 1px solid #374151;
+                z-index: 1100;
+                transition: left 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+            }
+            
+            .sidebar.open {
+                left: 0;
+            }
+            
+            .sidebar-header {
+                padding: 20px;
+                border-bottom: 1px solid #374151;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: #111827;
+            }
+            
+            .sidebar-header h3 {
+                margin: 0;
+                color: #3b82f6;
+                font-size: 1.25rem;
+            }
+            
+            .btn-icon {
+                background: none;
+                border: none;
+                color: #9ca3af;
+                font-size: 18px;
+                cursor: pointer;
+                padding: 4px;
+                border-radius: 4px;
+                transition: all 0.2s ease;
+            }
+            
+            .btn-icon:hover {
+                background: #374151;
+                color: white;
+            }
+            
+            /* Sidebar Filters */
+            .sidebar-filters {
+                padding: 20px;
+                border-bottom: 1px solid #374151;
+            }
+            
+            .search-box {
+                position: relative;
+                margin-bottom: 15px;
+            }
+            
+            .search-box input {
+                width: 100%;
+                padding: 10px 40px 10px 12px;
+                background: #374151;
+                border: 1px solid #4b5563;
+                border-radius: 6px;
+                color: white;
+                font-size: 14px;
+            }
+            
+            .search-box input:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            .search-icon {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #9ca3af;
+                font-size: 14px;
+            }
+            
+            .filter-row {
+                margin-bottom: 12px;
+            }
+            
+            .filter-row select,
+            .filter-row input[type="date"] {
+                width: 100%;
+                padding: 8px 12px;
+                background: #374151;
+                border: 1px solid #4b5563;
+                border-radius: 6px;
+                color: white;
+                font-size: 13px;
+            }
+            
+            /* Image List */
+            .image-list {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            
+            .list-header {
+                padding: 15px 20px;
+                border-bottom: 1px solid #374151;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: #111827;
+            }
+            
+            .result-count {
+                font-size: 13px;
+                color: #9ca3af;
+                font-weight: 500;
+            }
+            
+            .view-toggle {
+                display: flex;
+                gap: 4px;
+            }
+            
+            .view-btn {
+                background: #374151;
+                border: 1px solid #4b5563;
+                color: #9ca3af;
+                padding: 6px 10px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.2s ease;
+            }
+            
+            .view-btn:hover,
+            .view-btn.active {
+                background: #3b82f6;
+                border-color: #3b82f6;
+                color: white;
+            }
+            
+            /* Image Grid */
+            .image-grid {
+                flex: 1;
+                padding: 20px;
+                overflow-y: auto;
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 15px;
+                align-content: start;
+            }
+            
+            .image-item {
+                background: #374151;
+                border-radius: 8px;
+                overflow: hidden;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+            }
+            
+            .image-item:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                border-color: #3b82f6;
+            }
+            
+            .image-item.selected {
+                border-color: #10b981;
+                box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+            }
+            
+            .image-thumbnail {
+                width: 100%;
+                height: 120px;
+                background: #4b5563;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #9ca3af;
+                font-size: 24px;
+            }
+            
+            .image-thumbnail img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .image-info {
+                padding: 12px;
+            }
+            
+            .image-title {
+                font-size: 12px;
+                font-weight: 600;
+                color: white;
+                margin-bottom: 4px;
+                line-height: 1.3;
+            }
+            
+            .image-meta {
+                font-size: 11px;
+                color: #9ca3af;
+                line-height: 1.2;
+            }
+            
+            .image-status {
+                display: inline-block;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: 500;
+                margin-top: 4px;
+            }
+            
+            .status-pending { background: #f59e0b; color: #000; }
+            .status-in_progress { background: #3b82f6; color: white; }
+            .status-completed { background: #10b981; color: white; }
+            .status-flagged { background: #ef4444; color: white; }
+            
+            /* Pagination */
+            .pagination {
+                padding: 15px 20px;
+                border-top: 1px solid #374151;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: #111827;
+            }
+            
+            .page-info {
+                font-size: 13px;
+                color: #9ca3af;
+                font-weight: 500;
+            }
+            
+            /* Sidebar Overlay */
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1050;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+            }
+            
+            .sidebar-overlay.active {
+                opacity: 1;
+                visibility: visible;
+            }
+            
+            /* Content shift when sidebar is open */
+            body.sidebar-open .top-header {
+                left: 400px;
+            }
+            
+            body.sidebar-open .upload-interface,
+            body.sidebar-open .simple-mode,
+            body.sidebar-open .comparison-mode,
+            body.sidebar-open .advanced-mode {
+                margin-left: 400px;
+                width: calc(100% - 400px);
+            }
+            
+            /* Mode Selector */
+            .mode-selector {
+                display: flex;
+                gap: 8px;
             }
             
             .mode-btn {
@@ -92,8 +416,9 @@ async def root():
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                min-height: 100vh;
+                min-height: calc(100vh - 80px);
                 padding: 20px;
+                margin-top: 80px;
             }
             
             .upload-area {
@@ -123,7 +448,8 @@ async def root():
                 grid-template-columns: 1fr 1fr;
                 gap: 20px;
                 padding: 20px;
-                height: 100vh;
+                height: calc(100vh - 80px);
+                margin-top: 80px;
             }
             
             .image-panel, .planogram-panel {
@@ -193,7 +519,8 @@ async def root():
             .comparison-mode {
                 display: none;
                 padding: 20px;
-                height: 100vh;
+                height: calc(100vh - 80px);
+                margin-top: 80px;
                 overflow-y: auto;
             }
             
@@ -304,7 +631,8 @@ async def root():
                 grid-template-rows: 1fr 1fr;
                 gap: 20px;
                 padding: 20px;
-                height: 100vh;
+                height: calc(100vh - 80px);
+                margin-top: 80px;
             }
             
             .panel {
@@ -478,13 +806,99 @@ async def root():
         </style>
     </head>
     <body>
-        <!-- Mode Selector -->
-        <div class="mode-selector">
-            <button class="mode-btn active" onclick="switchMode('upload')">Upload</button>
-            <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
-            <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
-            <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
+        <!-- Top Header -->
+        <div class="top-header">
+            <div class="header-left">
+                <button class="sidebar-toggle" onclick="toggleSidebar()">
+                    <span id="sidebar-icon">📁</span>
+                </button>
+                <h1>📊 OnShelf AI Dashboard</h1>
+                <div class="breadcrumb" id="breadcrumb">
+                    <span>No image selected</span>
+                </div>
+            </div>
+            <div class="mode-selector">
+                <button class="mode-btn active" onclick="switchMode('upload')">Upload</button>
+                <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
+                <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
+                <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
+            </div>
         </div>
+
+        <!-- Left Sidebar - Image Selection -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>📁 Image Library</h3>
+                <button class="btn-icon" onclick="toggleSidebar()">✕</button>
+            </div>
+            
+            <!-- Search and Filters -->
+            <div class="sidebar-filters">
+                <div class="search-box">
+                    <input type="text" id="imageSearch" placeholder="Search images..." onkeyup="filterImages()">
+                    <span class="search-icon">🔍</span>
+                </div>
+                
+                <div class="filter-row">
+                    <select id="storeFilter" onchange="filterImages()">
+                        <option value="">All Stores</option>
+                        <option value="store_001">Store 001 - Downtown</option>
+                        <option value="store_002">Store 002 - Mall</option>
+                        <option value="store_003">Store 003 - Airport</option>
+                        <option value="store_004">Store 004 - Suburb</option>
+                    </select>
+                </div>
+                
+                <div class="filter-row">
+                    <select id="categoryFilter" onchange="filterImages()">
+                        <option value="">All Categories</option>
+                        <option value="beverages">Beverages</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="dairy">Dairy</option>
+                        <option value="frozen">Frozen</option>
+                        <option value="personal_care">Personal Care</option>
+                    </select>
+                </div>
+                
+                <div class="filter-row">
+                    <select id="statusFilter" onchange="filterImages()">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending Review</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="flagged">Flagged</option>
+                    </select>
+                </div>
+                
+                <div class="filter-row">
+                    <input type="date" id="dateFilter" onchange="filterImages()">
+                </div>
+            </div>
+            
+            <!-- Image List -->
+            <div class="image-list" id="imageList">
+                <div class="list-header">
+                    <span class="result-count" id="resultCount">Loading images...</span>
+                    <div class="view-toggle">
+                        <button class="view-btn active" onclick="setListView('grid')" title="Grid View">⊞</button>
+                        <button class="view-btn" onclick="setListView('list')" title="List View">☰</button>
+                    </div>
+                </div>
+                
+                <div class="image-grid" id="imageGrid">
+                    <!-- Images will be loaded here -->
+                </div>
+                
+                <div class="pagination" id="pagination">
+                    <button class="btn btn-secondary" onclick="loadPreviousPage()" id="prevBtn" disabled>← Previous</button>
+                    <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                    <button class="btn btn-secondary" onclick="loadNextPage()" id="nextBtn" disabled>Next →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
         
         <!-- Upload Interface -->
         <div id="upload-interface" class="upload-interface">
@@ -796,6 +1210,13 @@ async def root():
             let currentUploadId = null;
             let zoomLevel = 1.0;
             let overlaysVisible = false;
+            let sidebarOpen = false;
+            let currentPage = 1;
+            let totalPages = 1;
+            let imagesPerPage = 20;
+            let allImages = [];
+            let filteredImages = [];
+            let selectedImageId = null;
             
             // Mode switching
             function switchMode(mode) {
@@ -976,28 +1397,266 @@ async def root():
                 console.log('Loading deep dive for agent:', agentNumber);
             }
             
+            // Sidebar functionality
+            function toggleSidebar() {
+                sidebarOpen = !sidebarOpen;
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                const sidebarIcon = document.getElementById('sidebar-icon');
+                
+                if (sidebarOpen) {
+                    sidebar.classList.add('open');
+                    overlay.classList.add('active');
+                    document.body.classList.add('sidebar-open');
+                    sidebarIcon.textContent = '✕';
+                    loadImages();
+                } else {
+                    sidebar.classList.remove('open');
+                    overlay.classList.remove('active');
+                    document.body.classList.remove('sidebar-open');
+                    sidebarIcon.textContent = '📁';
+                }
+            }
+            
+            // Load images from API
+            async function loadImages() {
+                try {
+                    // Mock data for now - replace with real API call
+                    allImages = generateMockImages();
+                    filteredImages = [...allImages];
+                    updateImageGrid();
+                    updateResultCount();
+                } catch (error) {
+                    console.error('Error loading images:', error);
+                    document.getElementById('resultCount').textContent = 'Error loading images';
+                }
+            }
+            
+            // Generate mock images for demonstration
+            function generateMockImages() {
+                const stores = ['store_001', 'store_002', 'store_003', 'store_004'];
+                const categories = ['beverages', 'snacks', 'dairy', 'frozen', 'personal_care'];
+                const statuses = ['pending', 'in_progress', 'completed', 'flagged'];
+                const storeNames = {
+                    'store_001': 'Downtown',
+                    'store_002': 'Mall',
+                    'store_003': 'Airport',
+                    'store_004': 'Suburb'
+                };
+                
+                const images = [];
+                for (let i = 1; i <= 150; i++) {
+                    const store = stores[Math.floor(Math.random() * stores.length)];
+                    const category = categories[Math.floor(Math.random() * categories.length)];
+                    const status = statuses[Math.floor(Math.random() * statuses.length)];
+                    const date = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+                    
+                    images.push({
+                        id: `img_${i.toString().padStart(3, '0')}`,
+                        title: `${category.charAt(0).toUpperCase() + category.slice(1)} Shelf ${i}`,
+                        store: store,
+                        storeName: storeNames[store],
+                        category: category,
+                        status: status,
+                        date: date.toISOString().split('T')[0],
+                        timestamp: date.toLocaleString(),
+                        thumbnail: null // Will be placeholder
+                    });
+                }
+                
+                return images.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            }
+            
+            // Filter images based on search and filters
+            function filterImages() {
+                const searchTerm = document.getElementById('imageSearch').value.toLowerCase();
+                const storeFilter = document.getElementById('storeFilter').value;
+                const categoryFilter = document.getElementById('categoryFilter').value;
+                const statusFilter = document.getElementById('statusFilter').value;
+                const dateFilter = document.getElementById('dateFilter').value;
+                
+                filteredImages = allImages.filter(image => {
+                    const matchesSearch = !searchTerm || 
+                        image.title.toLowerCase().includes(searchTerm) ||
+                        image.storeName.toLowerCase().includes(searchTerm) ||
+                        image.category.toLowerCase().includes(searchTerm);
+                    
+                    const matchesStore = !storeFilter || image.store === storeFilter;
+                    const matchesCategory = !categoryFilter || image.category === categoryFilter;
+                    const matchesStatus = !statusFilter || image.status === statusFilter;
+                    const matchesDate = !dateFilter || image.date === dateFilter;
+                    
+                    return matchesSearch && matchesStore && matchesCategory && matchesStatus && matchesDate;
+                });
+                
+                currentPage = 1;
+                updateImageGrid();
+                updateResultCount();
+                updatePagination();
+            }
+            
+            // Update image grid display
+            function updateImageGrid() {
+                const grid = document.getElementById('imageGrid');
+                const startIndex = (currentPage - 1) * imagesPerPage;
+                const endIndex = startIndex + imagesPerPage;
+                const pageImages = filteredImages.slice(startIndex, endIndex);
+                
+                grid.innerHTML = pageImages.map(image => `
+                    <div class="image-item ${selectedImageId === image.id ? 'selected' : ''}" 
+                         onclick="selectImage('${image.id}')" 
+                         data-image-id="${image.id}">
+                        <div class="image-thumbnail">
+                            📷
+                        </div>
+                        <div class="image-info">
+                            <div class="image-title">${image.title}</div>
+                            <div class="image-meta">
+                                ${image.storeName} • ${image.category}<br>
+                                ${image.timestamp}
+                            </div>
+                            <div class="image-status status-${image.status}">
+                                ${image.status.replace('_', ' ')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            // Select an image
+            function selectImage(imageId) {
+                selectedImageId = imageId;
+                const image = allImages.find(img => img.id === imageId);
+                
+                if (image) {
+                    // Update breadcrumb
+                    document.getElementById('breadcrumb').innerHTML = `
+                        <span>${image.storeName} → ${image.category} → ${image.title}</span>
+                    `;
+                    
+                    // Update visual selection
+                    document.querySelectorAll('.image-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    document.querySelector(`[data-image-id="${imageId}"]`).classList.add('selected');
+                    
+                    // Load image data (mock for now)
+                    loadImageData(image);
+                    
+                    // Switch to simple mode and close sidebar
+                    switchMode('simple');
+                    toggleSidebar();
+                }
+            }
+            
+            // Load image data and switch to analysis mode
+            function loadImageData(image) {
+                // Mock processing results
+                const mockResult = {
+                    upload_id: image.id,
+                    agent_iterations: [
+                        {
+                            accuracy: 0.73,
+                            products_found: 21,
+                            duration: '45s',
+                            model_used: 'GPT-4o',
+                            improvements: ['Basic shelf structure detection', 'Initial product identification'],
+                            issues: ['Missing 4 products', 'Price extraction errors', 'Poor positioning accuracy'],
+                            json_data: { products: [], structure: {} }
+                        },
+                        {
+                            accuracy: 0.89,
+                            products_found: 24,
+                            duration: '38s',
+                            model_used: 'Claude',
+                            improvements: ['Found 3 additional products', 'Fixed price extraction', 'Improved confidence scores'],
+                            issues: ['Minor positioning errors', '2 products still missing'],
+                            json_data: { products: [], structure: {} }
+                        },
+                        {
+                            accuracy: 0.94,
+                            products_found: 25,
+                            duration: '22s',
+                            model_used: 'Hybrid',
+                            improvements: ['Found all products', 'Enhanced spatial positioning', 'Cross-validation complete'],
+                            issues: ['Minor confidence variations'],
+                            json_data: { products: [], structure: {} }
+                        }
+                    ]
+                };
+                
+                loadProcessingResults(mockResult);
+            }
+            
+            // Update result count
+            function updateResultCount() {
+                const count = filteredImages.length;
+                const total = allImages.length;
+                document.getElementById('resultCount').textContent = 
+                    `${count} of ${total} images`;
+            }
+            
+            // Pagination
+            function updatePagination() {
+                totalPages = Math.ceil(filteredImages.length / imagesPerPage);
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+                document.getElementById('prevBtn').disabled = currentPage <= 1;
+                document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            }
+            
+            function loadPreviousPage() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    updateImageGrid();
+                    updatePagination();
+                }
+            }
+            
+            function loadNextPage() {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    updateImageGrid();
+                    updatePagination();
+                }
+            }
+            
+            // View toggle
+            function setListView(viewType) {
+                document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                
+                const grid = document.getElementById('imageGrid');
+                if (viewType === 'list') {
+                    grid.style.gridTemplateColumns = '1fr';
+                } else {
+                    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(160px, 1fr))';
+                }
+            }
+            
             // Drag and drop support
             const uploadArea = document.querySelector('.upload-area');
             
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
-            
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
-            
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
+            if (uploadArea) {
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
                 
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    document.getElementById('fileInput').files = files;
-                    uploadFile();
-                }
-            });
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        document.getElementById('fileInput').files = files;
+                        uploadFile();
+                    }
+                });
+            }
         </script>
     </body>
     </html>
