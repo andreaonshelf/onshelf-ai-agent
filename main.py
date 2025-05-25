@@ -51,33 +51,277 @@ async def root():
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                padding: 20px;
                 background: #0a0a0a;
                 color: white;
+                overflow-x: hidden;
             }
-            .container {
-                max-width: 1200px;
-                margin: 0 auto;
+            
+            /* Mode Selector */
+            .mode-selector {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1000;
+                display: flex;
+                gap: 10px;
             }
-            .header {
-                text-align: center;
-                margin-bottom: 40px;
+            
+            .mode-btn {
+                padding: 8px 16px;
+                background: #1f2937;
+                border: 1px solid #374151;
+                color: #d1d5db;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.3s ease;
             }
+            
+            .mode-btn.active {
+                background: #3b82f6;
+                border-color: #3b82f6;
+                color: white;
+            }
+            
+            /* Upload Interface */
+            .upload-interface {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 20px;
+            }
+            
             .upload-area {
                 border: 2px dashed #374151;
-                border-radius: 8px;
-                padding: 40px;
+                border-radius: 12px;
+                padding: 60px;
                 text-align: center;
-                margin-bottom: 20px;
                 background: #111827;
+                max-width: 600px;
+                width: 100%;
+                transition: all 0.3s ease;
             }
+            
             .upload-area:hover {
                 border-color: #3b82f6;
                 background: #1f2937;
             }
+            
+            .upload-area.dragover {
+                border-color: #10b981;
+                background: #064e3b;
+            }
+            
+            /* Simple Mode - 2 Panel Layout */
+            .simple-mode {
+                display: none;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                padding: 20px;
+                height: 100vh;
+            }
+            
+            .image-panel, .planogram-panel {
+                background: #111827;
+                border-radius: 12px;
+                padding: 20px;
+                overflow: hidden;
+            }
+            
+            .image-viewer {
+                position: relative;
+                width: 100%;
+                height: 60%;
+                background: #000;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            
+            .image-viewer img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
+            
+            .zoom-controls {
+                position: absolute;
+                bottom: 10px;
+                right: 10px;
+                display: flex;
+                gap: 5px;
+            }
+            
+            .zoom-btn {
+                background: rgba(0,0,0,0.7);
+                color: white;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            
+            .rating-system {
+                margin-top: 20px;
+                padding: 20px;
+                background: #1f2937;
+                border-radius: 8px;
+            }
+            
+            .star-rating {
+                display: flex;
+                gap: 5px;
+                margin: 10px 0;
+            }
+            
+            .star {
+                font-size: 24px;
+                color: #374151;
+                cursor: pointer;
+                transition: color 0.2s;
+            }
+            
+            .star.active, .star:hover {
+                color: #fbbf24;
+            }
+            
+            /* Comparison Mode - Agent Iterations */
+            .comparison-mode {
+                display: none;
+                padding: 20px;
+                height: 100vh;
+                overflow-y: auto;
+            }
+            
+            .agent-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #374151;
+            }
+            
+            .agent-tab {
+                padding: 14px 28px;
+                background: #1f2937;
+                border: 1px solid #374151;
+                color: #d1d5db;
+                border-radius: 12px 12px 0 0;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-weight: 500;
+                font-size: 15px;
+                position: relative;
+                border-bottom: none;
+            }
+            
+            .agent-tab:hover {
+                background: #374151;
+                color: #e5e7eb;
+                transform: translateY(-1px);
+            }
+            
+            .agent-tab.active {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+                box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.3);
+            }
+            
+            .agent-tab.active::after {
+                content: '';
+                position: absolute;
+                bottom: -1px;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: #3b82f6;
+            }
+            
+            .agent-content {
+                display: none;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                height: calc(100vh - 120px);
+            }
+            
+            .agent-content.active {
+                display: grid;
+            }
+            
+            .agent-data, .agent-planogram {
+                background: #111827;
+                border-radius: 12px;
+                padding: 20px;
+                overflow-y: auto;
+            }
+            
+            .performance-metrics {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            
+            .metric {
+                background: #1f2937;
+                padding: 20px;
+                border-radius: 12px;
+                text-align: center;
+                border: 1px solid #374151;
+                transition: all 0.3s ease;
+            }
+            
+            .metric:hover {
+                border-color: #3b82f6;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            
+            .metric-value {
+                font-size: 28px;
+                font-weight: 700;
+                color: #3b82f6;
+                margin-bottom: 8px;
+                font-variant-numeric: tabular-nums;
+            }
+            
+            .metric-label {
+                font-size: 13px;
+                color: #9ca3af;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            
+            /* Advanced Mode - 4 Panel Layout */
+            .advanced-mode {
+                display: none;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr 1fr;
+                gap: 20px;
+                padding: 20px;
+                height: 100vh;
+            }
+            
+            .panel {
+                background: #111827;
+                border-radius: 12px;
+                padding: 20px;
+                overflow: hidden;
+            }
+            
+            .panel h3 {
+                color: #3b82f6;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #374151;
+            }
+            
+            /* Buttons */
             .btn {
                 background: #3b82f6;
                 color: white;
@@ -86,483 +330,537 @@ async def root():
                 border-radius: 6px;
                 cursor: pointer;
                 font-size: 16px;
+                transition: background 0.3s ease;
             }
+            
             .btn:hover {
                 background: #2563eb;
             }
-            .features {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-                margin-top: 40px;
+            
+            .btn-secondary {
+                background: #6b7280;
             }
-            .feature {
-                background: #111827;
-                padding: 20px;
-                border-radius: 8px;
+            
+            .btn-secondary:hover {
+                background: #4b5563;
+            }
+            
+            .btn-success {
+                background: #10b981;
+            }
+            
+            .btn-success:hover {
+                background: #059669;
+            }
+            
+            /* Feedback Areas */
+            .feedback-area {
+                margin-top: 15px;
+            }
+            
+            .feedback-area textarea {
+                width: 100%;
+                min-height: 80px;
+                background: #1f2937;
+                border: 1px solid #374151;
+                color: white;
+                padding: 12px;
+                border-radius: 6px;
+                resize: vertical;
+            }
+            
+            /* JSON Viewer */
+            .json-viewer {
+                background: #000;
+                color: #10b981;
+                padding: 15px;
+                border-radius: 6px;
+                font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+                font-size: 13px;
+                line-height: 1.4;
+                overflow-x: auto;
+                max-height: 400px;
+                overflow-y: auto;
                 border: 1px solid #374151;
             }
-            .feature h3 {
-                color: #3b82f6;
-                margin-top: 0;
+            
+            /* Enhanced Typography */
+            h2, h3, h4 {
+                font-weight: 600;
+                letter-spacing: -0.025em;
             }
-            .system-option {
-                background: #1f2937;
-                padding: 15px;
-                border-radius: 8px;
-                border: 2px solid #374151;
-                cursor: pointer;
-                transition: all 0.3s ease;
+            
+            h2 {
+                font-size: 1.875rem;
+                margin-bottom: 1.5rem;
             }
-            .system-option:hover {
+            
+            h3 {
+                font-size: 1.25rem;
+                margin-bottom: 1rem;
+            }
+            
+            h4 {
+                font-size: 1.125rem;
+                margin-bottom: 0.75rem;
+                margin-top: 1.5rem;
+            }
+            
+            /* Improved Lists */
+            ul {
+                padding-left: 1.25rem;
+                margin: 0.75rem 0;
+            }
+            
+            li {
+                margin-bottom: 0.5rem;
+                line-height: 1.5;
+            }
+            
+            /* Better Labels */
+            label {
+                font-weight: 500;
+                color: #e5e7eb;
+                display: block;
+                margin-bottom: 0.5rem;
+            }
+            
+            /* Enhanced Form Elements */
+            select {
+                width: 100%;
+                padding: 10px 12px;
+                background: #374151;
+                color: white;
+                border: 1px solid #4b5563;
+                border-radius: 6px;
+                font-size: 14px;
+                transition: border-color 0.2s ease;
+            }
+            
+            select:focus {
+                outline: none;
                 border-color: #3b82f6;
-                background: #111827;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
             }
-            .system-option.selected {
-                border-color: #10b981;
-                background: #064e3b;
-            }
-            .system-option h4 {
-                margin: 0 0 8px 0;
-                color: #3b82f6;
-            }
-            .system-option p {
-                margin: 0 0 8px 0;
-                color: #d1d5db;
-            }
-            .system-option small {
+            
+            /* Loading States */
+            .loading {
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 color: #9ca3af;
+                font-style: italic;
+            }
+            
+            .loading::before {
+                content: "⏳ ";
+                margin-right: 0.5rem;
+            }
+            
+            /* Responsive */
+            @media (max-width: 768px) {
+                .simple-mode, .advanced-mode {
+                    grid-template-columns: 1fr;
+                }
+                
+                .agent-content {
+                    grid-template-columns: 1fr;
+                }
+                
+                .mode-selector {
+                    position: relative;
+                    top: auto;
+                    right: auto;
+                    justify-content: center;
+                    margin-bottom: 20px;
+                }
             }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>🧠 OnShelf AI - Progressive Debugger</h1>
-                <p>Four-level orchestration system with human-in-the-loop evaluation</p>
-            </div>
-            
-            <div class="system-selector" style="margin-bottom: 20px;">
-                <h3>🎯 Strategic System Selection</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div class="system-option" onclick="selectSystem('custom')">
-                        <h4>🔧 Custom Consensus</h4>
-                        <p>Direct API calls, maximum control</p>
-                        <small>Best for: Cost control, fast debugging</small>
-                    </div>
-                    <div class="system-option" onclick="selectSystem('langgraph')">
-                        <h4>🏢 LangGraph Framework</h4>
-                        <p>Professional workflow management</p>
-                        <small>Best for: Enterprise deployment</small>
-                    </div>
-                    <div class="system-option" onclick="selectSystem('hybrid')">
-                        <h4>🚀 Hybrid System</h4>
-                        <p>Custom logic + LangChain power</p>
-                        <small>Best for: Maximum capability</small>
-                    </div>
-                </div>
-                <div style="text-align: center;">
-                    <label>
-                        <input type="checkbox" id="runComparison" checked> 
-                        Run Strategic Comparison (All Three Systems)
-                    </label>
-                </div>
-            </div>
-            
+        <!-- Mode Selector -->
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="switchMode('upload')">Upload</button>
+            <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
+            <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
+            <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
+        </div>
+        
+        <!-- Upload Interface -->
+        <div id="upload-interface" class="upload-interface">
             <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                <h3>📷 Upload Shelf Image</h3>
+                <h2>📷 Upload Shelf Image</h2>
                 <p>Click here or drag and drop a retail shelf image</p>
                 <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="uploadFile()">
-                <button class="btn">Choose File</button>
+                <button class="btn" style="margin-top: 20px;">Choose File</button>
             </div>
-            
-            <div class="features">
-                <div class="feature">
-                    <h3>🔄 Multiple Agent Iterations</h3>
-                    <p>Compare Agent 1 vs Agent 2 vs Agent 3 results side-by-side with cumulative learning</p>
+        </div>
+        
+        <!-- Simple Mode - 2 Panel Layout -->
+        <div id="simple-mode" class="simple-mode">
+            <div class="image-panel">
+                <h3>📷 Original Image</h3>
+                <div class="image-viewer">
+                    <img id="originalImage" src="" alt="Original shelf image">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomImage(0.25)">25%</button>
+                        <button class="zoom-btn" onclick="zoomImage(0.5)">50%</button>
+                        <button class="zoom-btn" onclick="zoomImage(1.0)">100%</button>
+                        <button class="zoom-btn" onclick="zoomImage(2.0)">200%</button>
+                        <button class="zoom-btn" onclick="zoomImage(4.0)">400%</button>
+                        <button class="zoom-btn" onclick="toggleOverlays()">Overlays</button>
+                    </div>
                 </div>
                 
-                <div class="feature">
-                    <h3>📊 Planogram Quality Evaluation</h3>
-                    <p>Rate and provide feedback on planogram generation quality separate from extraction</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>✏️ Interactive Prompt Editing</h3>
-                    <p>Edit agent prompts and immediately test changes with A/B testing</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>👤 Human-in-the-Loop Feedback</h3>
-                    <p>Simple mode for basic evaluation, advanced mode for detailed debugging</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🎯 Progressive Disclosure</h3>
-                    <p>Three interface modes: Simple, Comparison, and Advanced for different user types</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🏗️ Three-Level Abstraction</h3>
-                    <p>Switch between Brand View, Product View, and SKU View planograms</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>✏️ Direct Prompt Control</h3>
-                    <p>Edit prompts directly, test A/B variations, and manually override AI selections</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🧪 A/B Testing Interface</h3>
-                    <p>Compare prompt performance side-by-side with real-time testing capabilities</p>
+                <div class="rating-system">
+                    <h4>⭐ Extraction Quality</h4>
+                    <div class="star-rating" data-rating="extraction">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                    
+                    <div class="feedback-area">
+                        <label>What worked well:</label>
+                        <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
+                    </div>
                 </div>
             </div>
             
-            <div style="text-align: center; margin-top: 40px;">
-                <button onclick="showPromptManager()" class="btn" style="background: #10b981;">
-                    🎛️ Open Prompt Manager
+            <div class="planogram-panel">
+                <h3>📊 Final Planogram</h3>
+                <div id="planogramViewer" class="image-viewer">
+                    <!-- Planogram will be rendered here -->
+                </div>
+                
+                <div class="rating-system">
+                    <h4>⭐ Planogram Quality</h4>
+                    <div class="star-rating" data-rating="planogram">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                    
+                    <div class="feedback-area">
+                        <label>Needs improvement:</label>
+                        <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
+                    </div>
+                    
+                    <div style="margin-top: 20px; display: flex; gap: 10px;">
+                        <button class="btn" onclick="switchMode('comparison')">Show Details</button>
+                        <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Comparison Mode - Agent Iterations -->
+        <div id="comparison-mode" class="comparison-mode">
+            <h2>🔄 Agent Iteration Comparison</h2>
+            
+            <div class="agent-tabs">
+                <button class="agent-tab active" onclick="switchAgent(1)">Agent 1</button>
+                <button class="agent-tab" onclick="switchAgent(2)">Agent 2</button>
+                <button class="agent-tab" onclick="switchAgent(3)">Agent 3</button>
+            </div>
+            
+            <div id="agent-1" class="agent-content active">
+                <div class="agent-data">
+                    <div class="performance-metrics">
+                        <div class="metric">
+                            <div class="metric-value" id="agent1-accuracy">73%</div>
+                            <div class="metric-label">Accuracy</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="agent1-products">21</div>
+                            <div class="metric-label">Products Found</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="agent1-time">45s</div>
+                            <div class="metric-label">Processing Time</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="agent1-model">GPT-4o</div>
+                            <div class="metric-label">Model Used</div>
+                        </div>
+                    </div>
+                    
+                    <h4>✅ Improvements</h4>
+                    <ul id="agent1-improvements">
+                        <li>Basic shelf structure detection</li>
+                        <li>Initial product identification</li>
+                    </ul>
+                    
+                    <h4>❌ Issues</h4>
+                    <ul id="agent1-issues">
+                        <li>Missing 4 products</li>
+                        <li>Price extraction errors</li>
+                        <li>Poor positioning accuracy</li>
+                    </ul>
+                    
+                    <h4>📋 JSON Data</h4>
+                    <div class="json-viewer loading" id="agent1-json">
+                        Loading agent data...
+                    </div>
+                </div>
+                
+                <div class="agent-planogram">
+                    <h4>📊 Visual Planogram</h4>
+                    <div id="agent1-planogram" class="image-viewer">
+                        <!-- Agent 1 planogram will be rendered here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div id="agent-2" class="agent-content">
+                <div class="agent-data">
+                    <div class="performance-metrics">
+                        <div class="metric">
+                            <div class="metric-value">89%</div>
+                            <div class="metric-label">Accuracy</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">24</div>
+                            <div class="metric-label">Products Found</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">38s</div>
+                            <div class="metric-label">Processing Time</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">Claude</div>
+                            <div class="metric-label">Model Used</div>
+                        </div>
+                    </div>
+                    
+                    <h4>✅ Improvements</h4>
+                    <ul>
+                        <li>Found 3 additional products</li>
+                        <li>Fixed price extraction</li>
+                        <li>Improved confidence scores</li>
+                    </ul>
+                    
+                    <h4>❌ Issues</h4>
+                    <ul>
+                        <li>Minor positioning errors</li>
+                        <li>2 products still missing</li>
+                    </ul>
+                    
+                    <h4>📋 JSON Data</h4>
+                    <div class="json-viewer loading">
+                        Loading agent data...
+                    </div>
+                </div>
+                
+                <div class="agent-planogram">
+                    <h4>📊 Visual Planogram</h4>
+                    <div class="image-viewer">
+                        <!-- Agent 2 planogram will be rendered here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div id="agent-3" class="agent-content">
+                <div class="agent-data">
+                    <div class="performance-metrics">
+                        <div class="metric">
+                            <div class="metric-value">94%</div>
+                            <div class="metric-label">Accuracy</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">25</div>
+                            <div class="metric-label">Products Found</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">22s</div>
+                            <div class="metric-label">Processing Time</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">Hybrid</div>
+                            <div class="metric-label">Model Used</div>
+                        </div>
+                    </div>
+                    
+                    <h4>✅ Improvements</h4>
+                    <ul>
+                        <li>Found all products</li>
+                        <li>Enhanced spatial positioning</li>
+                        <li>Cross-validation complete</li>
+                    </ul>
+                    
+                    <h4>❌ Issues</h4>
+                    <ul>
+                        <li>Minor confidence variations</li>
+                    </ul>
+                    
+                    <h4>📋 JSON Data</h4>
+                    <div class="json-viewer loading">
+                        Loading agent data...
+                    </div>
+                </div>
+                
+                <div class="agent-planogram">
+                    <h4>📊 Visual Planogram</h4>
+                    <div class="image-viewer">
+                        <!-- Agent 3 planogram will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Advanced Mode - 4 Panel Layout -->
+        <div id="advanced-mode" class="advanced-mode">
+            <div class="panel">
+                <h3>📷 Original Image</h3>
+                <div class="image-viewer">
+                    <img id="advancedOriginalImage" src="" alt="Original shelf image">
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h3>🤖 Agent Deep Dive</h3>
+                <div style="margin-bottom: 15px;">
+                    <select id="agentSelector" onchange="loadAgentDeepDive()">
+                        <option value="1">Agent 1 - Initial Extraction</option>
+                        <option value="2">Agent 2 - Enhanced Detection</option>
+                        <option value="3">Agent 3 - Final Optimization</option>
+                    </select>
+                </div>
+                <div id="agentDeepDive" class="json-viewer loading">
+                    Loading agent details...
+                </div>
+                <button class="btn btn-secondary" onclick="openPromptEditor()" style="margin-top: 15px;">
+                    ✏️ Edit Prompts
                 </button>
+            </div>
+            
+            <div class="panel">
+                <h3>📊 Planogram Analysis</h3>
+                <div id="planogramAnalysis">
+                    <h4>Quality Evaluation</h4>
+                    <div class="star-rating" data-rating="advanced-planogram">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                    
+                    <h4>Issue Detection</h4>
+                    <div style="margin: 15px 0;">
+                        <label><input type="checkbox"> Poor spatial layout</label><br>
+                        <label><input type="checkbox"> Missing products</label><br>
+                        <label><input type="checkbox"> Incorrect positioning</label><br>
+                        <label><input type="checkbox"> Price extraction errors</label><br>
+                        <label><input type="checkbox"> Visual clarity issues</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h3>🧠 Orchestrator Reasoning</h3>
+                <div id="orchestratorInsights">
+                    <h4>Decision Logic</h4>
+                    <p>Master orchestrator chose 3-iteration approach based on initial complexity assessment.</p>
+                    
+                    <h4>Iteration Strategy</h4>
+                    <ul>
+                        <li>Agent 1: Broad detection with GPT-4o</li>
+                        <li>Agent 2: Refinement with Claude</li>
+                        <li>Agent 3: Validation with hybrid approach</li>
+                    </ul>
+                    
+                    <h4>Focus Areas</h4>
+                    <ul>
+                        <li>Product detection accuracy</li>
+                        <li>Spatial positioning</li>
+                        <li>Price extraction</li>
+                    </ul>
+                    
+                    <h4>Learning Progress</h4>
+                    <div class="metric">
+                        <div class="metric-value">+21%</div>
+                        <div class="metric-label">Accuracy Improvement</div>
+                    </div>
+                </div>
             </div>
         </div>
         
         <script>
-            let selectedSystem = 'custom';
+            let currentMode = 'upload';
+            let currentAgent = 1;
+            let currentUploadId = null;
+            let zoomLevel = 1.0;
+            let overlaysVisible = false;
             
-            function selectSystem(systemType) {
-                selectedSystem = systemType;
+            // Mode switching
+            function switchMode(mode) {
+                // Hide all modes
+                document.getElementById('upload-interface').style.display = 'none';
+                document.getElementById('simple-mode').style.display = 'none';
+                document.getElementById('comparison-mode').style.display = 'none';
+                document.getElementById('advanced-mode').style.display = 'none';
                 
-                // Update visual selection
-                document.querySelectorAll('.system-option').forEach(option => {
-                    option.classList.remove('selected');
+                // Update mode buttons
+                document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                
+                // Show selected mode
+                if (mode === 'upload') {
+                    document.getElementById('upload-interface').style.display = 'flex';
+                } else if (mode === 'simple') {
+                    document.getElementById('simple-mode').style.display = 'grid';
+                } else if (mode === 'comparison') {
+                    document.getElementById('comparison-mode').style.display = 'block';
+                } else if (mode === 'advanced') {
+                    document.getElementById('advanced-mode').style.display = 'grid';
+                }
+                
+                currentMode = mode;
+            }
+            
+            // Agent switching in comparison mode
+            function switchAgent(agentNumber) {
+                // Hide all agent content
+                document.querySelectorAll('.agent-content').forEach(content => {
+                    content.classList.remove('active');
                 });
-                event.target.closest('.system-option').classList.add('selected');
                 
-                // Uncheck comparison mode when selecting specific system
-                document.getElementById('runComparison').checked = false;
-            }
-            
-            function showPromptManager() {
-                // Create prompt manager interface
-                const promptManagerHTML = `
-                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;">
-                        <div style="background: #111827; padding: 30px; border-radius: 12px; width: 90%; max-width: 1200px; max-height: 90%; overflow-y: auto;">
-                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 20px;">
-                                <h2 style="margin: 0; color: #3b82f6;">🎛️ Prompt Management Center</h2>
-                                <button onclick="closePromptManager()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: auto;">✕ Close</button>
-                            </div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                                <!-- Left Panel: Prompt Editor -->
-                                <div style="background: #1f2937; padding: 20px; border-radius: 8px;">
-                                    <h3 style="color: #10b981; margin-top: 0;">✏️ Edit Prompts</h3>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <label style="display: block; margin-bottom: 5px; color: #d1d5db;">Prompt Type:</label>
-                                        <select id="promptType" style="width: 100%; padding: 8px; background: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px;">
-                                            <option value="structure_analysis">Structure Analysis</option>
-                                            <option value="position_analysis">Position Analysis</option>
-                                            <option value="quantity_analysis">Quantity Analysis</option>
-                                            <option value="detail_analysis">Detail Analysis</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <label style="display: block; margin-bottom: 5px; color: #d1d5db;">Model Type:</label>
-                                        <select id="modelType" style="width: 100%; padding: 8px; background: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px;">
-                                            <option value="universal">Universal (All Models)</option>
-                                            <option value="gpt4o">GPT-4o Specific</option>
-                                            <option value="claude">Claude Specific</option>
-                                            <option value="gemini">Gemini Specific</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <label style="display: block; margin-bottom: 5px; color: #d1d5db;">Prompt Content:</label>
-                                        <textarea id="promptContent" rows="10" style="width: 100%; padding: 8px; background: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px; font-family: monospace;" placeholder="Enter your prompt content here..."></textarea>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <label style="display: block; margin-bottom: 5px; color: #d1d5db;">Description (Optional):</label>
-                                        <input type="text" id="promptDescription" style="width: 100%; padding: 8px; background: #374151; color: white; border: 1px solid #4b5563; border-radius: 4px;" placeholder="Describe your changes...">
-                                    </div>
-                                    
-                                    <div style="display: flex; gap: 10px;">
-                                        <button onclick="savePrompt()" class="btn" style="background: #10b981;">💾 Save & Activate</button>
-                                        <button onclick="testPrompt()" class="btn" style="background: #3b82f6;">🧪 Test Prompt</button>
-                                        <button onclick="loadCurrentPrompt()" class="btn" style="background: #6b7280;">📥 Load Current</button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Right Panel: Version Management -->
-                                <div style="background: #1f2937; padding: 20px; border-radius: 8px;">
-                                    <h3 style="color: #10b981; margin-top: 0;">📚 Version History</h3>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <button onclick="loadPromptVersions()" class="btn" style="background: #3b82f6; width: 100%;">🔄 Refresh Versions</button>
-                                    </div>
-                                    
-                                    <div id="promptVersions" style="max-height: 400px; overflow-y: auto;">
-                                        <p style="color: #9ca3af; text-align: center;">Click "Refresh Versions" to load prompt history</p>
-                                    </div>
-                                    
-                                    <div style="margin-top: 20px;">
-                                        <h4 style="color: #10b981;">🤖 AI Suggestions</h4>
-                                        <div style="margin-bottom: 10px;">
-                                            <button onclick="getSuggestions('performance')" class="btn" style="background: #8b5cf6; font-size: 12px;">📊 Performance Based</button>
-                                            <button onclick="getSuggestions('errors')" class="btn" style="background: #ef4444; font-size: 12px;">🐛 Error Based</button>
-                                            <button onclick="getSuggestions('feedback')" class="btn" style="background: #f59e0b; font-size: 12px;">💬 Feedback Based</button>
-                                        </div>
-                                        <div id="suggestions" style="background: #374151; padding: 10px; border-radius: 4px; min-height: 60px; color: #d1d5db; font-size: 12px;">
-                                            AI suggestions will appear here...
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                // Update agent tabs
+                document.querySelectorAll('.agent-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
                 
-                document.body.insertAdjacentHTML('beforeend', promptManagerHTML);
-            }
-            
-            function closePromptManager() {
-                const modal = document.querySelector('[style*="position: fixed"]');
-                if (modal) modal.remove();
-            }
-            
-            async function savePrompt() {
-                const promptType = document.getElementById('promptType').value;
-                const modelType = document.getElementById('modelType').value;
-                const promptContent = document.getElementById('promptContent').value;
-                const description = document.getElementById('promptDescription').value;
+                // Show selected agent
+                document.getElementById(`agent-${agentNumber}`).classList.add('active');
+                event.target.classList.add('active');
                 
-                if (!promptContent.trim()) {
-                    alert('Please enter prompt content');
-                    return;
-                }
-                
-                try {
-                    const formData = new FormData();
-                    formData.append('prompt_type', promptType);
-                    formData.append('model_type', modelType);
-                    formData.append('new_content', promptContent);
-                    formData.append('description', description);
-                    
-                    const response = await fetch('/api/strategic/prompt/edit', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        alert(`✅ Prompt saved successfully!\\nVersion: ${result.new_version}\\nActivated: ${result.activated}`);
-                        loadPromptVersions(); // Refresh the version list
-                    } else {
-                        alert(`❌ Failed to save prompt: ${result.detail || 'Unknown error'}`);
-                    }
-                } catch (error) {
-                    alert(`❌ Error saving prompt: ${error.message}`);
-                }
+                currentAgent = agentNumber;
             }
             
-            async function testPrompt() {
-                const promptType = document.getElementById('promptType').value;
-                const modelType = document.getElementById('modelType').value;
-                const promptContent = document.getElementById('promptContent').value;
-                
-                if (!promptContent.trim()) {
-                    alert('Please enter prompt content to test');
-                    return;
-                }
-                
-                // For testing, we need an image - prompt user to upload one
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.onchange = async (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    
-                    try {
-                        const formData = new FormData();
-                        formData.append('prompt_type', promptType);
-                        formData.append('model_type', modelType);
-                        formData.append('prompt_content', promptContent);
-                        formData.append('test_image', file);
-                        
-                        const response = await fetch('/api/strategic/prompt/test', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            const testResults = result.test_results;
-                            alert(`🧪 Test Results:\\n` +
-                                  `Accuracy: ${(testResults.accuracy * 100).toFixed(1)}%\\n` +
-                                  `Confidence: ${(testResults.confidence * 100).toFixed(1)}%\\n` +
-                                  `Processing Time: ${testResults.processing_time_ms}ms\\n` +
-                                  `Quality: ${testResults.result_quality}\\n\\n` +
-                                  `Recommendations:\\n${result.recommendations.join('\\n')}`);
-                        } else {
-                            alert(`❌ Test failed: ${result.detail || 'Unknown error'}`);
-                        }
-                    } catch (error) {
-                        alert(`❌ Error testing prompt: ${error.message}`);
-                    }
-                };
-                input.click();
-            }
-            
-            async function loadCurrentPrompt() {
-                const promptType = document.getElementById('promptType').value;
-                const modelType = document.getElementById('modelType').value;
-                
-                try {
-                    const response = await fetch(`/api/strategic/prompt/versions?prompt_type=${promptType}&model_type=${modelType}`);
-                    const result = await response.json();
-                    
-                    if (result.versions && result.versions.length > 0) {
-                        // Find the active version
-                        const activeVersion = result.versions.find(v => v.is_active);
-                        if (activeVersion) {
-                            document.getElementById('promptContent').value = activeVersion.full_content;
-                            document.getElementById('promptDescription').value = `Loaded from ${activeVersion.prompt_version}`;
-                        } else {
-                            alert('No active version found for this prompt type and model');
-                        }
-                    } else {
-                        alert('No versions found for this prompt type and model');
-                    }
-                } catch (error) {
-                    alert(`❌ Error loading prompt: ${error.message}`);
-                }
-            }
-            
-            async function loadPromptVersions() {
-                const promptType = document.getElementById('promptType').value;
-                const modelType = document.getElementById('modelType').value;
-                
-                try {
-                    const response = await fetch(`/api/strategic/prompt/versions?prompt_type=${promptType}&model_type=${modelType}`);
-                    const result = await response.json();
-                    
-                    const versionsDiv = document.getElementById('promptVersions');
-                    
-                    if (result.versions && result.versions.length > 0) {
-                        versionsDiv.innerHTML = result.versions.map(version => `
-                            <div style="background: ${version.is_active ? '#065f46' : '#374151'}; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: ${version.is_active ? '2px solid #10b981' : '1px solid #4b5563'};">
-                                <div style="display: flex; justify-content: between; align-items: center;">
-                                    <strong style="color: ${version.is_active ? '#10b981' : '#3b82f6'};">
-                                        ${version.prompt_version} ${version.is_active ? '(ACTIVE)' : ''}
-                                    </strong>
-                                    <small style="color: #9ca3af;">${new Date(version.created_at).toLocaleDateString()}</small>
-                                </div>
-                                <p style="margin: 5px 0; font-size: 12px; color: #d1d5db;">${version.prompt_content}</p>
-                                <div style="font-size: 11px; color: #9ca3af;">
-                                    Score: ${(version.performance_score * 100).toFixed(1)}% | 
-                                    Usage: ${version.usage_count} | 
-                                    Corrections: ${(version.correction_rate * 100).toFixed(1)}%
-                                </div>
-                                <div style="margin-top: 8px;">
-                                    ${!version.is_active ? `<button onclick="activateVersion('${version.prompt_id}')" style="background: #10b981; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Activate</button>` : ''}
-                                    <button onclick="loadVersionContent('${version.full_content}')" style="background: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer; margin-left: 5px;">Load</button>
-                                </div>
-                            </div>
-                        `).join('');
-                    } else {
-                        versionsDiv.innerHTML = '<p style="color: #9ca3af; text-align: center;">No versions found</p>';
-                    }
-                } catch (error) {
-                    document.getElementById('promptVersions').innerHTML = `<p style="color: #ef4444;">Error loading versions: ${error.message}</p>`;
-                }
-            }
-            
-            async function activateVersion(promptId) {
-                try {
-                    const formData = new FormData();
-                    formData.append('prompt_id', promptId);
-                    formData.append('reason', 'Manual activation via UI');
-                    
-                    const response = await fetch('/api/strategic/prompt/activate', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        alert(`✅ Prompt version activated successfully!`);
-                        loadPromptVersions(); // Refresh the list
-                    } else {
-                        alert(`❌ Failed to activate version: ${result.detail || 'Unknown error'}`);
-                    }
-                } catch (error) {
-                    alert(`❌ Error activating version: ${error.message}`);
-                }
-            }
-            
-            function loadVersionContent(content) {
-                document.getElementById('promptContent').value = content;
-                document.getElementById('promptDescription').value = 'Loaded from version history';
-            }
-            
-            async function getSuggestions(basedOn) {
-                const promptType = document.getElementById('promptType').value;
-                const modelType = document.getElementById('modelType').value;
-                
-                try {
-                    const response = await fetch(`/api/strategic/prompt/suggestions?prompt_type=${promptType}&model_type=${modelType}&based_on=${basedOn}`);
-                    const result = await response.json();
-                    
-                    const suggestionsDiv = document.getElementById('suggestions');
-                    
-                    if (result.suggestions && result.suggestions.length > 0) {
-                        suggestionsDiv.innerHTML = result.suggestions.map(suggestion => `
-                            <div style="margin-bottom: 8px; padding: 8px; background: #4b5563; border-radius: 3px;">
-                                <strong style="color: #10b981;">${suggestion.type}:</strong>
-                                <p style="margin: 4px 0; font-size: 11px;">${suggestion.suggestion}</p>
-                                <small style="color: #9ca3af;">Priority: ${suggestion.priority}</small>
-                            </div>
-                        `).join('');
-                    } else {
-                        suggestionsDiv.innerHTML = 'No suggestions available for this configuration.';
-                    }
-                } catch (error) {
-                    document.getElementById('suggestions').innerHTML = `Error loading suggestions: ${error.message}`;
-                }
-            }
-            
+            // File upload
             async function uploadFile() {
                 const fileInput = document.getElementById('fileInput');
                 const file = fileInput.files[0];
-                const runComparison = document.getElementById('runComparison').checked;
                 
                 if (!file) return;
                 
-                const formData = new FormData();
-                formData.append('file', file);
-                
-                let endpoint, processingMessage;
-                
-                if (runComparison) {
-                    // Strategic comparison mode
-                    formData.append('systems', 'custom,langgraph,hybrid');
-                    endpoint = '/api/strategic/extract-comparison';
-                    processingMessage = '🔄 Running strategic comparison across all three systems...';
-                } else {
-                    // Single system mode
-                    formData.append('system_type', selectedSystem);
-                    endpoint = '/api/strategic/extract-single';
-                    processingMessage = `🔄 Processing with ${selectedSystem} system...`;
-                }
-                
                 try {
-                    document.body.innerHTML = `<div style="text-align: center; padding: 100px;"><h2>${processingMessage}</h2><p>This may take a few minutes</p></div>`;
+                    // Show processing message
+                    document.querySelector('.upload-area h2').textContent = '🔄 Processing...';
+                    document.querySelector('.upload-area p').textContent = 'This may take a few minutes';
                     
-                    const response = await fetch(endpoint, {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('target_accuracy', '0.95');
+                    formData.append('max_iterations', '3');
+                    formData.append('abstraction_level', 'product_view');
+                    
+                    const response = await fetch('/api/v2/process-with-iterations', {
                         method: 'POST',
                         body: formData
                     });
@@ -570,145 +868,136 @@ async def root():
                     const result = await response.json();
                     
                     if (response.ok) {
-                        if (runComparison) {
-                            displayComparisonResults(result);
-                        } else {
-                            displaySingleResults(result);
-                        }
+                        currentUploadId = result.upload_id;
+                        loadProcessingResults(result);
+                        switchMode('simple');
                     } else {
                         throw new Error(result.detail || 'Processing failed');
                     }
                 } catch (error) {
-                    document.body.innerHTML = `<div style="text-align: center; padding: 100px; color: #ef4444;"><h2>❌ Error</h2><p>${error.message}</p><button onclick="location.reload()" class="btn">Try Again</button></div>`;
+                    alert(`❌ Error: ${error.message}`);
+                    // Reset upload area
+                    document.querySelector('.upload-area h2').textContent = '📷 Upload Shelf Image';
+                    document.querySelector('.upload-area p').textContent = 'Click here or drag and drop a retail shelf image';
                 }
             }
             
-            function displaySingleResults(result) {
-                const html = `
-                    <div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
-                        <h1>✅ ${result.system_name} Processing Complete</h1>
+            // Load processing results into UI
+            function loadProcessingResults(result) {
+                // Set original image
+                const imageUrl = URL.createObjectURL(document.getElementById('fileInput').files[0]);
+                document.getElementById('originalImage').src = imageUrl;
+                document.getElementById('advancedOriginalImage').src = imageUrl;
+                
+                // Load agent iteration data
+                if (result.agent_iterations) {
+                    result.agent_iterations.forEach((agent, index) => {
+                        const agentNum = index + 1;
                         
-                        <div style="background: #111827; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3>📊 Results Summary</h3>
-                            <p><strong>System:</strong> ${result.system_name}</p>
-                            <p><strong>Accuracy:</strong> ${(result.extraction_result.overall_accuracy * 100).toFixed(1)}%</p>
-                            <p><strong>Products Found:</strong> ${result.extraction_result.products_found}</p>
-                            <p><strong>Consensus Reached:</strong> ${result.extraction_result.consensus_reached ? '✅ Yes' : '❌ No'}</p>
-                            <p><strong>Processing Time:</strong> ${result.processing_time.toFixed(1)}s</p>
-                            <p><strong>Total Cost:</strong> $${result.cost_breakdown.total_cost.toFixed(3)}</p>
-                        </div>
+                        // Update metrics
+                        const accuracyEl = document.getElementById(`agent${agentNum}-accuracy`);
+                        const productsEl = document.getElementById(`agent${agentNum}-products`);
+                        const timeEl = document.getElementById(`agent${agentNum}-time`);
+                        const modelEl = document.getElementById(`agent${agentNum}-model`);
                         
-                        <div style="background: #111827; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3>🏗️ Architecture Benefits</h3>
-                            <ul>
-                                ${result.architecture_benefits.map(benefit => `<li>${benefit}</li>`).join('')}
-                            </ul>
-                            <p><strong>Complexity:</strong> ${result.complexity_rating} | <strong>Control Level:</strong> ${result.control_level}</p>
-                        </div>
+                        if (accuracyEl) accuracyEl.textContent = `${Math.round(agent.accuracy * 100)}%`;
+                        if (productsEl) productsEl.textContent = agent.products_found;
+                        if (timeEl) timeEl.textContent = `${agent.duration}`;
+                        if (modelEl) modelEl.textContent = agent.model_used;
                         
-                        <div style="background: #111827; padding: 20px; border-radius: 8px;">
-                            <h3>📦 Extracted Products</h3>
-                            <p>Found ${result.extraction_result.products_found} products across ${result.extraction_result.structure.shelf_count || 'unknown'} shelves</p>
-                            <details>
-                                <summary>View detailed extraction data</summary>
-                                <pre style="background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px;">
-${JSON.stringify(result.extraction_result, null, 2)}
-                                </pre>
-                            </details>
-                        </div>
+                        // Update improvements and issues
+                        const improvementsEl = document.getElementById(`agent${agentNum}-improvements`);
+                        const issuesEl = document.getElementById(`agent${agentNum}-issues`);
                         
-                        <button onclick="location.reload()" class="btn" style="margin-top: 20px;">Process Another Image</button>
-                    </div>
-                `;
-                document.body.innerHTML = html;
+                        if (improvementsEl && agent.improvements) {
+                            improvementsEl.innerHTML = agent.improvements.map(imp => `<li>${imp}</li>`).join('');
+                        }
+                        
+                        if (issuesEl && agent.issues) {
+                            issuesEl.innerHTML = agent.issues.map(issue => `<li>${issue}</li>`).join('');
+                        }
+                        
+                        // Update JSON data
+                        const jsonEl = document.getElementById(`agent${agentNum}-json`);
+                        if (jsonEl && agent.json_data) {
+                            jsonEl.classList.remove('loading');
+                            jsonEl.textContent = JSON.stringify(agent.json_data, null, 2);
+                        }
+                    });
+                }
             }
             
-            function displayComparisonResults(result) {
-                const systems = Object.keys(result.system_results);
-                const successfulSystems = systems.filter(s => result.system_results[s].success);
-                
-                const html = `
-                    <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
-                        <h1>🎯 Strategic System Comparison Complete</h1>
-                        
-                        <div style="background: #111827; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3>📊 Comparison Summary</h3>
-                            <p><strong>Systems Compared:</strong> ${systems.length}</p>
-                            <p><strong>Successful Systems:</strong> ${successfulSystems.length}</p>
-                            ${result.comparison_summary.best_accuracy ? `<p><strong>Best Accuracy:</strong> ${result.comparison_summary.best_accuracy.system} (${(result.comparison_summary.best_accuracy.score * 100).toFixed(1)}%)</p>` : ''}
-                            ${result.comparison_summary.fastest_processing ? `<p><strong>Fastest Processing:</strong> ${result.comparison_summary.fastest_processing.system} (${result.comparison_summary.fastest_processing.time.toFixed(1)}s)</p>` : ''}
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px;">
-                            ${systems.map(systemType => {
-                                const systemResult = result.system_results[systemType];
-                                if (!systemResult.success) {
-                                    return `
-                                        <div style="background: #7f1d1d; padding: 20px; border-radius: 8px; border: 2px solid #dc2626;">
-                                            <h3>❌ ${systemResult.system_name}</h3>
-                                            <p><strong>Status:</strong> Failed</p>
-                                            <p><strong>Error:</strong> ${systemResult.error}</p>
-                                        </div>
-                                    `;
-                                }
-                                
-                                return `
-                                    <div style="background: #111827; padding: 20px; border-radius: 8px; border: 2px solid #374151;">
-                                        <h3>✅ ${systemResult.system_name}</h3>
-                                        <p><strong>Accuracy:</strong> ${(systemResult.accuracy * 100).toFixed(1)}%</p>
-                                        <p><strong>Products Found:</strong> ${systemResult.products_found}</p>
-                                        <p><strong>Processing Time:</strong> ${systemResult.processing_time.toFixed(1)}s</p>
-                                        <p><strong>Total Cost:</strong> $${systemResult.total_cost.toFixed(3)}</p>
-                                        <p><strong>Consensus Rate:</strong> ${(systemResult.consensus_rate * 100).toFixed(1)}%</p>
-                                        
-                                        <h4>🏗️ Architecture</h4>
-                                        <p><strong>Complexity:</strong> ${systemResult.complexity_rating}</p>
-                                        <p><strong>Control:</strong> ${systemResult.control_level}</p>
-                                        
-                                        <details style="margin-top: 10px;">
-                                            <summary>View Benefits</summary>
-                                            <ul style="margin: 10px 0;">
-                                                ${systemResult.architecture_benefits.map(benefit => `<li style="font-size: 14px;">${benefit}</li>`).join('')}
-                                            </ul>
-                                        </details>
-                                        
-                                        <details style="margin-top: 10px;">
-                                            <summary>View Extraction Data</summary>
-                                            <pre style="background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 10px; max-height: 200px;">
-${JSON.stringify(systemResult.extraction_data, null, 2)}
-                                            </pre>
-                                        </details>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        
-                        ${result.strategic_insights.recommendations.length > 0 ? `
-                        <div style="background: #111827; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3>💡 Strategic Recommendations</h3>
-                            <ul>
-                                ${result.strategic_insights.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                            </ul>
-                        </div>
-                        ` : ''}
-                        
-                        <div style="background: #111827; padding: 20px; border-radius: 8px;">
-                            <h3>🎯 Use Case Guidance</h3>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-                                ${Object.entries(result.strategic_insights.use_case_guidance || {}).map(([useCase, recommendation]) => `
-                                    <div style="background: #1f2937; padding: 15px; border-radius: 6px;">
-                                        <h4 style="margin: 0 0 8px 0; color: #3b82f6;">${useCase.replace(/_/g, ' ').toUpperCase()}</h4>
-                                        <p style="margin: 0; font-size: 14px;">${recommendation}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        
-                        <button onclick="location.reload()" class="btn" style="margin-top: 20px;">Run Another Comparison</button>
-                    </div>
-                `;
-                document.body.innerHTML = html;
+            // Zoom controls
+            function zoomImage(level) {
+                zoomLevel = level;
+                const images = document.querySelectorAll('.image-viewer img');
+                images.forEach(img => {
+                    img.style.transform = `scale(${level})`;
+                });
             }
+            
+            function toggleOverlays() {
+                overlaysVisible = !overlaysVisible;
+                // TODO: Implement overlay toggle
+                console.log('Overlays toggled:', overlaysVisible);
+            }
+            
+            // Star rating system
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('star')) {
+                    const rating = e.target.dataset.value;
+                    const ratingGroup = e.target.parentElement.dataset.rating;
+                    
+                    // Update visual state
+                    const stars = e.target.parentElement.querySelectorAll('.star');
+                    stars.forEach((star, index) => {
+                        if (index < rating) {
+                            star.classList.add('active');
+                        } else {
+                            star.classList.remove('active');
+                        }
+                    });
+                    
+                    // Store rating
+                    console.log(`Rating for ${ratingGroup}: ${rating} stars`);
+                }
+            });
+            
+            // Prompt editor
+            function openPromptEditor() {
+                // TODO: Implement prompt editor modal
+                alert('Prompt editor will open here');
+            }
+            
+            // Agent deep dive
+            function loadAgentDeepDive() {
+                const agentNumber = document.getElementById('agentSelector').value;
+                // TODO: Load detailed agent data
+                console.log('Loading deep dive for agent:', agentNumber);
+            }
+            
+            // Drag and drop support
+            const uploadArea = document.querySelector('.upload-area');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    document.getElementById('fileInput').files = files;
+                    uploadFile();
+                }
+            });
         </script>
     </body>
     </html>
