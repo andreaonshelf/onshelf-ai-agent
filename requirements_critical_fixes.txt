@@ -1,0 +1,25 @@
+# Critical Fixes Dependencies for OnShelf AI
+# Install with: pip install -r requirements_critical_fixes.txt
+
+# Google Gemini Integration
+google-generativeai>=0.3.0
+Pillow>=9.0.0  # Required for Gemini image processing
+
+# Supabase Database Integration  
+supabase>=2.0.0
+postgrest>=0.10.0
+
+# Enhanced API clients (if not already installed)
+openai>=1.0.0
+anthropic>=0.7.0
+instructor>=0.4.0
+
+# Additional utilities for real implementations
+asyncio-throttle>=1.0.0  # For API rate limiting
+tenacity>=8.0.0  # For retry logic
+pydantic>=2.0.0  # For data validation
+python-multipart>=0.0.5  # For form data handling
+
+# Optional: Enhanced logging and monitoring
+structlog>=22.0.0  # Better structured logging
+prometheus-client>=0.15.0  # Metrics collection 
