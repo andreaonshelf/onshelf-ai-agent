@@ -246,6 +246,131 @@ async def reprocess_item(item_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to reprocess: {str(e)}")
 
 
+@router.post("/reset/{item_id}")
+async def reset_item(item_id: int):
+    """Reset a specific queue item (clear status and errors)"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get current item data
+        result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Queue item not found")
+        
+        # Reset item to clean state
+        update_data = {
+            "status": "pending",
+            "extraction_result": None,
+            "planogram_result": None,
+            "final_accuracy": None,
+            "started_at": None,
+            "completed_at": None,
+            "error_message": None,
+            "iterations_completed": None,
+            "processing_duration_seconds": None,
+            "api_cost": None,
+            "human_review_required": False,
+            "escalation_reason": None,
+            "processing_attempts": 0
+        }
+        
+        result = supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
+        
+        logger.info(f"Reset queue item {item_id} to clean state", component="queue_api")
+        
+        return {
+            "success": True,
+            "item_id": item_id,
+            "status": "pending",
+            "message": "Item has been reset to pending status",
+            "reset_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to reset item {item_id}: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to reset item: {str(e)}")
+
+
+@router.post("/reset-all-failed")
+async def reset_all_failed_items():
+    """Reset all failed and stuck items"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Find all failed and stuck (processing for too long) items
+        result = supabase.table("ai_extraction_queue").select("*").in_(
+            "status", ["failed", "processing"]
+        ).execute()
+        
+        if not result.data:
+            return {
+                "success": True,
+                "message": "No failed or stuck items found",
+                "reset_count": 0
+            }
+        
+        # Filter processing items that are truly stuck (processing for more than 1 hour)
+        stuck_items = []
+        current_time = datetime.utcnow()
+        
+        for item in result.data:
+            if item["status"] == "failed":
+                stuck_items.append(item)
+            elif item["status"] == "processing" and item.get("started_at"):
+                started_at = datetime.fromisoformat(item["started_at"].replace('Z', '+00:00'))
+                if (current_time - started_at.replace(tzinfo=None)).total_seconds() > 3600:  # 1 hour
+                    stuck_items.append(item)
+        
+        if not stuck_items:
+            return {
+                "success": True,
+                "message": "No stuck items found (processing items are still within normal time)",
+                "reset_count": 0
+            }
+        
+        # Reset all stuck items
+        reset_data = {
+            "status": "pending",
+            "extraction_result": None,
+            "planogram_result": None,
+            "final_accuracy": None,
+            "started_at": None,
+            "completed_at": None,
+            "error_message": None,
+            "iterations_completed": None,
+            "processing_duration_seconds": None,
+            "api_cost": None,
+            "human_review_required": False,
+            "escalation_reason": None,
+            "processing_attempts": 0
+        }
+        
+        reset_ids = [item["id"] for item in stuck_items]
+        
+        # Update all stuck items
+        for item_id in reset_ids:
+            supabase.table("ai_extraction_queue").update(reset_data).eq("id", item_id).execute()
+        
+        logger.info(f"Reset {len(reset_ids)} failed/stuck items to pending", component="queue_api")
+        
+        return {
+            "success": True,
+            "message": f"Successfully reset {len(reset_ids)} failed/stuck items",
+            "reset_count": len(reset_ids),
+            "reset_ids": reset_ids,
+            "reset_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to reset failed items: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to reset failed items: {str(e)}")
+
+
 @router.get("/stats")
 async def get_queue_stats():
     """Get queue statistics"""

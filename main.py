@@ -40,6 +40,10 @@ app.include_router(strategic_router)
 from src.api.planogram_editor import router as planogram_editor_router
 app.include_router(planogram_editor_router)
 
+# Include real-time debugging interface
+from src.api.debug_interface import router as debug_router
+app.include_router(debug_router)
+
 # Include planogram rendering
 from src.api.planogram_renderer import router as planogram_router
 app.include_router(planogram_router)
@@ -1645,6 +1649,51 @@ async def root():
                 font-size: 14px;
                 line-height: 1.5;
             }
+            
+            /* Process With Modal Styles */
+            .modal-overlay {
+                backdrop-filter: blur(4px);
+                animation: fadeIn 0.2s ease-out;
+            }
+            
+            .modal-content {
+                animation: slideIn 0.3s ease-out;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            
+            .system-option {
+                transition: all 0.2s ease;
+            }
+            
+            .system-option:hover {
+                border-color: #3b82f6 !important;
+                background: #f8fafc !important;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+            }
+            
+            .system-option.selected {
+                border-color: #3b82f6 !important;
+                background: #f0f9ff !important;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            
+            @keyframes slideIn {
+                from { 
+                    opacity: 0;
+                    transform: translateY(-20px) scale(0.95);
+                }
+                to { 
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
         </style>
     </head>
     <body>
@@ -1762,6 +1811,11 @@ async def root():
                             <div class="stat-card failed">
                                 <div class="stat-number" id="failedCount">0</div>
                                 <div class="stat-label">Failed</div>
+                            </div>
+                            <div class="stat-card" style="border-left-color: #f59e0b; background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%); cursor: pointer;" onclick="resetAllFailedItems()">
+                                <div class="stat-number" style="font-size: 20px; color: #92400e;">🔄</div>
+                                <div class="stat-label" style="color: #92400e; font-weight: 600;">Reset All Failed</div>
+                                <div style="font-size: 11px; color: #92400e; margin-top: 5px; opacity: 0.8;">Click to reset stuck items</div>
                             </div>
                         </div>
                         
@@ -2018,8 +2072,163 @@ async def root():
                         <!-- Pipeline Debugger Tab -->
                         <div id="advanced-debugger" class="advanced-tab-content">
                             <div class="debugger-container">
-                                <h3>🔍 Pipeline Debugger</h3>
-                                <p>Detailed pipeline analysis and debugging tools will be displayed here.</p>
+                                <h3>🔍 Real-Time Pipeline Debugger</h3>
+                                
+                                <!-- Debug Session Controls -->
+                                <div class="debug-controls" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+                                        <div style="flex: 1;">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 5px;">Upload ID:</label>
+                                            <input type="text" id="debugUploadId" placeholder="Enter upload ID to monitor" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                        </div>
+                                        <div style="align-self: end;">
+                                            <button id="startDebugBtn" onclick="startDebugSession()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">🔍 Monitor Extraction</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border-left: 4px solid #64748b; margin-bottom: 15px;">
+                                        <p style="margin: 0; font-size: 14px; color: #475569;">
+                                            <strong>Real-Time Monitoring:</strong> This interface shows the ACTUAL Master Orchestrator iteration cycle. Each iteration generates a NEW planogram until target accuracy is achieved.
+                                        </p>
+                                        <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">
+                                            🔄 <strong>Multiple Planograms:</strong> Iteration 1 → Planogram A → Compare → 75% accuracy → Iteration 2 → Planogram B → Compare → 88% accuracy → Continue until 95%+ achieved
+                                        </p>
+                                    </div>
+                                    
+                                    <div id="debugSessionInfo" style="display: none; background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <strong>Monitoring Session:</strong> <span id="debugSessionId">-</span><br>
+                                                <strong>Status:</strong> <span id="debugStatus">-</span><br>
+                                                <strong>Current Stage:</strong> <span id="debugCurrentStage">-</span>
+                                            </div>
+                                            <button onclick="stopDebugSession()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Stop Monitoring</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Real-Time Pipeline Status -->
+                                <div id="pipelineStatus" class="pipeline-status" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                        <h4 style="margin: 0; color: #1f2937;">📊 System Workflow Status</h4>
+                                                                            <div style="display: flex; gap: 10px; align-items: center;">
+                                        <div style="background: #f0f9ff; padding: 6px 12px; border-radius: 6px; border: 1px solid #3b82f6;">
+                                            <span style="font-size: 12px; font-weight: 600; color: #1e40af;">Monitoring System: </span>
+                                            <span id="currentSystem" style="font-size: 12px; font-weight: 700; color: #1e40af;">Custom Consensus</span>
+                                        </div>
+                                        <div style="background: #fef3c7; padding: 6px 12px; border-radius: 6px; border: 1px solid #f59e0b;">
+                                            <span style="font-size: 11px; color: #92400e;">⚠️ System selected before extraction starts</span>
+                                        </div>
+                                    </div>
+                                    </div>
+                                    
+                                                        <!-- Master Orchestrator Iteration Cycle Progress -->
+                    <div class="iteration-cycle-progress" style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-weight: 600;">Master Orchestrator Iteration Cycle:</span>
+                            <span id="iterationProgressText">Ready to monitor extraction</span>
+                        </div>
+                        
+                        <!-- Current Iteration Display -->
+                        <div id="currentIterationDisplay" style="background: #f8fafc; padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #3b82f6;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>Current Iteration:</strong> <span id="currentIterationNumber">-</span> / <span id="maxIterations">5</span>
+                                    <br><strong>Target Accuracy:</strong> <span id="targetAccuracy">95%</span>
+                                    <br><strong>Current Accuracy:</strong> <span id="currentAccuracy">-</span>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #3b82f6;" id="iterationStatus">⏳</div>
+                                    <div style="font-size: 12px; color: #64748b;" id="iterationStatusText">Waiting</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Real Master Orchestrator Steps -->
+                        <div id="masterOrchestratorSteps" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Steps will be populated based on actual Master Orchestrator flow -->
+                        </div>
+                    </div>
+                                    
+                                    <!-- Orchestrator Info -->
+                                    <div class="orchestrator-info" style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                            <div>
+                                                <div style="font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Orchestrator</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #1f2937;" id="orchestratorType">DeterministicOrchestrator</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Voting Mechanism</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #1f2937;" id="votingMechanism">weighted_consensus</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Active Models</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #1f2937;" id="activeModels">3</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 12px; color: #6b7280; font-weight: 600; text-transform: uppercase;">Total Cost</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #1f2937;" id="totalCost">£0.00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Real-Time Model Comparison -->
+                                <div id="modelComparison" class="model-comparison" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none;">
+                                    <h4 style="margin: 0 0 15px 0; color: #1f2937;">🤖 Live Consensus Voting</h4>
+                                    
+                                    <!-- Current Stage Breakdown -->
+                                    <div id="currentStageBreakdown" style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                                        <h5 style="margin: 0 0 10px 0; color: #374151;">Current Stage: <span id="currentStageTitle">Structure Analysis</span></h5>
+                                        <div id="stageModelResults" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                                            <!-- Model results will be populated here -->
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Consensus Voting Results -->
+                                    <div id="consensusResults" style="background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                                        <h5 style="margin: 0 0 10px 0; color: #1e40af;">Consensus Decision</h5>
+                                        <div id="consensusDecision" style="font-size: 14px; color: #1e40af;">
+                                            Waiting for consensus voting...
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Cost Breakdown by Model -->
+                                    <div id="costBreakdown" style="margin-top: 15px;">
+                                        <h5 style="margin: 0 0 10px 0; color: #374151;">Cost Breakdown</h5>
+                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                                            <div style="background: #fef3c7; padding: 10px; border-radius: 4px; text-align: center;">
+                                                <div style="font-size: 12px; color: #92400e;">Claude-3.5-Sonnet</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #92400e;" id="claudeCost">£0.00</div>
+                                            </div>
+                                            <div style="background: #dbeafe; padding: 10px; border-radius: 4px; text-align: center;">
+                                                <div style="font-size: 12px; color: #1e40af;">GPT-4o</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #1e40af;" id="gpt4oCost">£0.00</div>
+                                            </div>
+                                            <div style="background: #d1fae5; padding: 10px; border-radius: 4px; text-align: center;">
+                                                <div style="font-size: 12px; color: #065f46;">Gemini-2.0-Flash</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #065f46;" id="geminiCost">£0.00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Real-Time Logs -->
+                                <div id="realTimeLogs" class="real-time-logs" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none;">
+                                    <h4 style="margin: 0 0 15px 0; color: #1f2937;">📋 Real-Time Extraction Logs</h4>
+                                    <div style="background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 13px; max-height: 400px; overflow-y: auto;" id="logContainer">
+                                        <div style="color: #94a3b8;">Waiting for debug session to start...</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Active Sessions -->
+                                <div class="active-sessions" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                    <h4 style="margin: 0 0 15px 0; color: #1f2937;">🔄 Active Debug Sessions</h4>
+                                    <div id="activeSessionsList">
+                                        <div style="color: #6b7280; text-align: center; padding: 20px;">No active debug sessions</div>
+                                    </div>
+                                    <button onclick="loadActiveSessions()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">🔄 Refresh Sessions</button>
+                                </div>
                             </div>
                         </div>
                         
@@ -2176,12 +2385,63 @@ async def root():
                              </div>
                          </div>
                         
-                        <div style="margin-top: 20px; display: flex; gap: 10px;">
-                            <button class="btn btn-secondary" onclick="switchMode('simple')">Simple View</button>
-                            <button class="btn btn-secondary" onclick="switchMode('comparison')">Comparison Mode</button>
-                            <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
-                        </div>
+
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Process With Modal -->
+        <div id="processWithModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;" onclick="closeProcessWithModal()">
+            <div class="modal-content" style="background: white; border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+                <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 20px; font-weight: 700;" id="processModalTitle">🚀 Process with AI System</h3>
+                
+                <div style="margin-bottom: 25px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #374151;">Select AI Extraction System:</label>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <label class="system-option" style="display: flex; align-items: center; gap: 12px; padding: 15px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;" onclick="selectSystem('custom_consensus', this)">
+                            <input type="radio" name="aiSystem" value="custom_consensus" style="width: 18px; height: 18px;">
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937;">Custom Consensus System</div>
+                                <div style="font-size: 13px; color: #6b7280;">3 AI models vote in parallel (GPT-4o, Claude-3.5-Sonnet, Gemini-2.0-Flash)</div>
+                                <div style="font-size: 12px; color: #3b82f6; margin-top: 4px;">⚡ Best for accuracy • 🎯 Weighted consensus • 💰 Moderate cost</div>
+                            </div>
+                        </label>
+                        
+                        <label class="system-option" style="display: flex; align-items: center; gap: 12px; padding: 15px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;" onclick="selectSystem('langgraph', this)">
+                            <input type="radio" name="aiSystem" value="langgraph" style="width: 18px; height: 18px;">
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937;">LangGraph Workflow System</div>
+                                <div style="font-size: 13px; color: #6b7280;">Sequential workflow with state management and smart retry logic</div>
+                                <div style="font-size: 12px; color: #10b981; margin-top: 4px;">🔄 Self-correcting • 📊 State tracking • 💡 Efficient</div>
+                            </div>
+                        </label>
+                        
+                        <label class="system-option" style="display: flex; align-items: center; gap: 12px; padding: 15px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;" onclick="selectSystem('hybrid', this)">
+                            <input type="radio" name="aiSystem" value="hybrid" style="width: 18px; height: 18px;">
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937;">Hybrid Adaptive System</div>
+                                <div style="font-size: 13px; color: #6b7280;">Dynamically selects best approach based on image complexity</div>
+                                <div style="font-size: 12px; color: #f59e0b; margin-top: 4px;">🧠 Adaptive • 🎯 Context-aware • 🚀 Optimized</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
+                    <div style="font-size: 14px; color: #1e40af; font-weight: 600; margin-bottom: 5px;">💡 How it works:</div>
+                    <div style="font-size: 13px; color: #475569; line-height: 1.5; margin-bottom: 10px;">
+                        The Master Orchestrator will run multiple iterations until 95% accuracy is achieved. Each iteration generates a new planogram and compares it to the original image.
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+                        <strong>Keyboard shortcuts:</strong> Press 1-3 to select system • Enter to start • Escape to cancel
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button onclick="closeProcessWithModal()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">Cancel</button>
+                    <button id="processWithBtn" onclick="processWithSelectedSystem()" style="padding: 10px 20px; background: #9ca3af; color: white; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; transition: all 0.2s ease; opacity: 0.6;" disabled onmouseover="if(!this.disabled) this.style.background='#2563eb'" onmouseout="if(!this.disabled) this.style.background='#3b82f6'">🚀 Start Processing</button>
                 </div>
             </div>
         </div>
@@ -2579,16 +2839,17 @@ async def root():
                         <div style="overflow-x: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                                 <thead>
-                                    <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Status</th>
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Date</th>
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 120px;">Store</th>
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Category</th>
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Country</th>
-                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Upload ID</th>
-                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Accuracy</th>
-                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 120px;">Actions</th>
-                                    </tr>
+                                                                            <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Status</th>
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Date</th>
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 120px;">Store</th>
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Category</th>
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Country</th>
+                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Upload ID</th>
+                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Accuracy</th>
+                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Debug</th>
+                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 120px;">Actions</th>
+                                        </tr>
                                 </thead>
                                 <tbody>
                                     ${queueData.map(item => {
@@ -2631,16 +2892,23 @@ async def root():
                                                     ` : '<span style="color: #94a3b8;">-</span>'}
                                                 </td>
                                                 <td style="padding: 12px 8px; text-align: center;">
-                                                    <div style="display: flex; gap: 4px; justify-content: center;">
-                                                        ${item.status === 'pending' ? `
-                                                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); startProcessing(${item.id})">Start</button>
+                                                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; background: #8b5cf6; border-color: #8b5cf6; color: white; font-weight: 600;" onclick="event.stopPropagation(); openDebugInterface('${item.ready_media_id || item.id}')">🔍 Debug</button>
+                                                </td>
+                                                                                                <td style="padding: 12px 8px; text-align: center;">
+                                                    <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
+                        ${item.status === 'pending' ? `
+                                                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id})">🚀 Process With</button>
                                                         ` : `
                                                             <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); viewResults(${item.id})">View</button>
                                                         `}
-                                                        ${item.status === 'completed' ? `
-                                                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); reprocess(${item.id})">Retry</button>
+                                                        ${(item.status === 'failed' || item.status === 'processing') ? `
+                                                            <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); resetItem(${item.id})">🔄 Reset</button>
                                                         ` : ''}
-                                                    </div>
+            ${item.status === 'completed' ? `
+                                                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id}, true)">🔄 Reprocess With</button>
+            ` : ''}
+                                                        <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #ef4444; color: white;" onclick="event.stopPropagation(); removeItem(${item.id})">🗑️ Remove</button>
+                        </div>
                                                 </td>
                                             </tr>
                                         `;
@@ -3308,6 +3576,286 @@ async def root():
                     } catch (error) {
                         console.error('Error reprocessing:', error);
                         alert('Failed to start reprocessing. Please try again.');
+                    }
+                }
+            }
+            
+            // Open debug interface for specific queue item
+            function openDebugInterface(uploadId) {
+                console.log(`🔍 Opening debug interface for upload ID: ${uploadId}`);
+                
+                // Switch to advanced mode and debugger tab
+                switchMode('advanced');
+                setTimeout(() => {
+                    switchAdvancedTab('debugger');
+                    
+                    // Pre-populate the debug form with the upload ID
+                    setTimeout(() => {
+                        const uploadIdInput = document.getElementById('debugUploadId');
+                        if (uploadIdInput) {
+                            uploadIdInput.value = uploadId;
+                            console.log(`✅ Pre-populated debug form with upload ID: ${uploadId}`);
+                        }
+                        
+                        // Optionally auto-start the debug session
+                        if (confirm(`Start debug session for upload ${uploadId}?`)) {
+                            startDebugSession();
+                        }
+                    }, 100);
+                }, 100);
+            }
+            
+            // Reset individual item
+            async function resetItem(itemId) {
+                if (confirm('Are you sure you want to reset this item? This will clear its status and allow it to be processed again.')) {
+                    try {
+                        const response = await fetch(`/api/queue/reset/${itemId}`, {
+                            method: 'POST'
+                        });
+                        
+                        if (response.ok) {
+                            console.log(`✅ Reset item #${itemId}`);
+                            loadQueue(); // Reload queue to show updated status
+                            updateQueueStats();
+                        } else {
+                            throw new Error('Failed to reset item');
+                        }
+                    } catch (error) {
+                        console.error('Error resetting item:', error);
+                        alert('Failed to reset item. Please try again.');
+                    }
+                }
+            }
+            
+            // Reset all failed/stuck items
+            async function resetAllFailedItems() {
+                const failedItems = queueData.filter(item => item.status === 'failed' || item.status === 'processing');
+                
+                if (failedItems.length === 0) {
+                    alert('No failed or stuck items to reset.');
+                    return;
+                }
+                
+                if (confirm(`Are you sure you want to reset ${failedItems.length} failed/stuck items? This will clear their status and allow them to be processed again.`)) {
+                    try {
+                        const response = await fetch('/api/queue/reset-all-failed', {
+                            method: 'POST'
+                        });
+                        
+                        if (response.ok) {
+                            console.log(`✅ Reset ${failedItems.length} failed/stuck items`);
+                            loadQueue(); // Reload queue to show updated status
+                            updateQueueStats();
+                        } else {
+                            throw new Error('Failed to reset items');
+                        }
+                    } catch (error) {
+                        console.error('Error resetting items:', error);
+                        alert('Failed to reset items. Please try again.');
+                    }
+                }
+            }
+            
+            // Process With Modal Functions
+            let currentProcessItemId = null;
+            let isReprocessing = false;
+            
+            function showProcessWithModal(itemId, reprocess = false) {
+                currentProcessItemId = itemId;
+                isReprocessing = reprocess;
+                
+                const modal = document.getElementById('processWithModal');
+                const title = document.getElementById('processModalTitle');
+                
+                title.textContent = reprocess ? '🔄 Reprocess with AI System' : '🚀 Process with AI System';
+                
+                // Reset form
+                document.querySelectorAll('input[name="aiSystem"]').forEach(radio => {
+                    radio.checked = false;
+                });
+                document.querySelectorAll('.system-option').forEach(option => {
+                    option.style.borderColor = '#e5e7eb';
+                    option.style.background = 'white';
+                    option.classList.remove('selected');
+                });
+                const processBtn = document.getElementById('processWithBtn');
+                processBtn.disabled = true;
+                processBtn.style.opacity = '0.6';
+                processBtn.style.cursor = 'not-allowed';
+                processBtn.style.background = '#9ca3af';
+                
+                // Show modal
+                modal.style.display = 'flex';
+                
+                console.log(`${reprocess ? 'Reprocess' : 'Process'} modal opened for item ${itemId}`);
+            }
+            
+            function closeProcessWithModal() {
+                const modal = document.getElementById('processWithModal');
+                modal.style.display = 'none';
+                currentProcessItemId = null;
+                isReprocessing = false;
+            }
+            
+            function selectSystem(systemValue, labelElement) {
+                // Update radio button
+                const radio = labelElement.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update visual selection
+                document.querySelectorAll('.system-option').forEach(label => {
+                    label.style.borderColor = '#e5e7eb';
+                    label.style.background = 'white';
+                    label.classList.remove('selected');
+                });
+                
+                labelElement.style.borderColor = '#3b82f6';
+                labelElement.style.background = '#f0f9ff';
+                labelElement.classList.add('selected');
+                
+                // Enable process button
+                const processBtn = document.getElementById('processWithBtn');
+                processBtn.disabled = false;
+                processBtn.style.opacity = '1';
+                processBtn.style.cursor = 'pointer';
+                processBtn.style.background = '#3b82f6';
+                
+                console.log(`Selected system: ${systemValue}`);
+            }
+            
+            // Add keyboard support for modal
+            document.addEventListener('keydown', function(e) {
+                const modal = document.getElementById('processWithModal');
+                if (modal.style.display === 'flex') {
+                    if (e.key === 'Escape') {
+                        closeProcessWithModal();
+                    } else if (e.key === 'Enter') {
+                        const processBtn = document.getElementById('processWithBtn');
+                        if (!processBtn.disabled) {
+                            processWithSelectedSystem();
+                        }
+                    } else if (e.key >= '1' && e.key <= '3') {
+                        // Quick select with number keys
+                        const systems = ['custom_consensus', 'langgraph', 'hybrid'];
+                        const systemIndex = parseInt(e.key) - 1;
+                        if (systemIndex < systems.length) {
+                            const systemValue = systems[systemIndex];
+                            const label = document.querySelector(`label[onclick*="${systemValue}"]`);
+                            if (label) {
+                                selectSystem(systemValue, label);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            async function processWithSelectedSystem() {
+                const selectedSystem = document.querySelector('input[name="aiSystem"]:checked');
+                
+                if (!selectedSystem || !currentProcessItemId) {
+                    alert('Please select a system and try again.');
+                    return;
+                }
+                
+                const systemValue = selectedSystem.value;
+                const actionText = isReprocessing ? 'Reprocessing' : 'Processing';
+                
+                try {
+                    // Close modal first
+                    closeProcessWithModal();
+                    
+                    // Show processing feedback
+                    const item = queueData.find(item => item.id === currentProcessItemId);
+                    if (item) {
+                        item.status = 'processing';
+                        renderQueue();
+                        updateQueueStats();
+                    }
+                    
+                    console.log(`${actionText} item ${currentProcessItemId} with ${systemValue}`);
+                    
+                    // Make API call to start processing
+                    const response = await fetch(`/api/queue/${isReprocessing ? 'reprocess' : 'process'}/${currentProcessItemId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            system: systemValue,
+                            target_accuracy: 0.95,
+                            max_iterations: 5
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log(`✅ ${actionText} started successfully:`, result);
+                        
+                        // Show success message
+                        alert(`${actionText} started with ${getSystemDisplayName(systemValue)}! You can monitor progress in the Advanced > Pipeline Debugger tab.`);
+                        
+                        // Reload queue to show updated status
+                        setTimeout(() => {
+                            loadQueue();
+                        }, 1000);
+                        
+                    } else {
+                        throw new Error(`Failed to start ${actionText.toLowerCase()}`);
+                    }
+                    
+                } catch (error) {
+                    console.error(`Error ${actionText.toLowerCase()}:`, error);
+                    alert(`Failed to start ${actionText.toLowerCase()}. Please try again.`);
+                    
+                    // Reset item status on error
+                    if (item) {
+                        item.status = isReprocessing ? 'completed' : 'pending';
+                        renderQueue();
+                        updateQueueStats();
+                    }
+                }
+            }
+            
+            function getSystemDisplayName(systemValue) {
+                const names = {
+                    'custom_consensus': 'Custom Consensus System',
+                    'langgraph': 'LangGraph Workflow System', 
+                    'hybrid': 'Hybrid Adaptive System'
+                };
+                return names[systemValue] || systemValue;
+            }
+            
+            // Remove item function
+            async function removeItem(itemId) {
+                const item = queueData.find(item => item.id === itemId);
+                const itemName = item ? `Extraction #${item.id}` : `Item #${itemId}`;
+                
+                if (confirm(`Are you sure you want to remove ${itemName} from the queue? This action cannot be undone.`)) {
+                    try {
+                        const response = await fetch(`/api/queue/remove/${itemId}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        if (response.ok) {
+                            console.log(`✅ Removed item #${itemId} from queue`);
+                            
+                            // Remove from local data
+                            const index = queueData.findIndex(item => item.id === itemId);
+                            if (index !== -1) {
+                                queueData.splice(index, 1);
+                            }
+                            
+                            // Update UI
+                            renderQueue();
+                            updateQueueStats();
+                            
+                            // Show success message
+                            alert(`${itemName} has been removed from the queue.`);
+                            
+                        } else {
+                            throw new Error('Failed to remove item');
+                        }
+                    } catch (error) {
+                        console.error('Error removing item:', error);
+                        alert('Failed to remove item. Please try again.');
                     }
                 }
             }
@@ -4048,6 +4596,580 @@ async def root():
                     console.error('Failed to load error summary:', error);
                     errorSummary.innerHTML = '<div class="log-loading">Error loading error summary</div>';
                 }
+            }
+            
+            // Real-Time Debugging Functions
+            let debugWebSocket = null;
+            let currentDebugSessionId = null;
+            
+            // System workflow definitions
+            const systemWorkflows = {
+                "Custom Consensus": {
+                    "stages": [
+                        {"name": "structure_consensus", "display": "Structure Analysis", "models": ["GPT-4o", "Claude-3.5-Sonnet", "Gemini-2.0-Flash"], "type": "parallel"},
+                        {"name": "position_consensus", "display": "Position Consensus", "models": ["GPT-4o", "Claude-3.5-Sonnet", "Gemini-2.0-Flash"], "type": "shelf_by_shelf"},
+                        {"name": "quantity_consensus", "display": "Quantity Analysis", "models": ["GPT-4o", "Claude-3.5-Sonnet", "Gemini-2.0-Flash"], "type": "parallel"},
+                        {"name": "detail_consensus", "display": "Detail Extraction", "models": ["GPT-4o", "Claude-3.5-Sonnet", "Gemini-2.0-Flash"], "type": "parallel"},
+                        {"name": "planogram_generation", "display": "Generate Planogram", "models": ["PlanogramOrchestrator"], "type": "iteration_step"},
+                        {"name": "ai_comparison", "display": "AI Compare vs Original", "models": ["ImageComparisonAgent"], "type": "iteration_step"},
+                        {"name": "accuracy_calculation", "display": "Calculate Accuracy", "models": ["FeedbackManager"], "type": "iteration_step"},
+                        {"name": "iteration_decision", "display": "Continue or Stop?", "models": ["MasterOrchestrator"], "type": "decision_point"}
+                    ],
+                    "orchestrator": "DeterministicOrchestrator",
+                    "voting_mechanism": "weighted_consensus"
+                },
+                "LangGraph": {
+                    "stages": [
+                        {"name": "structure_consensus_node", "display": "Structure Node", "models": ["GPT-4o", "Claude-3.5-Sonnet"], "type": "workflow_node"},
+                        {"name": "position_consensus_node", "display": "Position Node", "models": ["GPT-4o", "Claude-3.5-Sonnet"], "type": "workflow_node"},
+                        {"name": "quantity_consensus_node", "display": "Quantity Node", "models": ["GPT-4o", "Claude-3.5-Sonnet"], "type": "workflow_node"},
+                        {"name": "detail_consensus_node", "display": "Detail Node", "models": ["GPT-4o", "Claude-3.5-Sonnet"], "type": "workflow_node"},
+                        {"name": "generate_planogram_node", "display": "Planogram Node", "models": ["Workflow"], "type": "workflow_node"},
+                        {"name": "validate_end_to_end_node", "display": "Validation Node", "models": ["Workflow"], "type": "workflow_node"},
+                        {"name": "smart_retry_node", "display": "Smart Retry", "models": ["Workflow"], "type": "conditional"}
+                    ],
+                    "orchestrator": "LangGraph StateGraph",
+                    "voting_mechanism": "workflow_state_management"
+                },
+                "Hybrid": {
+                    "stages": [
+                        {"name": "adaptive_structure", "display": "Adaptive Structure", "models": ["Dynamic Selection"], "type": "adaptive"},
+                        {"name": "multi_model_positions", "display": "Multi-Model Positions", "models": ["Best Available"], "type": "adaptive"},
+                        {"name": "consensus_validation", "display": "Consensus Validation", "models": ["Ensemble"], "type": "ensemble"},
+                        {"name": "quality_optimization", "display": "Quality Optimization", "models": ["Feedback Loop"], "type": "iterative"}
+                    ],
+                    "orchestrator": "AdaptiveOrchestrator",
+                    "voting_mechanism": "dynamic_consensus"
+                }
+            };
+
+            function displaySystemWorkflow(systemName) {
+                const workflow = systemWorkflows[systemName];
+                
+                // Update system display
+                document.getElementById('currentSystem').textContent = systemName;
+                document.getElementById('orchestratorType').textContent = workflow.orchestrator;
+                document.getElementById('votingMechanism').textContent = workflow.voting_mechanism;
+                
+                // Count active models
+                const allModels = new Set();
+                workflow.stages.forEach(stage => {
+                    stage.models.forEach(model => allModels.add(model));
+                });
+                document.getElementById('activeModels').textContent = allModels.size;
+                
+                // Show REAL Master Orchestrator iteration cycle steps
+                displayMasterOrchestratorSteps(systemName);
+                
+                console.log(`📊 Displaying workflow for ${systemName} with real Master Orchestrator steps`);
+            }
+            
+            function displayMasterOrchestratorSteps(systemName) {
+                const stepsContainer = document.getElementById('masterOrchestratorSteps');
+                stepsContainer.innerHTML = '';
+                
+                // REAL Master Orchestrator iteration cycle steps (from src/orchestrator/master_orchestrator.py)
+                const masterSteps = [
+                    {
+                        id: 'extract_data',
+                        name: `Step 1: Extract with ${systemName}`,
+                        description: 'ExtractionOrchestrator.extract_with_cumulative_learning() - Uses previous attempts and focus areas',
+                        status: 'pending',
+                        component: 'ExtractionOrchestrator'
+                    },
+                    {
+                        id: 'generate_planogram',
+                        name: 'Step 2: Generate Planogram',
+                        description: 'PlanogramOrchestrator.generate_for_agent_iteration() - Creates visual planogram from extraction JSON',
+                        status: 'pending',
+                        component: 'PlanogramOrchestrator'
+                    },
+                    {
+                        id: 'ai_compare',
+                        name: 'Step 3: AI Comparison Analysis',
+                        description: 'ImageComparisonAgent.compare_image_vs_planogram() - Compares original image vs generated planogram',
+                        status: 'pending',
+                        component: 'ImageComparisonAgent'
+                    },
+                    {
+                        id: 'calculate_accuracy',
+                        name: 'Step 4: Calculate Accuracy',
+                        description: 'FeedbackManager.analyze_accuracy_with_failure_areas() - Analyzes comparison and identifies failure areas',
+                        status: 'pending',
+                        component: 'CumulativeFeedbackManager'
+                    },
+                    {
+                        id: 'iteration_decision',
+                        name: 'Step 5: Iteration Decision',
+                        description: 'MasterOrchestrator checks: if accuracy >= target_accuracy, STOP; else prepare next iteration with focus areas',
+                        status: 'pending',
+                        component: 'MasterOrchestrator'
+                    }
+                ];
+                
+                masterSteps.forEach((step, index) => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'master-step';
+                    stepDiv.setAttribute('data-step', step.id);
+                    stepDiv.style.cssText = `
+                        display: flex; 
+                        align-items: center; 
+                        padding: 8px 12px; 
+                        background: #f8fafc; 
+                        border-radius: 6px; 
+                        border-left: 4px solid #e5e7eb;
+                        transition: all 0.3s ease;
+                    `;
+                    
+                    stepDiv.innerHTML = `
+                        <div style="width: 24px; height: 24px; border-radius: 50%; background: #e5e7eb; color: #6b7280; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; margin-right: 12px;">
+                            ${index + 1}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #374151; font-size: 14px;">${step.name}</div>
+                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${step.description}</div>
+                            <div style="font-size: 11px; color: #3b82f6; margin-top: 4px; font-weight: 500;">🔧 ${step.component}</div>
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; font-weight: 600;">⏸ Pending</div>
+                    `;
+                    
+                    stepsContainer.appendChild(stepDiv);
+                });
+            }
+
+            // Initialize workflow display on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                displaySystemWorkflow('Custom Consensus');
+            });
+            
+            async function startDebugSession() {
+                const uploadId = document.getElementById('debugUploadId').value.trim();
+                
+                if (!uploadId) {
+                    alert('Please enter an upload ID to monitor');
+                    return;
+                }
+                
+                try {
+                    // Start monitoring session - system will be detected automatically
+                    const response = await fetch('/api/debug/start-session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            upload_id: uploadId,
+                            system_name: 'Custom Consensus'  // Default system for monitoring
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to start debug session: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    currentDebugSessionId = data.session_id;
+                    
+                    // Update UI
+                    document.getElementById('debugSessionId').textContent = currentDebugSessionId;
+                    document.getElementById('debugStatus').textContent = 'Starting...';
+                    document.getElementById('debugCurrentStage').textContent = 'Detecting system...';
+                    document.getElementById('debugSessionInfo').style.display = 'block';
+                    document.getElementById('startDebugBtn').disabled = true;
+                    document.getElementById('startDebugBtn').textContent = '🔄 Monitoring...';
+                    
+                    // Update system display based on actual system being used
+                    if (data.system) {
+                        displaySystemWorkflow(data.system);
+                        addLogMessage(`Monitoring ${data.system} extraction system`, 'info');
+                    }
+                    
+                    // Show pipeline status panels
+                    document.getElementById('pipelineStatus').style.display = 'block';
+                    document.getElementById('modelComparison').style.display = 'block';
+                    document.getElementById('realTimeLogs').style.display = 'block';
+                    
+                    // Connect WebSocket for real-time updates
+                    connectDebugWebSocket(currentDebugSessionId);
+                    
+                    console.log(`✅ Started monitoring session: ${currentDebugSessionId} for system: ${data.system || 'Unknown'}`);
+                    
+                } catch (error) {
+                    console.error('Failed to start monitoring session:', error);
+                    alert(`Failed to start monitoring session: ${error.message}`);
+                }
+            }
+            
+            function connectDebugWebSocket(sessionId) {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/api/debug/ws/${sessionId}`;
+                
+                debugWebSocket = new WebSocket(wsUrl);
+                
+                debugWebSocket.onopen = function() {
+                    console.log('✅ Monitoring WebSocket connected');
+                    addLogMessage('Connected to monitoring session', 'info');
+                };
+                
+                debugWebSocket.onmessage = function(event) {
+                    const update = JSON.parse(event.data);
+                    handleDebugUpdate(update);
+                };
+                
+                debugWebSocket.onclose = function() {
+                    console.log('🔌 Monitoring WebSocket disconnected');
+                    addLogMessage('Disconnected from monitoring session', 'warning');
+                };
+                
+                debugWebSocket.onerror = function(error) {
+                    console.error('❌ Monitoring WebSocket error:', error);
+                    addLogMessage('WebSocket connection error', 'error');
+                };
+            }
+            
+            function handleDebugUpdate(update) {
+                console.log('📡 Debug update received:', update);
+                
+                switch (update.type) {
+                    case 'initial_status':
+                        document.getElementById('debugStatus').textContent = update.status;
+                        document.getElementById('debugCurrentStage').textContent = update.current_stage;
+                        break;
+                        
+                    case 'stage_update':
+                        updatePipelineStage(update.stage, update.status);
+                        document.getElementById('debugCurrentStage').textContent = update.stage;
+                        document.getElementById('pipelineProgressText').textContent = update.message || `${update.stage} - ${update.status}`;
+                        addLogMessage(`Stage ${update.stage}: ${update.status}`, 'info');
+                        break;
+                        
+                    case 'iteration_start':
+                        updateIterationStart(update);
+                        addLogMessage(`🔄 Starting Iteration ${update.iteration} - Target: ${update.target_accuracy}%`, 'info');
+                        break;
+                        
+                    case 'extract_data_start':
+                        updateMasterStep('extract_data', 'processing', `Extracting with ${update.system}`);
+                        addLogMessage(`🔍 Step 1: Extracting data using ${update.system}`, 'info');
+                        break;
+                        
+                    case 'extract_data_complete':
+                        updateMasterStep('extract_data', 'completed', `Found ${update.products} products`);
+                        addLogMessage(`✅ Step 1 Complete: ${update.products} products extracted`, 'success');
+                        break;
+                        
+                    case 'planogram_generation_start':
+                        updateMasterStep('generate_planogram', 'processing', 'Creating visual planogram');
+                        addLogMessage(`📊 Step 2: Generating planogram from extraction JSON`, 'info');
+                        break;
+                        
+                    case 'planogram_generated':
+                        updateMasterStep('generate_planogram', 'completed', `Planogram created`);
+                        addLogMessage(`✅ Step 2 Complete: Planogram generated for ${update.products} products`, 'success');
+                        break;
+                        
+                    case 'ai_comparison_start':
+                        updateMasterStep('ai_compare', 'processing', 'Comparing vs original image');
+                        addLogMessage(`🔍 Step 3: AI comparing planogram vs original image`, 'info');
+                        break;
+                        
+                    case 'ai_comparison_complete':
+                        updateMasterStep('ai_compare', 'completed', 'Comparison analysis done');
+                        addLogMessage(`✅ Step 3 Complete: AI comparison analysis finished`, 'success');
+                        break;
+                        
+                    case 'accuracy_calculation_start':
+                        updateMasterStep('calculate_accuracy', 'processing', 'Analyzing accuracy');
+                        addLogMessage(`📊 Step 4: Calculating accuracy from comparison`, 'info');
+                        break;
+                        
+                    case 'accuracy_calculated':
+                        updateMasterStep('calculate_accuracy', 'completed', `${update.accuracy}% accuracy`);
+                        updateMasterStep('iteration_decision', 'processing', 'Deciding next action');
+                        
+                        const accuracyColor = update.accuracy >= 95 ? 'success' : update.accuracy >= 80 ? 'warning' : 'error';
+                        addLogMessage(`🎯 Step 4 Complete: ${update.accuracy}% accuracy (Target: ${update.target}%)`, accuracyColor);
+                        
+                        // Update current accuracy display
+                        document.getElementById('currentAccuracy').textContent = `${update.accuracy}%`;
+                        
+                        if (update.accuracy >= update.target) {
+                            updateMasterStep('iteration_decision', 'completed', '✅ Target achieved - STOP');
+                            updateIterationComplete(update.iteration, update.accuracy, true);
+                            addLogMessage(`✅ Step 5 Complete: Target accuracy achieved! Stopping iterations.`, 'success');
+                        } else {
+                            updateMasterStep('iteration_decision', 'completed', '⏭️ Continue to next iteration');
+                            addLogMessage(`⏭️ Step 5 Complete: Accuracy below target, continuing to next iteration...`, 'info');
+                            // Reset steps for next iteration
+                            setTimeout(() => resetMasterStepsForNextIteration(), 1000);
+                        }
+                        break;
+                        
+                    case 'iteration_complete':
+                        updateIterationInfo(update);
+                        addLogMessage(`Iteration ${update.iteration} complete - Accuracy: ${(update.accuracy * 100).toFixed(1)}%, Products: ${update.products_found}, Cost: £${update.cost.toFixed(2)}`, 'success');
+                        break;
+                        
+                    case 'extraction_complete':
+                        document.getElementById('debugStatus').textContent = 'Completed';
+                        document.getElementById('startDebugBtn').disabled = false;
+                        document.getElementById('startDebugBtn').textContent = '🔍 Monitor Extraction';
+                        addLogMessage(`Extraction complete! Final accuracy: ${(update.final_accuracy * 100).toFixed(1)}%, Total cost: £${update.total_cost.toFixed(2)}`, 'success');
+                        break;
+                        
+                    case 'extraction_failed':
+                        document.getElementById('debugStatus').textContent = 'Failed';
+                        document.getElementById('startDebugBtn').disabled = false;
+                        document.getElementById('startDebugBtn').textContent = '🔍 Monitor Extraction';
+                        addLogMessage(`Extraction failed: ${update.error}`, 'error');
+                        break;
+                }
+            }
+            
+            function updatePipelineStage(stage, status) {
+                const stageElement = document.querySelector(`[data-stage="${stage}"]`);
+                if (stageElement) {
+                    stageElement.classList.remove('pending', 'processing', 'completed', 'failed');
+                    
+                    if (status === 'processing') {
+                        stageElement.style.background = '#f59e0b';
+                        stageElement.style.color = 'white';
+                        stageElement.innerHTML = `${stage.charAt(0).toUpperCase() + stage.slice(1)} ⏳`;
+                    } else if (status === 'completed') {
+                        stageElement.style.background = '#10b981';
+                        stageElement.style.color = 'white';
+                        stageElement.innerHTML = `${stage.charAt(0).toUpperCase() + stage.slice(1)} ✅`;
+                    } else if (status === 'failed') {
+                        stageElement.style.background = '#ef4444';
+                        stageElement.style.color = 'white';
+                        stageElement.innerHTML = `${stage.charAt(0).toUpperCase() + stage.slice(1)} ❌`;
+                    }
+                }
+            }
+            
+            function updateIterationInfo(update) {
+                document.getElementById('currentIteration').textContent = update.iteration;
+                document.getElementById('productsFound').textContent = update.products_found;
+                document.getElementById('currentAccuracy').textContent = `${(update.accuracy * 100).toFixed(1)}%`;
+                document.getElementById('totalCost').textContent = `£${update.total_cost.toFixed(2)}`;
+            }
+            
+            function addLogMessage(message, level = 'info') {
+                const logContainer = document.getElementById('logContainer');
+                const timestamp = new Date().toLocaleTimeString();
+                
+                let color = '#e2e8f0';
+                let icon = 'ℹ️';
+                
+                switch (level) {
+                    case 'success':
+                        color = '#10b981';
+                        icon = '✅';
+                        break;
+                    case 'warning':
+                        color = '#f59e0b';
+                        icon = '⚠️';
+                        break;
+                    case 'error':
+                        color = '#ef4444';
+                        icon = '❌';
+                        break;
+                }
+                
+                const logEntry = document.createElement('div');
+                logEntry.style.color = color;
+                logEntry.style.marginBottom = '5px';
+                logEntry.innerHTML = `<span style="color: #94a3b8;">[${timestamp}]</span> ${icon} ${message}`;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            
+            function stopDebugSession() {
+                if (currentDebugSessionId) {
+                    // Close WebSocket
+                    if (debugWebSocket) {
+                        debugWebSocket.close();
+                        debugWebSocket = null;
+                    }
+                    
+                    // Clean up session
+                    fetch(`/api/debug/session/${currentDebugSessionId}`, {
+                        method: 'DELETE'
+                    }).catch(console.error);
+                    
+                    // Reset UI
+                    document.getElementById('debugSessionInfo').style.display = 'none';
+                    document.getElementById('pipelineStatus').style.display = 'none';
+                    document.getElementById('modelComparison').style.display = 'none';
+                    document.getElementById('realTimeLogs').style.display = 'none';
+                    document.getElementById('startDebugBtn').disabled = false;
+                    document.getElementById('startDebugBtn').textContent = '🔍 Monitor Extraction';
+                    
+                    currentDebugSessionId = null;
+                    console.log('🛑 Monitoring session stopped');
+                }
+            }
+            
+            async function loadActiveSessions() {
+                try {
+                    const response = await fetch('/api/debug/active-sessions');
+                    if (response.ok) {
+                        const data = await response.json();
+                        renderActiveSessions(data.active_sessions);
+                    }
+                } catch (error) {
+                    console.error('Failed to load active sessions:', error);
+                }
+            }
+            
+            function renderActiveSessions(sessions) {
+                const container = document.getElementById('activeSessionsList');
+                
+                if (sessions.length === 0) {
+                    container.innerHTML = '<div style="color: #6b7280; text-align: center; padding: 20px;">No active debug sessions</div>';
+                    return;
+                }
+                
+                const sessionItems = sessions.map(session => `
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #3b82f6;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>Session:</strong> ${session.session_id.substring(0, 8)}...<br>
+                                <strong>Upload ID:</strong> ${session.upload_id}<br>
+                                <strong>Status:</strong> ${session.status}<br>
+                                <strong>Stage:</strong> ${session.current_stage}<br>
+                                <strong>Iterations:</strong> ${session.iterations}
+                            </div>
+                            <div>
+                                <button onclick="connectToSession('${session.session_id}')" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 5px;">Connect</button><br>
+                                <button onclick="stopSession('${session.session_id}')" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Stop</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = sessionItems;
+            }
+            
+            function connectToSession(sessionId) {
+                if (currentDebugSessionId) {
+                    stopDebugSession();
+                }
+                
+                currentDebugSessionId = sessionId;
+                document.getElementById('debugSessionId').textContent = sessionId;
+                document.getElementById('debugSessionInfo').style.display = 'block';
+                document.getElementById('pipelineStatus').style.display = 'block';
+                document.getElementById('modelComparison').style.display = 'block';
+                document.getElementById('realTimeLogs').style.display = 'block';
+                
+                connectDebugWebSocket(sessionId);
+                
+                // Load current session status
+                fetch(`/api/debug/session/${sessionId}/status`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('debugStatus').textContent = data.status;
+                        document.getElementById('debugCurrentStage').textContent = data.current_stage;
+                    })
+                    .catch(console.error);
+            }
+            
+            function stopSession(sessionId) {
+                fetch(`/api/debug/session/${sessionId}`, {
+                    method: 'DELETE'
+                }).then(() => {
+                    loadActiveSessions();
+                    if (currentDebugSessionId === sessionId) {
+                        stopDebugSession();
+                    }
+                }).catch(console.error);
+            }
+            
+            // Real-time Master Orchestrator step updates
+            function updateIterationStart(update) {
+                document.getElementById('currentIterationNumber').textContent = update.iteration;
+                document.getElementById('targetAccuracy').textContent = `${update.target_accuracy}%`;
+                document.getElementById('iterationStatus').textContent = '🔄';
+                document.getElementById('iterationStatusText').textContent = 'Running';
+                document.getElementById('iterationProgressText').textContent = `Iteration ${update.iteration} - Extracting Data`;
+                
+                // Reset all steps to pending for new iteration
+                resetMasterStepsForNextIteration();
+            }
+            
+            function updateMasterStep(stepId, status, statusText) {
+                const stepElement = document.querySelector(`[data-step="${stepId}"]`);
+                if (!stepElement) return;
+                
+                const circle = stepElement.querySelector('div:first-child');
+                const statusElement = stepElement.querySelector('div:last-child');
+                
+                if (status === 'processing') {
+                    stepElement.style.borderLeftColor = '#f59e0b';
+                    stepElement.style.background = '#fffbeb';
+                    circle.style.background = '#f59e0b';
+                    circle.style.color = 'white';
+                    statusElement.innerHTML = '⏳ Processing';
+                    statusElement.style.color = '#f59e0b';
+                } else if (status === 'completed') {
+                    stepElement.style.borderLeftColor = '#10b981';
+                    stepElement.style.background = '#f0fdf4';
+                    circle.style.background = '#10b981';
+                    circle.style.color = 'white';
+                    statusElement.innerHTML = '✅ Complete';
+                    statusElement.style.color = '#10b981';
+                } else if (status === 'failed') {
+                    stepElement.style.borderLeftColor = '#ef4444';
+                    stepElement.style.background = '#fef2f2';
+                    circle.style.background = '#ef4444';
+                    circle.style.color = 'white';
+                    statusElement.innerHTML = '❌ Failed';
+                    statusElement.style.color = '#ef4444';
+                }
+                
+                // Update status text if provided
+                if (statusText) {
+                    const descriptionElement = stepElement.querySelector('div:nth-child(2) div:last-child');
+                    if (descriptionElement) {
+                        descriptionElement.textContent = statusText;
+                    }
+                }
+            }
+            
+            function updateIterationComplete(iteration, accuracy, targetAchieved) {
+                document.getElementById('currentAccuracy').textContent = `${accuracy}%`;
+                
+                if (targetAchieved) {
+                    document.getElementById('iterationStatus').textContent = '✅';
+                    document.getElementById('iterationStatusText').textContent = 'Complete';
+                    document.getElementById('iterationProgressText').textContent = `Iteration ${iteration} - Target Achieved!`;
+                } else {
+                    document.getElementById('iterationStatus').textContent = '⏭️';
+                    document.getElementById('iterationStatusText').textContent = 'Continuing';
+                    document.getElementById('iterationProgressText').textContent = `Iteration ${iteration} - Preparing Next`;
+                }
+            }
+            
+            function resetMasterStepsForNextIteration() {
+                const steps = ['extract_data', 'generate_planogram', 'ai_compare', 'calculate_accuracy', 'iteration_decision'];
+                
+                steps.forEach(stepId => {
+                    const stepElement = document.querySelector(`[data-step="${stepId}"]`);
+                    if (!stepElement) return;
+                    
+                    const circle = stepElement.querySelector('div:first-child');
+                    const statusElement = stepElement.querySelector('div:last-child');
+                    
+                    // Reset to pending state
+                    stepElement.style.borderLeftColor = '#e5e7eb';
+                    stepElement.style.background = '#f8fafc';
+                    circle.style.background = '#e5e7eb';
+                    circle.style.color = '#6b7280';
+                    statusElement.innerHTML = '⏸ Pending';
+                    statusElement.style.color = '#6b7280';
+                });
             }
             
             function renderErrorSummary(errors) {
