@@ -45,6 +45,7 @@ async def get_queue_items(
         # Query ai_extraction_queue with proper prioritization
         query = supabase.table("ai_extraction_queue").select("""
             id,
+            upload_id,
             ready_media_id,
             enhanced_image_path,
             status,
@@ -100,6 +101,44 @@ async def get_queue_items(
             -(datetime.fromisoformat(x['created_at'].replace('Z', '+00:00')).timestamp())
         ))
         
+        # Enrich items with store/category data
+        for item in sorted_items:
+            try:
+                # Skip if no upload_id
+                if not item.get('upload_id'):
+                    continue
+                    
+                # Get upload data with store info from metadata
+                upload_result = supabase.table("uploads").select(
+                    "category, created_at, collection_id, metadata"
+                ).eq("id", item['upload_id']).execute()
+                
+                if upload_result.data and len(upload_result.data) > 0:
+                    upload_data = upload_result.data[0]
+                    item['uploads'] = upload_data
+                    
+                    # If there's a collection_id, get store info
+                    if upload_data.get('collection_id'):
+                        collection_result = supabase.table("collections").select(
+                            "store_id"
+                        ).eq("id", upload_data['collection_id']).execute()
+                        
+                        if collection_result.data and len(collection_result.data) > 0:
+                            collection_data = collection_result.data[0]
+                            item['uploads']['collections'] = collection_data
+                            
+                            # Get store info if store_id exists
+                            if collection_data.get('store_id'):
+                                store_result = supabase.table("stores").select(
+                                    "retailer_name, format, location_city, location_address, country"
+                                ).eq("store_id", collection_data['store_id']).execute()
+                                
+                                if store_result.data and len(store_result.data) > 0:
+                                    item['uploads']['collections']['stores'] = store_result.data[0]
+            except Exception as e:
+                logger.warning(f"Failed to enrich item {item['id']} with upload data: {e}")
+                # Continue processing other items
+                
         logger.info(f"Retrieved {len(sorted_items)} queue items", component="queue_api")
         
         return {
@@ -292,6 +331,39 @@ async def reset_item(item_id: int):
     except Exception as e:
         logger.error(f"Failed to reset item {item_id}: {e}", component="queue_api")
         raise HTTPException(status_code=500, detail=f"Failed to reset item: {str(e)}")
+
+
+@router.delete("/remove/{item_id}")
+async def remove_item(item_id: int):
+    """Remove a queue item completely"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get current item data to verify it exists
+        result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Queue item not found")
+        
+        item = result.data[0]
+        
+        # Delete the item from the queue
+        delete_result = supabase.table("ai_extraction_queue").delete().eq("id", item_id).execute()
+        
+        logger.info(f"Removed queue item {item_id} from database", component="queue_api")
+        
+        return {
+            "success": True,
+            "item_id": item_id,
+            "message": f"Item #{item_id} has been removed from the queue",
+            "removed_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to remove item {item_id}: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to remove item: {str(e)}")
 
 
 @router.post("/reset-all-failed")
@@ -543,51 +615,107 @@ async def reset_fake_completed_items():
 
 @router.get("/stores")
 async def get_stores():
-    """Get list of stores from real data - NO MOCK DATA"""
-    
+    """Get unique stores from uploads metadata"""
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
-        # Try to get real store data from database
-        # This would typically come from a stores table or extracted from queue items
-        result = supabase.table("ai_extraction_queue").select("ready_media_id").execute()
+        # Get all uploads with metadata
+        result = supabase.table("uploads").select("metadata").execute()
         
-        if not result.data:
-            return []
+        stores = set()
+        for item in result.data:
+            if item.get('metadata'):
+                store_name = item['metadata'].get('store_name') or item['metadata'].get('retailer')
+                if store_name:
+                    stores.add(store_name)
         
-        # For now, return empty list since we don't have store metadata
-        # In a real system, this would query a stores table
-        logger.info("Store data requested - returning empty list (no mock data)", component="queue_api")
-        return []
+        # Sort and format for frontend
+        store_list = [{"id": s, "name": s} for s in sorted(stores)]
+        
+        logger.info(f"Retrieved {len(store_list)} unique stores", component="queue_api")
+        return store_list
         
     except Exception as e:
         logger.error(f"Failed to get stores: {e}", component="queue_api")
         return []  # Return empty instead of error to avoid breaking the UI
 
 
-@router.get("/categories")
+@router.get("/categories") 
 async def get_categories():
-    """Get list of categories from real data - NO MOCK DATA"""
-    
+    """Get unique categories from uploads"""
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
-        # Try to get real category data from database
-        # This would typically come from a categories table or extracted from queue items
-        result = supabase.table("ai_extraction_queue").select("ready_media_id").execute()
+        # Get all uploads with category
+        result = supabase.table("uploads").select("category").execute()
         
-        if not result.data:
-            return []
+        categories = set()
+        for item in result.data:
+            if item.get('category'):
+                categories.add(item['category'])
         
-        # For now, return empty list since we don't have category metadata
-        # In a real system, this would query a categories table
-        logger.info("Category data requested - returning empty list (no mock data)", component="queue_api")
-        return []
+        # Sort and format for frontend
+        category_list = [{"id": c, "name": c} for c in sorted(categories)]
+        
+        logger.info(f"Retrieved {len(category_list)} unique categories", component="queue_api")
+        return category_list
         
     except Exception as e:
         logger.error(f"Failed to get categories: {e}", component="queue_api")
+        return []  # Return empty instead of error to avoid breaking the UI
+
+
+@router.get("/countries")
+async def get_countries():
+    """Get unique countries from uploads metadata"""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get all uploads with metadata
+        result = supabase.table("uploads").select("metadata").execute()
+        
+        countries = set()
+        for item in result.data:
+            if item.get('metadata') and item['metadata'].get('country'):
+                countries.add(item['metadata']['country'])
+        
+        # Sort and format for frontend
+        country_list = [{"id": c, "name": c} for c in sorted(countries)]
+        
+        logger.info(f"Retrieved {len(country_list)} unique countries", component="queue_api")
+        return country_list
+        
+    except Exception as e:
+        logger.error(f"Failed to get countries: {e}", component="queue_api")
+        return []  # Return empty instead of error to avoid breaking the UI
+
+
+@router.get("/cities")
+async def get_cities():
+    """Get unique cities from uploads metadata"""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get all uploads with metadata
+        result = supabase.table("uploads").select("metadata").execute()
+        
+        cities = set()
+        for item in result.data:
+            if item.get('metadata') and item['metadata'].get('city'):
+                cities.add(item['metadata']['city'])
+        
+        # Sort and format for frontend
+        city_list = [{"id": c, "name": c} for c in sorted(cities)]
+        
+        logger.info(f"Retrieved {len(city_list)} unique cities", component="queue_api")
+        return city_list
+        
+    except Exception as e:
+        logger.error(f"Failed to get cities: {e}", component="queue_api")
         return []  # Return empty instead of error to avoid breaking the UI
 
 

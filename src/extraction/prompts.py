@@ -205,12 +205,23 @@ OUTPUT: Complete, validated extraction with confidence scores
             "mismatch_analysis": """
 You are comparing an original shelf image with an AI-generated planogram.
 
+PLANOGRAM GENERATION LOGIC (for better comparison):
+The planogram you're comparing against was generated using this exact logic:
+1. Products are placed in a 2D grid system based on shelf_level and position_on_shelf
+2. Each product occupies 'facings' number of horizontal cells (side-by-side units)
+3. Products with stack > 1 occupy multiple vertical rows (stacked products)
+4. Empty positions show as transparent gaps in the grid
+5. Colors represent confidence levels from the extraction JSON
+6. Global shelf width is calculated to ensure all shelves have consistent width
+7. The planogram uses the SAME positioning logic as our demo system
+
 COMPARISON OBJECTIVES:
 1. Identify ALL differences that impact accuracy:
-   - Missing products
-   - Wrong positions
-   - Incorrect facings
-   - Price errors
+   - Missing products (should be in planogram but not visible in original)
+   - Wrong positions (product in different shelf/position than original)
+   - Incorrect facings (wrong number of side-by-side units)
+   - Price errors (if prices are shown)
+   - Stacking errors (wrong vertical arrangement)
 
 2. For each mismatch:
    - Specify exact location (e.g., "Shelf 2, position 3")
@@ -221,9 +232,54 @@ COMPARISON OBJECTIVES:
 3. Calculate accuracy metrics:
    - Overall match percentage
    - Per-shelf accuracy
+   - Position accuracy
+   - Facing count accuracy
    - Confidence in assessment
 
-TARGET: Flag all issues preventing 95%+ accuracy
+4. Understanding the planogram helps you:
+   - Know that facings = horizontal repetition of same product
+   - Understand that stack = vertical repetition
+   - Recognize that empty gaps are intentional (not missing products)
+   - Compare spatial relationships more accurately
+
+TARGET: Flag all issues preventing 95%+ accuracy with understanding of how the planogram was generated
+""",
+            
+            "planogram_aware_extraction": """
+You are an expert retail product extractor with DEEP UNDERSTANDING of how planograms are generated.
+
+CRITICAL: Your extraction will be used to generate a planogram using this EXACT logic:
+1. Products are placed in a 2D grid based on shelf_level (1=bottom) and position_on_shelf (1=leftmost)
+2. Each product's 'facings' determines how many horizontal grid cells it occupies
+3. Products with 'stack' > 1 will occupy multiple vertical rows
+4. Empty positions will show as gaps in the planogram
+5. The planogram uses consistent shelf widths across all shelves
+6. Colors represent your confidence levels
+
+EXTRACTION REQUIREMENTS WITH PLANOGRAM AWARENESS:
+1. For each visible product, provide:
+   - shelf_level: Which shelf (1=bottom, 2=middle, 3=top, etc.)
+   - position_on_shelf: Left-to-right position (1, 2, 3, 4...)
+   - facings: How many units side-by-side (critical for planogram width)
+   - stack: How many units stacked vertically (1=single height, 2+=stacked)
+   - product_name: Specific product name
+   - brand: Brand name
+   - confidence: Your confidence level (0.0-1.0)
+
+2. PLANOGRAM-AWARE GUIDELINES:
+   - Count facings carefully - each facing becomes a grid cell
+   - Position numbers should be sequential with no gaps unless there's truly an empty space
+   - If you see 3 Coca-Cola cans side by side, that's facings=3, NOT 3 separate products
+   - Stacked products (one behind another) increase stack count, not facings
+   - Your position_on_shelf directly maps to planogram grid columns
+
+3. QUALITY CHECKS:
+   - Does your facing count make sense for the shelf width?
+   - Are your positions sequential and logical?
+   - Will your extraction create a realistic planogram layout?
+   - Are you distinguishing between facings (horizontal) and stack (depth)?
+
+REMEMBER: Your extraction directly drives planogram generation. Accurate facings and positions are CRITICAL for the planogram to match the original image.
 """
         }
     

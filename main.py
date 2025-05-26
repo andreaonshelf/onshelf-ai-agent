@@ -1726,6 +1726,22 @@ async def root():
                     </div>
                     
                     <div class="filter-group">
+                        <label>Country</label>
+                        <select id="countryFilter" onchange="filterImages()">
+                            <option value="">All Countries</option>
+                            <!-- Real country data will be loaded from database -->
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>City</label>
+                        <select id="cityFilter" onchange="filterImages()">
+                            <option value="">All Cities</option>
+                            <!-- Real city data will be loaded from database -->
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
                         <label>Category</label>
                         <select id="categoryFilter" onchange="filterImages()">
                             <option value="">All Categories</option>
@@ -2213,6 +2229,19 @@ async def root():
                                     </div>
                                 </div>
                                 
+                                <!-- Live Prompt Monitoring -->
+                                <div id="livePromptMonitoring" class="live-prompt-monitoring" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none;">
+                                    <h4 style="margin: 0 0 15px 0; color: #1f2937;">🤖 Live Prompt Monitoring</h4>
+                                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                                        <div style="margin-bottom: 15px; font-size: 14px; color: #475569;">
+                                            <strong>Real-time view of prompts being used by each AI model during extraction</strong>
+                                        </div>
+                                        <div id="promptContainer" style="display: flex; flex-direction: column; gap: 15px; max-height: 500px; overflow-y: auto;">
+                                            <div style="color: #94a3b8; text-align: center; padding: 20px;">Waiting for extraction to start...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Real-Time Logs -->
                                 <div id="realTimeLogs" class="real-time-logs" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: none;">
                                     <h4 style="margin: 0 0 15px 0; color: #1f2937;">📋 Real-Time Extraction Logs</h4>
@@ -2784,6 +2813,54 @@ async def root():
                         console.log('ℹ️ No category data available from API');
                     }
                     
+                    // Load real country data
+                    const countryResponse = await fetch('/api/queue/countries');
+                    if (countryResponse.ok) {
+                        const countries = await countryResponse.json();
+                        const countrySelect = document.getElementById('countryFilter');
+                        
+                        // Clear existing options except "All Countries"
+                        while (countrySelect.children.length > 1) {
+                            countrySelect.removeChild(countrySelect.lastChild);
+                        }
+                        
+                        // Add real country options
+                        countries.forEach(country => {
+                            const option = document.createElement('option');
+                            option.value = country.id;
+                            option.textContent = country.name;
+                            countrySelect.appendChild(option);
+                        });
+                        
+                        console.log(`✅ Loaded ${countries.length} real countries`);
+                    } else {
+                        console.log('ℹ️ No country data available from API');
+                    }
+                    
+                    // Load real city data
+                    const cityResponse = await fetch('/api/queue/cities');
+                    if (cityResponse.ok) {
+                        const cities = await cityResponse.json();
+                        const citySelect = document.getElementById('cityFilter');
+                        
+                        // Clear existing options except "All Cities"
+                        while (citySelect.children.length > 1) {
+                            citySelect.removeChild(citySelect.lastChild);
+                        }
+                        
+                        // Add real city options
+                        cities.forEach(city => {
+                            const option = document.createElement('option');
+                            option.value = city.id;
+                            option.textContent = city.name;
+                            citySelect.appendChild(option);
+                        });
+                        
+                        console.log(`✅ Loaded ${cities.length} real cities`);
+                    } else {
+                        console.log('ℹ️ No city data available from API');
+                    }
+                    
                 } catch (error) {
                     console.error('❌ Failed to load filter data:', error);
                     console.log('ℹ️ Using empty filters (no mock data)');
@@ -2856,7 +2933,24 @@ async def root():
                                         const statusColor = getStatusColor(item.status);
                                         const accuracy = item.final_accuracy ? Math.round(item.final_accuracy * 100) : null;
                                         const accuracyColor = accuracy >= 90 ? '#10b981' : accuracy >= 70 ? '#f59e0b' : '#ef4444';
-                                        const uploadId = item.ready_media_id ? item.ready_media_id.substring(0, 8) + '...' : '-';
+                                        const uploadId = item.upload_id || '-';
+                                        
+                                        // Extract data from uploads and metadata
+                                        const uploads = item.uploads || {};
+                                        const metadata = uploads.metadata || {};
+                                        
+                                        // Debug logging
+                                        if (item.id === 5) {
+                                            console.log('Item 5 data:', item);
+                                            console.log('Uploads:', uploads);
+                                            console.log('Metadata:', metadata);
+                                        }
+                                        
+                                        const category = uploads.category || '-';
+                                        const uploadDate = uploads.created_at || item.created_at;
+                                        const storeName = metadata.store_name || metadata.retailer || '-';
+                                        const storeLocation = metadata.city || '-';
+                                        const country = metadata.country || '-';
                                         
                                         return `
                                             <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer; ${selectedItemId === item.id ? 'background-color: #f0f9ff;' : ''}" 
@@ -2871,20 +2965,21 @@ async def root():
                                                     </div>
                                                 </td>
                                                 <td style="padding: 12px 8px; color: #4a5568;">
-                                                    ${new Date(item.created_at).toLocaleDateString()}
-                                                    <div style="font-size: 12px; color: #64748b;">${new Date(item.created_at).toLocaleTimeString()}</div>
+                                                    ${new Date(uploadDate).toLocaleDateString()}
+                                                    <div style="font-size: 12px; color: #64748b;">${new Date(uploadDate).toLocaleTimeString()}</div>
                                                 </td>
                                                 <td style="padding: 12px 8px; color: #2d3748; font-weight: 500;">
-                                                    ${item.store_name || 'Unknown Store'}
+                                                    ${storeName}
+                                                    ${storeLocation !== '-' ? `<div style="font-size: 12px; color: #64748b;">${storeLocation}</div>` : ''}
                                                 </td>
                                                 <td style="padding: 12px 8px; color: #4a5568;">
-                                                    ${item.category || 'General'}
+                                                    ${category}
                                                 </td>
                                                 <td style="padding: 12px 8px; color: #4a5568;">
-                                                    ${item.country || 'UK'}
+                                                    ${country}
                                                 </td>
                                                 <td style="padding: 12px 8px; color: #64748b; font-family: monospace; font-size: 12px;">
-                                                    ${uploadId}
+                                                    ${uploadId.length > 30 ? uploadId.substring(0, 8) + '...' : uploadId}
                                                 </td>
                                                 <td style="padding: 12px 8px; text-align: center;">
                                                     ${accuracy !== null ? `
@@ -3864,19 +3959,37 @@ async def root():
             function filterImages() {
                 const searchTerm = document.getElementById('searchInput').value.toLowerCase();
                 const storeFilter = document.getElementById('storeFilter').value;
+                const countryFilter = document.getElementById('countryFilter').value;
+                const cityFilter = document.getElementById('cityFilter').value;
                 const categoryFilter = document.getElementById('categoryFilter').value;
                 const statusFilter = document.getElementById('statusFilter').value;
                 const dateFilter = document.getElementById('dateFilter').value;
                 
                 filteredImages = imageData.filter(image => {
-                    // Search filter
-                    if (searchTerm && !image.title.toLowerCase().includes(searchTerm)) return false;
+                    // Extract metadata fields
+                    const uploads = image.uploads || {};
+                    const metadata = uploads.metadata || {};
+                    const category = uploads.category || '';
+                    const storeName = metadata.store_name || metadata.retailer || '';
+                    const country = metadata.country || '';
+                    const city = metadata.city || '';
+                    
+                    // Search filter (search in ID or store name)
+                    if (searchTerm && 
+                        !image.id.toString().includes(searchTerm) &&
+                        !storeName.toLowerCase().includes(searchTerm)) return false;
                     
                     // Store filter
-                    if (storeFilter && image.store !== storeFilter) return false;
+                    if (storeFilter && storeName !== storeFilter) return false;
+                    
+                    // Country filter
+                    if (countryFilter && country !== countryFilter) return false;
+                    
+                    // City filter
+                    if (cityFilter && city !== cityFilter) return false;
                     
                     // Category filter
-                    if (categoryFilter && image.category !== categoryFilter) return false;
+                    if (categoryFilter && category !== categoryFilter) return false;
                     
                     // Status filter
                     if (statusFilter && image.status !== statusFilter) return false;
@@ -4787,6 +4900,7 @@ async def root():
                     // Show pipeline status panels
                     document.getElementById('pipelineStatus').style.display = 'block';
                     document.getElementById('modelComparison').style.display = 'block';
+                    document.getElementById('livePromptMonitoring').style.display = 'block';
                     document.getElementById('realTimeLogs').style.display = 'block';
                     
                     // Connect WebSocket for real-time updates
@@ -4841,6 +4955,12 @@ async def root():
                         document.getElementById('debugCurrentStage').textContent = update.stage;
                         document.getElementById('pipelineProgressText').textContent = update.message || `${update.stage} - ${update.status}`;
                         addLogMessage(`Stage ${update.stage}: ${update.status}`, 'info');
+                        break;
+                        
+                    case 'prompt_used':
+                        // Show live prompts being used by each model
+                        displayLivePrompt(update.model, update.step, update.prompt_template, update.prompt_content, update.agent_id);
+                        addLogMessage(`🤖 ${update.model} using prompt: ${update.prompt_template} for ${update.step}`, 'info');
                         break;
                         
                     case 'iteration_start':
@@ -5002,6 +5122,7 @@ async def root():
                     document.getElementById('debugSessionInfo').style.display = 'none';
                     document.getElementById('pipelineStatus').style.display = 'none';
                     document.getElementById('modelComparison').style.display = 'none';
+                    document.getElementById('livePromptMonitoring').style.display = 'none';
                     document.getElementById('realTimeLogs').style.display = 'none';
                     document.getElementById('startDebugBtn').disabled = false;
                     document.getElementById('startDebugBtn').textContent = '🔍 Monitor Extraction';
@@ -5062,6 +5183,7 @@ async def root():
                 document.getElementById('debugSessionInfo').style.display = 'block';
                 document.getElementById('pipelineStatus').style.display = 'block';
                 document.getElementById('modelComparison').style.display = 'block';
+                document.getElementById('livePromptMonitoring').style.display = 'block';
                 document.getElementById('realTimeLogs').style.display = 'block';
                 
                 connectDebugWebSocket(sessionId);
@@ -5170,6 +5292,176 @@ async def root():
                     statusElement.innerHTML = '⏸ Pending';
                     statusElement.style.color = '#6b7280';
                 });
+            }
+            
+            // Live prompt monitoring functions
+            function displayLivePrompt(model, step, promptTemplate, promptContent, agentId) {
+                const promptContainer = document.getElementById('promptContainer');
+                
+                // Clear the waiting message if it's the first prompt
+                if (promptContainer.innerHTML.includes('Waiting for extraction')) {
+                    promptContainer.innerHTML = '';
+                }
+                
+                // Create unique ID for this prompt
+                const promptId = `prompt-${model}-${step}-${agentId || 'main'}`;
+                
+                // Remove existing prompt from same model/step if it exists
+                const existingPrompt = document.getElementById(promptId);
+                if (existingPrompt) {
+                    existingPrompt.remove();
+                }
+                
+                // Get model color
+                const modelColors = {
+                    'GPT-4o': '#10b981',
+                    'Claude-3.5-Sonnet': '#3b82f6', 
+                    'Gemini-2.0-Flash': '#f59e0b',
+                    'GPT-4o-Latest': '#10b981',
+                    'Claude-3-Sonnet': '#3b82f6'
+                };
+                
+                const modelColor = modelColors[model] || '#6b7280';
+                
+                // Create prompt display element
+                const promptElement = document.createElement('div');
+                promptElement.id = promptId;
+                promptElement.style.cssText = `
+                    border: 2px solid ${modelColor};
+                    border-radius: 8px;
+                    background: white;
+                    overflow: hidden;
+                    margin-bottom: 10px;
+                `;
+                
+                // Truncate prompt content for display
+                const truncatedContent = promptContent.length > 300 
+                    ? promptContent.substring(0, 300) + '...' 
+                    : promptContent;
+                
+                promptElement.innerHTML = `
+                    <div style="background: ${modelColor}; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>🤖 ${model}</strong> • Step: ${step} • Template: ${promptTemplate}
+                            ${agentId ? ` • Agent: ${agentId}` : ''}
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.9;">
+                            ${new Date().toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="background: #f8fafc; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.4; color: #374151; max-height: 200px; overflow-y: auto;">
+                            ${escapeHtml(truncatedContent)}
+                        </div>
+                        <div style="margin-top: 10px; display: flex; gap: 10px;">
+                            <button onclick="expandPrompt('${promptId}')" style="background: #e5e7eb; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                📄 View Full Prompt
+                            </button>
+                            <button onclick="copyPrompt('${promptId}')" style="background: #e5e7eb; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                // Store full content for later access
+                promptElement.dataset.fullContent = promptContent;
+                
+                // Add to container (newest at top)
+                promptContainer.insertBefore(promptElement, promptContainer.firstChild);
+                
+                // Limit to last 10 prompts to avoid memory issues
+                const allPrompts = promptContainer.children;
+                if (allPrompts.length > 10) {
+                    for (let i = 10; i < allPrompts.length; i++) {
+                        allPrompts[i].remove();
+                    }
+                }
+            }
+            
+            function expandPrompt(promptId) {
+                const promptElement = document.getElementById(promptId);
+                if (!promptElement) return;
+                
+                const fullContent = promptElement.dataset.fullContent;
+                
+                // Create modal to show full prompt
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; color: #1f2937;">Full Prompt Content</h3>
+                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                        </div>
+                        <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                            <pre style="background: #f8fafc; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 13px; line-height: 1.4; color: #374151; white-space: pre-wrap; margin: 0;">${escapeHtml(fullContent)}</pre>
+                        </div>
+                        <div style="padding: 20px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px;">
+                            <button onclick="copyToClipboard('${escapeHtml(fullContent).replace(/'/g, "\\'")}'); this.textContent='✅ Copied!'; setTimeout(() => this.textContent='📋 Copy Full Prompt', 2000)" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">📋 Copy Full Prompt</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                // Close on background click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                });
+            }
+            
+            function copyPrompt(promptId) {
+                const promptElement = document.getElementById(promptId);
+                if (!promptElement) return;
+                
+                const fullContent = promptElement.dataset.fullContent;
+                copyToClipboard(fullContent);
+                
+                // Show feedback
+                const button = promptElement.querySelector('button[onclick*="copyPrompt"]');
+                if (button) {
+                    const originalText = button.textContent;
+                    button.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000);
+                }
+            }
+            
+            function copyToClipboard(text) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text);
+                } else {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
+            }
+            
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
             }
             
             function renderErrorSummary(errors) {
