@@ -56,12 +56,7 @@ class Quantity(BaseModel):
     total_facings: int = Field(description="Total visible product facings")
 
 
-class PixelCoordinates(BaseModel):
-    """Pixel coordinates in image"""
-    x: int = Field(description="Left edge pixel coordinate")
-    y: int = Field(description="Top edge pixel coordinate")
-    width: int = Field(description="Bounding box width")
-    height: int = Field(description="Bounding box height")
+# PixelCoordinates class removed - using relative positioning instead
 
 
 class ProductExtraction(BaseModel):
@@ -79,8 +74,17 @@ class ProductExtraction(BaseModel):
     # Quantity information (critical for retail)
     quantity: Quantity
     
-    # Pixel location (for consumer surveys)
-    pixel_coordinates: PixelCoordinates
+    # Relative positioning (replacing pixel coordinates)
+    shelf_level: int = Field(description="1=bottom shelf, counting upward")
+    position_on_shelf: int = Field(description="1=leftmost, 2=second from left, etc.")
+    
+    # Additional product information
+    any_text: Optional[str] = Field(None, description="Any visible text on the product")
+    color: Optional[str] = Field(None, description="Primary color of the product packaging")
+    pack_size: Optional[int] = Field(None, description="Number of items in a pack if visible")
+    volume: Optional[str] = Field(None, description="Volume/weight if visible (e.g., '500ml', '1kg')")
+    is_on_promo: bool = Field(False, description="Whether product has promotional tags")
+    facings_total: int = Field(1, description="Total number of facings for this product")
     
     # Quality metrics
     extraction_confidence: float = Field(description="0.0-1.0")

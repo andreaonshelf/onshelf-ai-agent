@@ -123,7 +123,6 @@ class PlanogramGenerator:
                     facings=brand.total_facings,
                     width_cm=brand.block_width_cm,
                     confidence_color=brand.confidence_color,
-                    pixel_coordinates={},
                     position_cm=current_position,
                     shelf_number=shelf_num
                 )
@@ -170,7 +169,6 @@ class PlanogramGenerator:
                     facings=product.facing_count,
                     width_cm=product.block_width_cm,
                     confidence_color=product.confidence_color,
-                    pixel_coordinates={},
                     position_cm=current_position,
                     shelf_number=shelf_num
                 )
@@ -217,7 +215,6 @@ class PlanogramGenerator:
                     facings=1,  # Each SKU block is one facing
                     width_cm=sku.block_width_cm,
                     confidence_color=sku.confidence_color,
-                    pixel_coordinates={},
                     position_cm=current_position,
                     shelf_number=shelf_num
                 )
@@ -246,7 +243,7 @@ class PlanogramGenerator:
             
             return await self.generate_from_abstraction(
                 product_view,
-                extraction.structure if hasattr(extraction, 'structure') else None,
+                extraction.shelf_structure if hasattr(extraction, 'shelf_structure') else None,
                 "product_view"
             )
         

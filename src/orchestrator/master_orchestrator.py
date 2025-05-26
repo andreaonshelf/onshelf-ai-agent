@@ -253,7 +253,7 @@ class MasterOrchestrator:
         # Convert high confidence positions to locked list
         for position in accuracy_analysis.high_confidence_positions:
             locked_positions.append({
-                "shelf": position.shelf_number,
+                "shelf": position.section.horizontal,
                 "position": position.position_on_shelf,
                 "data": position.data,
                 "confidence": position.confidence,

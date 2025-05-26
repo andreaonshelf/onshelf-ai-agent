@@ -876,6 +876,44 @@ async def root():
                 display: block;
             }
             
+            /* Advanced Mode Tabs */
+            .advanced-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .advanced-tab {
+                padding: 12px 20px;
+                border: none;
+                background: none;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                color: #64748b;
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s ease;
+            }
+            
+            .advanced-tab:hover {
+                color: #3b82f6;
+            }
+            
+            .advanced-tab.active {
+                color: #3b82f6;
+                border-bottom-color: #3b82f6;
+            }
+            
+            .advanced-tab-content {
+                display: none;
+                height: calc(100% - 60px);
+            }
+            
+            .advanced-tab-content.active {
+                display: block;
+            }
+            
             .advanced-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -896,6 +934,188 @@ async def root():
             .technical-analysis {
                 padding: 20px;
                 overflow-y: auto;
+            }
+            
+            /* Log Viewer Styles */
+            .logs-container {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            
+            .log-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 20px;
+                background: #f8fafc;
+                border-bottom: 1px solid #e2e8f0;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .log-filters {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                flex-wrap: wrap;
+            }
+            
+            .log-filters select,
+            .log-filters input {
+                padding: 6px 10px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            
+            .log-filters input {
+                min-width: 200px;
+            }
+            
+            .log-actions {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            
+            .log-viewer {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px;
+                background: #1e293b;
+                color: #e2e8f0;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                font-size: 13px;
+                line-height: 1.4;
+            }
+            
+            .log-entry {
+                display: flex;
+                align-items: flex-start;
+                padding: 4px 0;
+                border-bottom: 1px solid #334155;
+                word-wrap: break-word;
+            }
+            
+            .log-entry:hover {
+                background: #334155;
+            }
+            
+            .log-timestamp {
+                color: #94a3b8;
+                margin-right: 10px;
+                min-width: 80px;
+                font-weight: 500;
+            }
+            
+            .log-level {
+                margin-right: 10px;
+                min-width: 60px;
+                font-weight: 600;
+                text-align: center;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 11px;
+            }
+            
+            .log-level.ERROR {
+                background: #dc2626;
+                color: white;
+            }
+            
+            .log-level.WARNING {
+                background: #d97706;
+                color: white;
+            }
+            
+            .log-level.INFO {
+                background: #2563eb;
+                color: white;
+            }
+            
+            .log-level.DEBUG {
+                background: #6b7280;
+                color: white;
+            }
+            
+            .log-component {
+                color: #60a5fa;
+                margin-right: 10px;
+                min-width: 120px;
+                font-weight: 500;
+            }
+            
+            .log-message {
+                flex: 1;
+                color: #e2e8f0;
+            }
+            
+            .log-loading {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                color: #64748b;
+            }
+            
+            /* Error Summary Styles */
+            .error-summary-panel {
+                padding: 20px;
+                overflow-y: auto;
+            }
+            
+            .error-summary {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .error-item {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 6px;
+                padding: 12px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .error-item:hover {
+                background: #fee2e2;
+                border-color: #f87171;
+            }
+            
+            .error-item.warning {
+                background: #fffbeb;
+                border-color: #fed7aa;
+            }
+            
+            .error-item.warning:hover {
+                background: #fef3c7;
+                border-color: #fbbf24;
+            }
+            
+            .error-timestamp {
+                font-size: 12px;
+                color: #6b7280;
+                margin-bottom: 4px;
+            }
+            
+            .error-component {
+                font-size: 12px;
+                font-weight: 600;
+                color: #374151;
+                margin-bottom: 4px;
+            }
+            
+            .error-message {
+                font-size: 14px;
+                color: #1f2937;
+                line-height: 1.4;
             }
             
             .analysis-section {
@@ -1097,10 +1317,7 @@ async def root():
                         <label>Store</label>
                         <select id="storeFilter" onchange="filterImages()">
                             <option value="">All Stores</option>
-                            <option value="walmart">Walmart</option>
-                            <option value="target">Target</option>
-                            <option value="kroger">Kroger</option>
-                            <option value="safeway">Safeway</option>
+                            <!-- Real store data will be loaded from database -->
                         </select>
                     </div>
                     
@@ -1108,10 +1325,7 @@ async def root():
                         <label>Category</label>
                         <select id="categoryFilter" onchange="filterImages()">
                             <option value="">All Categories</option>
-                            <option value="beverages">Beverages</option>
-                            <option value="snacks">Snacks</option>
-                            <option value="dairy">Dairy</option>
-                            <option value="frozen">Frozen</option>
+                            <!-- Real category data will be loaded from database -->
                         </select>
                     </div>
                     
@@ -1281,19 +1495,19 @@ async def root():
                         <div id="agent1" class="agent-content">
                             <div class="agent-metrics">
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent1Accuracy">87%</div>
+                                    <div class="metric-value" id="agent1Accuracy">--</div>
                                     <div class="metric-label">Accuracy</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent1Speed">2.3s</div>
+                                    <div class="metric-value" id="agent1Speed">--</div>
                                     <div class="metric-label">Processing Time</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent1Cost">£0.12</div>
+                                    <div class="metric-value" id="agent1Cost">--</div>
                                     <div class="metric-label">API Cost</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent1Products">5</div>
+                                    <div class="metric-value" id="agent1Products">--</div>
                                     <div class="metric-label">Products Found</div>
                                 </div>
                             </div>
@@ -1309,19 +1523,19 @@ async def root():
                         <div id="agent2" class="agent-content" style="display: none;">
                             <div class="agent-metrics">
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent2Accuracy">92%</div>
+                                    <div class="metric-value" id="agent2Accuracy">--</div>
                                     <div class="metric-label">Accuracy</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent2Speed">4.1s</div>
+                                    <div class="metric-value" id="agent2Speed">--</div>
                                     <div class="metric-label">Processing Time</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent2Cost">£0.18</div>
+                                    <div class="metric-value" id="agent2Cost">--</div>
                                     <div class="metric-label">API Cost</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent2Products">6</div>
+                                    <div class="metric-value" id="agent2Products">--</div>
                                     <div class="metric-label">Products Found</div>
                                 </div>
                             </div>
@@ -1337,19 +1551,19 @@ async def root():
                         <div id="agent3" class="agent-content" style="display: none;">
                             <div class="agent-metrics">
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent3Accuracy">95%</div>
+                                    <div class="metric-value" id="agent3Accuracy">--</div>
                                     <div class="metric-label">Accuracy</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent3Speed">3.7s</div>
+                                    <div class="metric-value" id="agent3Speed">--</div>
                                     <div class="metric-label">Processing Time</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent3Cost">£0.15</div>
+                                    <div class="metric-value" id="agent3Cost">--</div>
                                     <div class="metric-label">API Cost</div>
                                 </div>
                                 <div class="metric-card">
-                                    <div class="metric-value" id="agent3Products">7</div>
+                                    <div class="metric-value" id="agent3Products">--</div>
                                     <div class="metric-label">Products Found</div>
                                 </div>
                             </div>
@@ -1369,77 +1583,155 @@ async def root():
                         </div>
                     </div>
                     
-                    <!-- Advanced Mode - 4 Panel Technical Deep Dive -->
+                    <!-- Advanced Mode - Technical Deep Dive with Tabs -->
                     <div id="advanced-mode" class="advanced-mode">
-                        <div class="advanced-grid">
-                            <!-- Original Image Panel -->
-                            <div class="advanced-panel">
-                                <div class="panel-header">
-                                    <h3>📷 Original Image Analysis</h3>
+                        <!-- Advanced Mode Tabs -->
+                        <div class="advanced-tabs">
+                            <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
+                        </div>
+                        
+                        <!-- Overview Tab - 4 Panel Grid -->
+                        <div id="advanced-overview" class="advanced-tab-content active">
+                            <div class="advanced-grid">
+                                <!-- Original Image Panel -->
+                                <div class="advanced-panel">
+                                    <div class="panel-header">
+                                        <h3>📷 Original Image Analysis</h3>
+                                    </div>
+                                    <div class="panel-content">
+                                        <div class="image-viewer">
+                                            <img id="advancedOriginalImage" src="" alt="Original image">
+                                            <div class="image-controls">
+                                                <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
+                                                <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
+                                                <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
+                                                <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="panel-content">
-                                    <div class="image-viewer">
-                                        <img id="advancedOriginalImage" src="" alt="Original image">
-                                        <div class="image-controls">
-                                            <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
-                                            <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
-                                            <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
-                                            <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                
+                                <!-- Agent Deep Dive Panel -->
+                                <div class="advanced-panel">
+                                    <div class="panel-header">
+                                        <h3>🔍 Agent Deep Dive</h3>
+                                    </div>
+                                    <div class="technical-analysis">
+                                        <div class="analysis-section">
+                                            <h4>Model Performance</h4>
+                                            <div class="analysis-data" id="modelPerformance">
+                                                Loading performance data...
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="analysis-section">
+                                            <h4>Confidence Scores</h4>
+                                            <div class="analysis-data" id="confidenceScores">
+                                                Loading confidence data...
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="analysis-section">
+                                            <h4>Error Analysis</h4>
+                                            <div class="analysis-data" id="errorAnalysis">
+                                                Loading error analysis...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Planogram Analysis Panel -->
+                                <div class="advanced-panel">
+                                    <div class="panel-header">
+                                        <h3>📊 Planogram Analysis</h3>
+                                    </div>
+                                    <div class="panel-content">
+                                        <div id="advancedPlanogramViewer" class="image-viewer">
+                                            <div class="loading">Loading planogram...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Quick Error Summary Panel -->
+                                <div class="advanced-panel">
+                                    <div class="panel-header">
+                                        <h3>⚠️ Error Summary</h3>
+                                    </div>
+                                    <div class="error-summary-panel">
+                                        <div id="errorSummary" class="error-summary">
+                                            <!-- Error summary will be loaded here -->
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Agent Deep Dive Panel -->
-                            <div class="advanced-panel">
-                                <div class="panel-header">
-                                    <h3>🔍 Agent Deep Dive</h3>
-                                </div>
-                                <div class="technical-analysis">
-                                    <div class="analysis-section">
-                                        <h4>Model Performance</h4>
-                                        <div class="analysis-data" id="modelPerformance">
-                                            Loading performance data...
-                                        </div>
+                        </div>
+                        
+                        <!-- Logs Tab -->
+                        <div id="advanced-logs" class="advanced-tab-content">
+                            <div class="logs-container">
+                                <!-- Log Controls -->
+                                <div class="log-controls">
+                                    <div class="log-filters">
+                                        <select id="logLevelFilter" onchange="filterLogs()">
+                                            <option value="">All Levels</option>
+                                            <option value="ERROR">ERROR</option>
+                                            <option value="WARNING">WARNING</option>
+                                            <option value="INFO">INFO</option>
+                                            <option value="DEBUG">DEBUG</option>
+                                        </select>
+                                        
+                                        <select id="logComponentFilter" onchange="filterLogs()">
+                                            <option value="">All Components</option>
+                                            <option value="extraction_engine">Extraction Engine</option>
+                                            <option value="agent">Agent</option>
+                                            <option value="abstraction_manager">Abstraction Manager</option>
+                                            <option value="queue_processor">Queue Processor</option>
+                                            <option value="cost_tracker">Cost Tracker</option>
+                                        </select>
+                                        
+                                        <input type="text" id="logSearchInput" placeholder="Search logs..." onkeyup="filterLogs()">
+                                        
+                                        <select id="logTimeRange" onchange="filterLogs()">
+                                            <option value="1">Last 1 hour</option>
+                                            <option value="6">Last 6 hours</option>
+                                            <option value="24" selected>Last 24 hours</option>
+                                            <option value="168">Last 7 days</option>
+                                        </select>
                                     </div>
                                     
-                                    <div class="analysis-section">
-                                        <h4>Confidence Scores</h4>
-                                        <div class="analysis-data" id="confidenceScores">
-                                            Loading confidence data...
-                                        </div>
+                                    <div class="log-actions">
+                                        <button class="btn btn-secondary" onclick="toggleAutoScroll()">
+                                            <span id="autoScrollText">⏸️ Pause Auto-scroll</span>
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="exportLogs()">📥 Export</button>
+                                        <button class="btn btn-secondary" onclick="clearLogView()">🗑️ Clear</button>
+                                        <button class="btn btn-primary" onclick="refreshLogs()">🔄 Refresh</button>
                                     </div>
-                                    
-                                    <div class="analysis-section">
-                                        <h4>Error Analysis</h4>
-                                        <div class="analysis-data" id="errorAnalysis">
-                                            Loading error analysis...
-                                        </div>
-                                    </div>
+                                </div>
+                                
+                                <!-- Log Viewer -->
+                                <div class="log-viewer" id="logViewer">
+                                    <div class="log-loading">Loading logs...</div>
                                 </div>
                             </div>
-                            
-                            <!-- Planogram Analysis Panel -->
-                            <div class="advanced-panel">
-                                <div class="panel-header">
-                                    <h3>📊 Planogram Analysis</h3>
-                                </div>
-                                <div class="panel-content">
-                                    <div id="advancedPlanogramViewer" class="image-viewer">
-                                        <div class="loading">Loading planogram...</div>
-                                    </div>
-                                </div>
+                        </div>
+                        
+                        <!-- Pipeline Debugger Tab -->
+                        <div id="advanced-debugger" class="advanced-tab-content">
+                            <div class="debugger-container">
+                                <h3>🔍 Pipeline Debugger</h3>
+                                <p>Detailed pipeline analysis and debugging tools will be displayed here.</p>
                             </div>
-                            
-                            <!-- Orchestrator Panel -->
-                            <div class="advanced-panel">
-                                <div class="panel-header">
-                                    <h3>⚙️ System Orchestrator</h3>
-                                </div>
-                                <div class="orchestrator-panel">
-                                    <div class="orchestrator-flow" id="orchestratorFlow">
-                                        <!-- Flow steps will be loaded here -->
-                                    </div>
+                        </div>
+                        
+                        <!-- Orchestrator Tab -->
+                        <div id="advanced-orchestrator" class="advanced-tab-content">
+                            <div class="orchestrator-container">
+                                <div class="orchestrator-flow" id="orchestratorFlow">
+                                    <!-- Flow steps will be loaded here -->
                                 </div>
                             </div>
                         </div>
@@ -1468,6 +1760,9 @@ async def root():
             let zoomLevel = 1.0;
             let overlaysVisible = false;
             let currentAgent = 'agent1';
+            let currentAdvancedTab = 'overview';
+            let autoScrollEnabled = true;
+            let logRefreshInterval = null;
             
             // Initialize application
             document.addEventListener('DOMContentLoaded', function() {
@@ -1480,6 +1775,7 @@ async def root():
                 
                 loadQueue();
                 loadImages();
+                loadFilterData();
             });
             
             // Sidebar management
@@ -1623,6 +1919,64 @@ async def root():
                 }
             }
             
+            // Load real filter data from database
+            async function loadFilterData() {
+                try {
+                    console.log('🔄 Loading filter data from database...');
+                    
+                    // Load real store data
+                    const storeResponse = await fetch('/api/queue/stores');
+                    if (storeResponse.ok) {
+                        const stores = await storeResponse.json();
+                        const storeSelect = document.getElementById('storeFilter');
+                        
+                        // Clear existing options except "All Stores"
+                        while (storeSelect.children.length > 1) {
+                            storeSelect.removeChild(storeSelect.lastChild);
+                        }
+                        
+                        // Add real store options
+                        stores.forEach(store => {
+                            const option = document.createElement('option');
+                            option.value = store.id;
+                            option.textContent = store.name;
+                            storeSelect.appendChild(option);
+                        });
+                        
+                        console.log(`✅ Loaded ${stores.length} real stores`);
+                    } else {
+                        console.log('ℹ️ No store data available from API');
+                    }
+                    
+                    // Load real category data
+                    const categoryResponse = await fetch('/api/queue/categories');
+                    if (categoryResponse.ok) {
+                        const categories = await categoryResponse.json();
+                        const categorySelect = document.getElementById('categoryFilter');
+                        
+                        // Clear existing options except "All Categories"
+                        while (categorySelect.children.length > 1) {
+                            categorySelect.removeChild(categorySelect.lastChild);
+                        }
+                        
+                        // Add real category options
+                        categories.forEach(category => {
+                            const option = document.createElement('option');
+                            option.value = category.id;
+                            option.textContent = category.name;
+                            categorySelect.appendChild(option);
+                        });
+                        
+                        console.log(`✅ Loaded ${categories.length} real categories`);
+                    } else {
+                        console.log('ℹ️ No category data available from API');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Failed to load filter data:', error);
+                    console.log('ℹ️ Using empty filters (no mock data)');
+                }
+            }
 
             
             // Update queue statistics
@@ -2203,6 +2557,215 @@ async def root():
                     console.log(`Rating for ${ratingGroup}: ${rating} stars`);
                 }
             });
+            
+            // Advanced Mode Tab Switching
+            function switchAdvancedTab(tabName) {
+                // Hide all tab contents
+                document.querySelectorAll('.advanced-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                
+                // Update tab states
+                document.querySelectorAll('.advanced-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                
+                // Show selected tab
+                document.getElementById(`advanced-${tabName}`).classList.add('active');
+                event.target.classList.add('active');
+                
+                currentAdvancedTab = tabName;
+                
+                // Load tab-specific data
+                if (tabName === 'logs') {
+                    loadLogs();
+                    startLogRefresh();
+                } else if (tabName === 'overview') {
+                    loadErrorSummary();
+                    stopLogRefresh();
+                } else {
+                    stopLogRefresh();
+                }
+            }
+            
+            // Log Viewer Functions
+            async function loadLogs() {
+                if (!selectedItemId) {
+                    document.getElementById('logViewer').innerHTML = '<div class="log-loading">Please select a queue item to view logs</div>';
+                    return;
+                }
+                
+                const logViewer = document.getElementById('logViewer');
+                const level = document.getElementById('logLevelFilter').value;
+                const component = document.getElementById('logComponentFilter').value;
+                const search = document.getElementById('logSearchInput').value;
+                const hours = document.getElementById('logTimeRange').value;
+                
+                try {
+                    const params = new URLSearchParams({
+                        limit: '100',
+                        hours: hours
+                    });
+                    
+                    if (level) params.append('level', level);
+                    if (component) params.append('component', component);
+                    if (search) params.append('search', search);
+                    
+                    const response = await fetch(`/api/queue/logs/${selectedItemId}?${params}`);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        renderLogs(data.logs);
+                    } else {
+                        logViewer.innerHTML = '<div class="log-loading">Failed to load logs</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load logs:', error);
+                    logViewer.innerHTML = '<div class="log-loading">Error loading logs</div>';
+                }
+            }
+            
+            function renderLogs(logs) {
+                const logViewer = document.getElementById('logViewer');
+                
+                if (logs.length === 0) {
+                    logViewer.innerHTML = '<div class="log-loading">No logs found for the selected filters</div>';
+                    return;
+                }
+                
+                const logEntries = logs.map(log => `
+                    <div class="log-entry">
+                        <span class="log-timestamp">${log.timestamp}</span>
+                        <span class="log-level ${log.level}">${log.level}</span>
+                        <span class="log-component">${log.component}</span>
+                        <span class="log-message">${escapeHtml(log.message)}</span>
+                    </div>
+                `).join('');
+                
+                logViewer.innerHTML = logEntries;
+                
+                // Auto-scroll to bottom if enabled
+                if (autoScrollEnabled) {
+                    logViewer.scrollTop = logViewer.scrollHeight;
+                }
+            }
+            
+            function filterLogs() {
+                loadLogs();
+            }
+            
+            function toggleAutoScroll() {
+                autoScrollEnabled = !autoScrollEnabled;
+                const text = document.getElementById('autoScrollText');
+                text.textContent = autoScrollEnabled ? '⏸️ Pause Auto-scroll' : '▶️ Resume Auto-scroll';
+            }
+            
+            function exportLogs() {
+                if (!selectedItemId) {
+                    alert('Please select a queue item first');
+                    return;
+                }
+                
+                const level = document.getElementById('logLevelFilter').value;
+                const component = document.getElementById('logComponentFilter').value;
+                const search = document.getElementById('logSearchInput').value;
+                const hours = document.getElementById('logTimeRange').value;
+                
+                const params = new URLSearchParams({
+                    limit: '1000',
+                    hours: hours
+                });
+                
+                if (level) params.append('level', level);
+                if (component) params.append('component', component);
+                if (search) params.append('search', search);
+                
+                const url = `/api/queue/logs/${selectedItemId}?${params}`;
+                window.open(url, '_blank');
+            }
+            
+            function clearLogView() {
+                document.getElementById('logViewer').innerHTML = '<div class="log-loading">Log view cleared</div>';
+            }
+            
+            function refreshLogs() {
+                loadLogs();
+            }
+            
+            function startLogRefresh() {
+                if (logRefreshInterval) clearInterval(logRefreshInterval);
+                logRefreshInterval = setInterval(() => {
+                    if (currentAdvancedTab === 'logs' && autoScrollEnabled) {
+                        loadLogs();
+                    }
+                }, 5000); // Refresh every 5 seconds
+            }
+            
+            function stopLogRefresh() {
+                if (logRefreshInterval) {
+                    clearInterval(logRefreshInterval);
+                    logRefreshInterval = null;
+                }
+            }
+            
+            // Error Summary Functions
+            async function loadErrorSummary() {
+                const errorSummary = document.getElementById('errorSummary');
+                
+                try {
+                    const response = await fetch('/api/queue/logs/errors?limit=5');
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        renderErrorSummary(data.errors);
+                    } else {
+                        errorSummary.innerHTML = '<div class="log-loading">Failed to load error summary</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load error summary:', error);
+                    errorSummary.innerHTML = '<div class="log-loading">Error loading error summary</div>';
+                }
+            }
+            
+            function renderErrorSummary(errors) {
+                const errorSummary = document.getElementById('errorSummary');
+                
+                if (errors.length === 0) {
+                    errorSummary.innerHTML = '<div class="log-loading">✅ No recent errors found</div>';
+                    return;
+                }
+                
+                const errorItems = errors.map(error => `
+                    <div class="error-item ${error.level.toLowerCase()}" onclick="jumpToLogContext('${error.timestamp}', '${error.component}')">
+                        <div class="error-timestamp">${error.timestamp}</div>
+                        <div class="error-component">${error.component}</div>
+                        <div class="error-message">${escapeHtml(error.message)}</div>
+                    </div>
+                `).join('');
+                
+                errorSummary.innerHTML = errorItems;
+            }
+            
+            function jumpToLogContext(timestamp, component) {
+                // Switch to logs tab
+                switchAdvancedTab('logs');
+                
+                // Set filters to show context around this error
+                document.getElementById('logComponentFilter').value = component;
+                document.getElementById('logSearchInput').value = '';
+                
+                // Load logs with the specific context
+                setTimeout(() => {
+                    loadLogs();
+                }, 100);
+            }
+            
+            // Utility function
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
         </script>
     </body>
     </html>

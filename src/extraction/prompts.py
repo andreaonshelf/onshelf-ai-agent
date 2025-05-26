@@ -56,23 +56,27 @@ SHELF STRUCTURE PROVIDED:
 EXTRACTION REQUIREMENTS:
 1. For each visible product, identify:
    - Which shelf level (use structure reference, 1=bottom)
-   - Position within shelf (count from left to right)
+   - Position within shelf (count from left to right, starting at 1)
    - Product name and brand (be specific)
    - Facing count (how many units visible side by side)
-   - Pixel coordinates (x, y, width, height)
+   - Primary color of packaging
+   - Any visible text on the product
+   - Volume/weight if visible (e.g., '500ml', '1kg')
+   - Whether product has promotional tags
 
 2. Quality Guidelines:
    - Only extract clearly visible products
    - If product name is unclear, mark with validation flag
    - Count facings accurately - this is critical for retail
    - Use shelf structure to ensure correct positioning
+   - Note pack sizes if visible (e.g., '6-pack')
 
 3. Handle Special Cases:
    - Stacked products: count visible facings only
-   - Promotional displays: note position
+   - Promotional displays: mark is_on_promo=true
    - Empty spaces: record as gaps
 
-IMPORTANT: Accuracy over quantity. Better to extract 20 products correctly than 30 with errors.
+IMPORTANT: Focus on relative positioning (shelf level, position on shelf) rather than pixel measurements.
 """,
             
             "price_extraction_specialized": """
@@ -95,7 +99,7 @@ PRICE EXTRACTION TASKS:
    - If no clear price visible, mark as null
 
 3. Spatial Matching:
-   - Use product pixel coordinates to find nearby prices
+   - Use product shelf position to find nearby prices
    - Price tags are usually directly below products
    - Be careful with dense shelves - match prices accurately
 
@@ -140,16 +144,18 @@ VALIDATION CHECKLIST:
 1. Structural Integrity:
    - Do product positions align with shelf structure?
    - Are shelves numbered consistently (1=bottom)?
-   - Do pixel coordinates make sense?
+   - Are positions numbered sequentially from left to right?
 
 2. Product Accuracy:
    - Is the product count reasonable for shelf size?
    - Are brands and names consistent?
    - Do facing counts add up logically?
+   - Are product colors and sizes captured?
 
 3. Data Completeness:
    - Any obvious products missed?
    - Price data matched correctly?
+   - Promotional status identified?
    - Validation flags applied appropriately?
 
 4. Final Tasks:

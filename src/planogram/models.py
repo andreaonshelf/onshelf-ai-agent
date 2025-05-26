@@ -18,7 +18,6 @@ class ProductBlock(BaseModel):
     width_cm: float
     height_cm: float = 40.0  # Standard shelf height
     confidence_color: str
-    pixel_coordinates: Dict[str, int]
     position_cm: float
     shelf_number: int
     type: str = "product"

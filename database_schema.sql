@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS prompt_performance (
 CREATE TABLE IF NOT EXISTS extraction_results (
     result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     upload_id TEXT NOT NULL,
+    comparison_group_id TEXT,
     system_type TEXT NOT NULL, -- 'custom', 'langgraph', 'hybrid'
     overall_accuracy DECIMAL(4,3),
     consensus_reached BOOLEAN,

@@ -10,8 +10,11 @@ from datetime import datetime
 from ..config import SystemConfig
 from ..agents.structure_agent import StructureAnalysisAgent
 from ..models.extraction_models import (
-    ExtractionResult, CumulativeExtractionContext, ProductExtraction,
-    ConfidenceLevel, ValidationFlag
+    ExtractionResult, CumulativeExtractionContext, ValidationFlag
+)
+from ..extraction.models import (
+    ProductExtraction, Position, SectionCoordinates, Quantity, 
+    AIModelType, ConfidenceLevel
 )
 from ..models.shelf_structure import ShelfStructure
 from ..utils import logger
@@ -106,7 +109,7 @@ class ExtractionOrchestrator:
         # Analyze all previous attempts for cumulative learning
         for attempt_num, attempt in enumerate(previous_attempts, 1):
             for product in attempt.products:
-                position_key = f"shelf_{product.position.shelf_number}_pos_{product.position.position_on_shelf}"
+                position_key = f"shelf_{product.section.horizontal}_pos_{product.position.l_position_on_section}"
                 
                 if product.extraction_confidence >= 0.95:
                     # High confidence - add to successful extractions
@@ -289,15 +292,15 @@ class ExtractionOrchestrator:
         
         return "\n".join(result) if result else "Stable confidence across positions"
     
-    def _select_model_for_agent(self, agent_number: int, context: CumulativeExtractionContext) -> str:
+    def _select_model_for_agent(self, agent_number: int, context: CumulativeExtractionContext) -> AIModelType:
         """Select appropriate model based on agent number and context"""
         if agent_number == 1:
-            return "gpt-4o-2024-11-20"  # Fast initial extraction
+            return AIModelType.GPT4O_LATEST  # Fast initial extraction
         elif agent_number == 2:
-            return "claude-3-5-sonnet-20241022"  # Better reasoning for improvements
+            return AIModelType.CLAUDE_3_SONNET  # Better reasoning for improvements
         else:
             # Use best model for final refinements
-            return "claude-3-5-sonnet-20241022 + gemini-2.0-flash-exp"
+            return AIModelType.CLAUDE_3_SONNET
     
     async def _mock_extraction_with_context(self, 
                                           image: bytes,
@@ -311,15 +314,19 @@ class ExtractionOrchestrator:
             if 'data' in locked:
                 product_data = locked['data']
                 product = ProductExtraction(
+                    section=SectionCoordinates(horizontal="1", vertical="Center"),
+                    position=Position(
+                        l_position_on_section=1,
+                        r_position_on_section=1,
+                        l_empty=False,
+                        r_empty=False
+                    ),
                     brand=product_data.get('brand', 'Unknown'),
                     name=product_data.get('name', 'Unknown Product'),
                     price=product_data.get('price'),
-                    position=product_data.get('position', {
-                        'shelf_number': 1,
-                        'position_on_shelf': 1,
-                        'facing_count': 1,
-                        'confidence': 0.95
-                    }),
+                    quantity=Quantity(stack=1, columns=1, total_facings=1),
+                    shelf_level=1,
+                    position_on_shelf=1,
                     extraction_confidence=0.95,
                     confidence_category=ConfidenceLevel.VERY_HIGH,
                     extracted_by_model=self._select_model_for_agent(agent_number, context)
@@ -330,15 +337,19 @@ class ExtractionOrchestrator:
         if agent_number > 1:
             # Simulate finding missed products
             products.append(ProductExtraction(
+                section=SectionCoordinates(horizontal="2", vertical="Center"),
+                position=Position(
+                    l_position_on_section=3,
+                    r_position_on_section=3,
+                    l_empty=False,
+                    r_empty=False
+                ),
                 brand="Red Bull",
                 name="Energy Drink 250ml",
                 price=1.89,
-                position={
-                    'shelf_number': 2,
-                    'position_on_shelf': 3,
-                    'facing_count': 2,
-                    'confidence': 0.88
-                },
+                quantity=Quantity(stack=1, columns=2, total_facings=2),
+                shelf_level=2,
+                position_on_shelf=3,
                 extraction_confidence=0.88,
                 confidence_category=ConfidenceLevel.HIGH,
                 extracted_by_model=self._select_model_for_agent(agent_number, context)

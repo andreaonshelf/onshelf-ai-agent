@@ -96,7 +96,8 @@ class AIExtractionQueueProcessor:
     async def _process_queue_item(self, queue_item: Dict):
         """Process a single queue item"""
         queue_id = queue_item['id']
-        ready_media_id = queue_item['ready_media_id']
+        ready_media_id = queue_item.get('ready_media_id')
+        enhanced_image_path = queue_item.get('enhanced_image_path')
         
         try:
             # Mark as processing
@@ -109,9 +110,51 @@ class AIExtractionQueueProcessor:
                 ready_media_id=ready_media_id
             )
             
+            # Get image data - try multiple sources
+            image_data = None
+            if enhanced_image_path:
+                # Try to load from enhanced image path
+                try:
+                    with open(enhanced_image_path, 'rb') as f:
+                        image_data = f.read()
+                    logger.info(f"Loaded image from enhanced_image_path: {enhanced_image_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load from enhanced_image_path: {e}")
+            
+            if not image_data and ready_media_id:
+                # Try to get from ready_media table or other source
+                try:
+                    # Query for the actual image data
+                    media_result = self.supabase.table("ready_media") \
+                        .select("image_data, file_path") \
+                        .eq("id", ready_media_id) \
+                        .execute()
+                    
+                    if media_result.data:
+                        media_item = media_result.data[0]
+                        if media_item.get('image_data'):
+                            image_data = media_item['image_data']
+                        elif media_item.get('file_path'):
+                            with open(media_item['file_path'], 'rb') as f:
+                                image_data = f.read()
+                except Exception as e:
+                    logger.warning(f"Failed to load from ready_media: {e}")
+            
+            if not image_data:
+                raise Exception(f"No image data found for queue item {queue_id}")
+            
             # Process with enhanced AI agent
             start_time = time.time()
-            result = await self.agent.achieve_target_accuracy_enhanced(ready_media_id)
+            
+            # Use the master orchestrator for real processing
+            from ..orchestrator.master_orchestrator import MasterOrchestrator
+            orchestrator = MasterOrchestrator(self.config)
+            
+            # Process the image with real AI extraction
+            result = await orchestrator.achieve_target_accuracy(str(queue_id), {
+                'primary': image_data
+            })
+            
             processing_duration = time.time() - start_time
             
             # Update queue with results
@@ -122,7 +165,7 @@ class AIExtractionQueueProcessor:
                 component="queue_processor",
                 queue_id=queue_id,
                 ready_media_id=ready_media_id,
-                final_accuracy=result.accuracy,
+                final_accuracy=result.final_accuracy if hasattr(result, 'final_accuracy') else 0.0,
                 duration=processing_duration
             )
             
@@ -172,33 +215,72 @@ class AIExtractionQueueProcessor:
     async def _update_queue_with_results(self, queue_id: str, result, processing_duration: float):
         """Update queue item with extraction results"""
         try:
-            # Extract results from the agent result
+            # Extract results from the master orchestrator result
             extraction_result = {
-                "products": result.products if hasattr(result, 'products') else [],
-                "shelf_structure": result.shelf_structure if hasattr(result, 'shelf_structure') else {},
-                "accuracy_score": result.accuracy if hasattr(result, 'accuracy') else 0.0,
-                "models_used": result.models_used if hasattr(result, 'models_used') else [],
-                "iterations": result.iterations if hasattr(result, 'iterations') else 1,
+                "products": [],
+                "shelf_structure": {},
+                "accuracy_score": 0.0,
+                "models_used": [],
+                "iterations": 1,
                 "processing_time": processing_duration
             }
             
             planogram_result = {
                 "planogram_id": f"planogram_{queue_id}",
-                "shelves": result.shelves if hasattr(result, 'shelves') else [],
-                "canvas_data": result.canvas_data if hasattr(result, 'canvas_data') else None,
-                "svg_data": result.svg_data if hasattr(result, 'svg_data') else None
+                "shelves": [],
+                "canvas_data": None,
+                "svg_data": None
             }
+            
+            final_accuracy = 0.0
+            iterations_completed = 1
+            api_cost = 0.0
+            
+            # Extract data based on result type
+            if hasattr(result, 'final_accuracy'):
+                final_accuracy = result.final_accuracy
+            elif hasattr(result, 'accuracy'):
+                final_accuracy = result.accuracy
+                
+            if hasattr(result, 'iterations_completed'):
+                iterations_completed = result.iterations_completed
+            elif hasattr(result, 'iterations'):
+                iterations_completed = result.iterations
+                
+            if hasattr(result, 'total_api_cost'):
+                api_cost = result.total_api_cost
+            elif hasattr(result, 'cost'):
+                api_cost = result.cost
+                
+            # Extract extraction data
+            if hasattr(result, 'best_extraction'):
+                best_extraction = result.best_extraction
+                if hasattr(best_extraction, 'products'):
+                    extraction_result["products"] = [p.dict() if hasattr(p, 'dict') else p for p in best_extraction.products]
+                if hasattr(best_extraction, 'shelf_structure'):
+                    extraction_result["shelf_structure"] = best_extraction.shelf_structure.dict() if hasattr(best_extraction.shelf_structure, 'dict') else best_extraction.shelf_structure
+                extraction_result["accuracy_score"] = final_accuracy
+                
+            # Extract planogram data
+            if hasattr(result, 'best_planogram'):
+                best_planogram = result.best_planogram
+                if hasattr(best_planogram, 'shelves'):
+                    planogram_result["shelves"] = [s.dict() if hasattr(s, 'dict') else s for s in best_planogram.shelves]
+                if hasattr(best_planogram, 'canvas_data'):
+                    planogram_result["canvas_data"] = best_planogram.canvas_data
+                if hasattr(best_planogram, 'svg_data'):
+                    planogram_result["svg_data"] = best_planogram.svg_data
             
             update_data = {
                 "status": "completed",
                 "completed_at": datetime.utcnow().isoformat(),
                 "extraction_result": extraction_result,
                 "planogram_result": planogram_result,
-                "final_accuracy": result.accuracy if hasattr(result, 'accuracy') else 0.0,
-                "iterations_completed": result.iterations if hasattr(result, 'iterations') else 1,
+                "final_accuracy": final_accuracy,
+                "iterations_completed": iterations_completed,
                 "processing_duration_seconds": int(processing_duration),
-                "api_cost": result.cost if hasattr(result, 'cost') else 0.0,
-                "human_review_required": (result.accuracy if hasattr(result, 'accuracy') else 0.0) < 0.85
+                "api_cost": api_cost,
+                "human_review_required": final_accuracy < 0.85
             }
             
             self.supabase.table("ai_extraction_queue") \
@@ -210,7 +292,7 @@ class AIExtractionQueueProcessor:
                 f"Queue item {queue_id} updated with results",
                 component="queue_processor",
                 queue_id=queue_id,
-                accuracy=result.accuracy if hasattr(result, 'accuracy') else 0.0
+                accuracy=final_accuracy
             )
                 
         except Exception as e:
