@@ -110,57 +110,16 @@ class AIExtractionQueueProcessor:
                 ready_media_id=ready_media_id
             )
             
-            # Get image data - try multiple sources
-            image_data = None
-            if enhanced_image_path:
-                # Try to load from Supabase storage
-                try:
-                    # Download from Supabase storage
-                    image_data = self.supabase.storage.from_("retail-captures").download(enhanced_image_path)
-                    logger.info(f"Loaded image from Supabase storage: {enhanced_image_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to load from Supabase storage: {e}")
-                    # Fallback to local file
-                    try:
-                        with open(enhanced_image_path, 'rb') as f:
-                            image_data = f.read()
-                        logger.info(f"Loaded image from local path: {enhanced_image_path}")
-                    except Exception as e2:
-                        logger.warning(f"Failed to load from local path: {e2}")
-            
-            if not image_data and ready_media_id:
-                # Try to get from ready_media table or other source
-                try:
-                    # Query for the actual image data
-                    media_result = self.supabase.table("ready_media") \
-                        .select("image_data, file_path") \
-                        .eq("id", ready_media_id) \
-                        .execute()
-                    
-                    if media_result.data:
-                        media_item = media_result.data[0]
-                        if media_item.get('image_data'):
-                            image_data = media_item['image_data']
-                        elif media_item.get('file_path'):
-                            with open(media_item['file_path'], 'rb') as f:
-                                image_data = f.read()
-                except Exception as e:
-                    logger.warning(f"Failed to load from ready_media: {e}")
-            
-            if not image_data:
-                raise Exception(f"No image data found for queue item {queue_id}")
-            
-            # Process with enhanced AI agent
+            # Process with master orchestrator (it handles image loading)
             start_time = time.time()
             
             # Use the master orchestrator for real processing
             from ..orchestrator.master_orchestrator import MasterOrchestrator
             orchestrator = MasterOrchestrator(self.config)
             
-            # Process the image with real AI extraction
-            result = await orchestrator.achieve_target_accuracy(str(queue_id), {
-                'primary': image_data
-            })
+            # Process with master orchestrator using upload_id
+            upload_id = queue_item['upload_id']
+            result = await orchestrator.achieve_target_accuracy(upload_id)
             
             processing_duration = time.time() - start_time
             

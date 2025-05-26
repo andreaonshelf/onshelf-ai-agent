@@ -202,13 +202,46 @@ class MasterOrchestrator:
         return result
     
     async def _get_images(self, upload_id: str) -> Dict[str, bytes]:
-        """Get images for processing"""
-        # TODO: Implement actual image loading from Supabase
-        # For now, return mock data
-        return {
-            'enhanced': b'mock_image_data',
-            'original': b'mock_image_data'
-        }
+        """Get images for processing from Supabase storage"""
+        from supabase import create_client
+        
+        try:
+            supabase = create_client(self.config.supabase_url, self.config.supabase_service_key)
+            
+            # Get upload info from uploads table
+            upload_result = supabase.table("uploads").select("file_path").eq("id", upload_id).execute()
+            
+            if not upload_result.data:
+                raise Exception(f"Upload {upload_id} not found in uploads table")
+            
+            file_path = upload_result.data[0]["file_path"]
+            
+            # Download image from Supabase storage
+            image_data = supabase.storage.from_("retail-captures").download(file_path)
+            
+            logger.info(
+                f"Loaded image for upload {upload_id}: {len(image_data)} bytes",
+                component="master_orchestrator",
+                upload_id=upload_id,
+                file_path=file_path,
+                size_mb=len(image_data) / 1024 / 1024
+            )
+            
+            # Return both enhanced and original as the same image for now
+            return {
+                'enhanced': image_data,
+                'original': image_data,
+                'overview': image_data  # Some steps expect 'overview'
+            }
+            
+        except Exception as e:
+            logger.error(
+                f"Failed to load images for upload {upload_id}: {e}",
+                component="master_orchestrator",
+                upload_id=upload_id,
+                error=str(e)
+            )
+            raise Exception(f"No image data found for queue item {upload_id}: {e}")
     
     def _get_focus_areas_from_previous(self, iteration_history: List[Dict]) -> List[Dict]:
         """Extract focus areas from previous iteration failures"""

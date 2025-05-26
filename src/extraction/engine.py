@@ -417,13 +417,90 @@ class ModularExtractionEngine:
                     else:
                         prompt = prompt.replace(placeholder, str(serializable_value))
         
-        # Choose the right model
-        if step.model == AIModelType.CLAUDE_3_SONNET:
-            return await self._execute_with_claude(prompt, inputs["images"], step.output_schema, agent_id)
-        elif step.model == AIModelType.GPT4O_LATEST:
-            return await self._execute_with_gpt4o(prompt, inputs["images"], step.output_schema, agent_id)
-        elif step.model == AIModelType.GEMINI_2_FLASH:
-            return await self._execute_with_gemini(prompt, inputs["images"], step.output_schema, agent_id)
+        # Execute with automatic model fallback for robustness
+        return await self._execute_with_fallback(step.model, prompt, inputs["images"], step.output_schema, agent_id)
+    
+    async def _execute_with_fallback(self, primary_model: AIModelType, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute step with automatic model fallback for maximum reliability"""
+        
+        # Define fallback order: try primary model first, then fallbacks
+        fallback_chain = [primary_model]
+        
+        # Add other models as fallbacks (avoid duplicates)
+        all_models = [AIModelType.CLAUDE_3_SONNET, AIModelType.GPT4O_LATEST, AIModelType.GEMINI_2_FLASH]
+        for model in all_models:
+            if model != primary_model:
+                fallback_chain.append(model)
+        
+        last_error = None
+        
+        for i, model in enumerate(fallback_chain):
+            is_fallback = i > 0
+            
+            try:
+                if model == AIModelType.CLAUDE_3_SONNET:
+                    result = await self._execute_with_claude(prompt, images, output_schema, agent_id)
+                elif model == AIModelType.GPT4O_LATEST:
+                    result = await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
+                elif model == AIModelType.GEMINI_2_FLASH:
+                    result = await self._execute_with_gemini(prompt, images, output_schema, agent_id)
+                else:
+                    continue
+                
+                # Success! Log if we used a fallback
+                if is_fallback:
+                    logger.info(
+                        f"Fallback successful: {model.value} worked after {primary_model.value} failed",
+                        component="extraction_engine",
+                        agent_id=agent_id,
+                        primary_model=primary_model.value,
+                        successful_model=model.value,
+                        attempt_number=i+1
+                    )
+                
+                return result
+                
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+                
+                # Check if it's a content moderation or similar policy issue
+                is_content_issue = any(phrase in error_msg.lower() for phrase in [
+                    "could not process image",
+                    "content policy",
+                    "safety",
+                    "inappropriate",
+                    "invalid_request_error"
+                ])
+                
+                if is_fallback:
+                    logger.warning(
+                        f"Fallback model {model.value} also failed: {error_msg[:100]}",
+                        component="extraction_engine",
+                        agent_id=agent_id,
+                        model=model.value,
+                        error_type="content_moderation" if is_content_issue else "api_error"
+                    )
+                else:
+                    logger.warning(
+                        f"Primary model {model.value} failed, trying fallbacks: {error_msg[:100]}",
+                        component="extraction_engine",
+                        agent_id=agent_id,
+                        model=model.value,
+                        error_type="content_moderation" if is_content_issue else "api_error"
+                    )
+                
+                # Continue to next model in chain
+                continue
+        
+        # All models failed
+        logger.error(
+            f"All models failed for this step. Last error: {str(last_error)[:200]}",
+            component="extraction_engine",
+            agent_id=agent_id,
+            tried_models=[m.value for m in fallback_chain]
+        )
+        raise Exception(f"All AI models failed. Last error: {last_error}")
     
     def _compress_image_for_model(self, img_data: bytes, model_type: str, img_name: str = "image") -> bytes:
         """Compress image only if needed for specific model limits"""
