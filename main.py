@@ -420,6 +420,7 @@ async def root():
                 display: flex;
                 height: 100vh;
                 overflow: hidden;
+                position: relative;
             }
             
             /* Left Sidebar - Image Selection */
@@ -429,8 +430,10 @@ async def root():
                 border-right: 1px solid #e2e8f0;
                 display: flex;
                 flex-direction: column;
-                transition: transform 0.3s ease;
+                transition: all 0.3s ease;
                 z-index: 100;
+                position: relative;
+                flex-shrink: 0;
             }
             
             .left-sidebar.collapsed {
@@ -676,6 +679,7 @@ async def root():
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
+                width: 100%;
             }
             
             /* Header */
@@ -739,9 +743,14 @@ async def root():
             
             /* Queue Interface */
             .queue-interface {
+                display: none;
                 padding: 30px;
                 height: 100%;
                 overflow-y: auto;
+            }
+            
+            .queue-interface.active {
+                display: block;
             }
             
             .queue-stats {
@@ -777,9 +786,7 @@ async def root():
             }
             
             .queue-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-                gap: 20px;
+                margin-top: 20px;
             }
             
             .queue-item {
@@ -964,18 +971,17 @@ async def root():
                 background: #d97706;
             }
             
-            /* Simple Mode - 2 Panel Layout */
-            .simple-mode {
-                display: none;
-                height: 100%;
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-                padding: 20px;
-            }
-            
-            .simple-mode.active {
-                display: grid;
-            }
+                         /* Simple Mode - 2 Panel Layout */
+             .simple-mode {
+                 display: none;
+                 height: 100%;
+                 padding: 20px;
+                 flex-direction: column;
+             }
+             
+             .simple-mode.active {
+                 display: flex;
+             }
             
             .image-panel,
             .planogram-panel {
@@ -1718,12 +1724,11 @@ async def root():
                 <!-- Header -->
                 <div class="header">
                     <h1>🤖 OnShelf AI Dashboard</h1>
-                    <div class="mode-selector">
-                        <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
-                        <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
-                        <button class="mode-btn" onclick="switchMode('comparison')">Comparison</button>
-                        <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
-                    </div>
+                                         <div class="mode-selector">
+                         <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
+                         <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
+                         <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
+                     </div>
                 </div>
                 
                 <!-- Breadcrumb -->
@@ -1734,7 +1739,7 @@ async def root():
                 <!-- Content Area -->
                 <div class="content-area">
                     <!-- Queue Interface -->
-                    <div id="queue-interface" class="queue-interface">
+                    <div id="queue-interface" class="queue-interface active">
                         <div class="queue-stats">
                             <div class="stat-card review">
                                 <div class="stat-number" id="reviewCount">0</div>
@@ -1759,183 +1764,110 @@ async def root():
                         </div>
                     </div>
                     
-                    <!-- Simple Mode - 2 Panel Layout -->
-                    <div id="simple-mode" class="simple-mode">
-                        <div class="image-panel">
-                            <div class="panel-header">
-                                <h3>📷 Original Image</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="image-viewer">
-                                    <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
-                                    <div id="imageLoading" class="loading">Loading image...</div>
-                                    <div class="image-controls">
-                                        <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
-                                        <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
-                                        <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
-                                        <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="planogram-panel">
-                            <div class="panel-header">
-                                <h3>📊 Generated Planogram</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div id="planogramViewer" class="image-viewer">
-                                    <div class="loading">Loading planogram...</div>
-                                </div>
-                                
-                                <div class="rating-system">
-                                    <h4>⭐ Extraction Quality</h4>
-                                    <div class="star-rating" data-rating="extraction">
-                                        <span class="star" data-value="1">★</span>
-                                        <span class="star" data-value="2">★</span>
-                                        <span class="star" data-value="3">★</span>
-                                        <span class="star" data-value="4">★</span>
-                                        <span class="star" data-value="5">★</span>
-                                    </div>
-                                    
-                                    <div class="feedback-area">
-                                        <label>What worked well:</label>
-                                        <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
-                                    </div>
-                                    
-                                    <h4 style="margin-top: 20px;">⭐ Planogram Quality</h4>
-                                    <div class="star-rating" data-rating="planogram">
-                                        <span class="star" data-value="1">★</span>
-                                        <span class="star" data-value="2">★</span>
-                                        <span class="star" data-value="3">★</span>
-                                        <span class="star" data-value="4">★</span>
-                                        <span class="star" data-value="5">★</span>
-                                    </div>
-                                    
-                                    <div class="feedback-area">
-                                        <label>Needs improvement:</label>
-                                        <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
-                                    </div>
-                                    
-                                    <div style="margin-top: 20px; display: flex; gap: 10px;">
-                                        <button class="btn btn-primary" onclick="switchMode('comparison')">Show Details</button>
-                                        <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
-                                        <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                         <!-- Simple Mode - 2 Panel Layout -->
+                     <div id="simple-mode" class="simple-mode">
+                         <div class="simple-content" style="height: 100%; overflow-y: auto; padding: 20px;">
+                             <!-- Top Panels: Image and Planogram Only -->
+                             <div class="top-panels" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; height: 400px;">
+                                 <div class="image-panel">
+                                     <div class="panel-header">
+                                         <h3>📷 Original Image</h3>
+                                     </div>
+                                     <div class="panel-content" style="height: 100%;">
+                                         <div class="image-viewer" style="height: 100%;">
+                                             <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
+                                             <div id="imageLoading" class="loading">Loading image...</div>
+                                             <div class="image-controls">
+                                                 <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
+                                                 <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
+                                                 <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
+                                                 <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                                 
+                                 <div class="planogram-panel">
+                                     <div class="panel-header">
+                                         <h3>📊 Generated Planogram</h3>
+                                     </div>
+                                     <div class="panel-content" style="height: 100%;">
+                                         <div id="planogramViewer" style="height: 100%; overflow: auto;">
+                                             <div class="loading">Loading planogram...</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                             
+                             <!-- Separate Dashboard and Controls Row -->
+                             <div class="dashboard-controls-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; height: 120px;">
+                                 <!-- Compact Stats Dashboard - Separate Container -->
+                                 <div id="compactStatsDashboard" class="compact-stats-dashboard" style="width: 100%; height: 100%;">
+                                     <!-- Stats will be populated by JavaScript -->
+                                 </div>
+                                 
+                                 <!-- Display Controls - Separate Container -->
+                                 <div id="planogramControls" class="planogram-controls" style="width: 100%; height: 100%;">
+                                     <!-- Controls will be populated by JavaScript -->
+                                 </div>
+                             </div>
+                             
+                             <!-- Full Width Products Table -->
+                             <div id="extractedProductsTable" class="extracted-products-table" style="width: 100%; margin-bottom: 20px;">
+                                 <!-- Table will be populated by JavaScript -->
+                             </div>
+                             
+                             <!-- Rating System -->
+                             <div class="rating-system">
+                                 <h4>⭐ Extraction Quality</h4>
+                                 <div class="star-rating" data-rating="extraction">
+                                     <span class="star" data-value="1">★</span>
+                                     <span class="star" data-value="2">★</span>
+                                     <span class="star" data-value="3">★</span>
+                                     <span class="star" data-value="4">★</span>
+                                     <span class="star" data-value="5">★</span>
+                                 </div>
+                                 
+                                 <div class="feedback-area">
+                                     <label>What worked well:</label>
+                                     <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
+                                 </div>
+                                 
+                                 <h4 style="margin-top: 20px;">⭐ Planogram Quality</h4>
+                                 <div class="star-rating" data-rating="planogram">
+                                     <span class="star" data-value="1">★</span>
+                                     <span class="star" data-value="2">★</span>
+                                     <span class="star" data-value="3">★</span>
+                                     <span class="star" data-value="4">★</span>
+                                     <span class="star" data-value="5">★</span>
+                                 </div>
+                                 
+                                 <div class="feedback-area">
+                                     <label>Needs improvement:</label>
+                                     <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
+                                 </div>
+                                 
+                                 <div style="margin-top: 20px; display: flex; gap: 10px;">
+                                     <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
+                                     <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
                     
-                    <!-- Comparison Mode - System Comparison -->
-                    <div id="comparison-mode" class="comparison-mode">
-                        <div class="agent-tabs">
-                            <button class="agent-tab active" onclick="switchAgent('agent1')">Agent 1: Custom Consensus</button>
-                            <button class="agent-tab" onclick="switchAgent('agent2')">Agent 2: LangGraph</button>
-                            <button class="agent-tab" onclick="switchAgent('agent3')">Agent 3: Hybrid</button>
-                        </div>
-                        
-                        <div id="agent1" class="agent-content">
-                            <div class="agent-metrics">
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent1Accuracy">--</div>
-                                    <div class="metric-label">Accuracy</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent1Speed">--</div>
-                                    <div class="metric-label">Processing Time</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent1Cost">--</div>
-                                    <div class="metric-label">API Cost</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent1Products">--</div>
-                                    <div class="metric-label">Products Found</div>
-                                </div>
-                            </div>
-                            
-                            <div class="extraction-results">
-                                <h4>Extraction Results</h4>
-                                <div id="agent1Results" class="results-grid">
-                                    <!-- Results will be loaded here -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="agent2" class="agent-content" style="display: none;">
-                            <div class="agent-metrics">
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent2Accuracy">--</div>
-                                    <div class="metric-label">Accuracy</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent2Speed">--</div>
-                                    <div class="metric-label">Processing Time</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent2Cost">--</div>
-                                    <div class="metric-label">API Cost</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent2Products">--</div>
-                                    <div class="metric-label">Products Found</div>
-                                </div>
-                            </div>
-                            
-                            <div class="extraction-results">
-                                <h4>Extraction Results</h4>
-                                <div id="agent2Results" class="results-grid">
-                                    <!-- Results will be loaded here -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="agent3" class="agent-content" style="display: none;">
-                            <div class="agent-metrics">
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent3Accuracy">--</div>
-                                    <div class="metric-label">Accuracy</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent3Speed">--</div>
-                                    <div class="metric-label">Processing Time</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent3Cost">--</div>
-                                    <div class="metric-label">API Cost</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value" id="agent3Products">--</div>
-                                    <div class="metric-label">Products Found</div>
-                                </div>
-                            </div>
-                            
-                            <div class="extraction-results">
-                                <h4>Extraction Results</h4>
-                                <div id="agent3Results" class="results-grid">
-                                    <!-- Results will be loaded here -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 20px; display: flex; gap: 10px;">
-                            <button class="btn btn-secondary" onclick="switchMode('simple')">Simple View</button>
-                            <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
-                            <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
-                        </div>
-                    </div>
+                    
                     
                     <!-- Advanced Mode - Technical Deep Dive with Tabs -->
                     <div id="advanced-mode" class="advanced-mode">
-                        <!-- Advanced Mode Tabs -->
-                        <div class="advanced-tabs">
-                            <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
-                            <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
-                            <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
-                            <button class="advanced-tab" onclick="switchAdvancedTab('iterations')">🔄 Iterations</button>
-                            <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
-                        </div>
+                                                 <!-- Advanced Mode Tabs -->
+                         <div class="advanced-tabs">
+                             <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
+                             <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
+                             <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
+                             <button class="advanced-tab" onclick="switchAdvancedTab('iterations')">🔄 Iterations</button>
+                             <button class="advanced-tab" onclick="switchAdvancedTab('comparison')">⚖️ System Comparison</button>
+                             <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
+                         </div>
                         
                         <!-- Overview Tab - 4 Panel Grid -->
                         <div id="advanced-overview" class="advanced-tab-content active">
@@ -2134,14 +2066,109 @@ async def root():
                             </div>
                         </div>
                         
-                        <!-- Orchestrator Tab -->
-                        <div id="advanced-orchestrator" class="advanced-tab-content">
-                            <div class="orchestrator-container">
-                                <div class="orchestrator-flow" id="orchestratorFlow">
-                                    <!-- Flow steps will be loaded here -->
-                                </div>
-                            </div>
-                        </div>
+                                                 <!-- System Comparison Tab -->
+                         <div id="advanced-comparison" class="advanced-tab-content">
+                             <div class="comparison-container">
+                                 <div class="agent-tabs">
+                                     <button class="agent-tab active" onclick="switchAgent('agent1')">Agent 1: Custom Consensus</button>
+                                     <button class="agent-tab" onclick="switchAgent('agent2')">Agent 2: LangGraph</button>
+                                     <button class="agent-tab" onclick="switchAgent('agent3')">Agent 3: Hybrid</button>
+                                 </div>
+                                 
+                                 <div id="agent1" class="agent-content">
+                                     <div class="agent-metrics">
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent1Accuracy">--</div>
+                                             <div class="metric-label">Accuracy</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent1Speed">--</div>
+                                             <div class="metric-label">Processing Time</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent1Cost">--</div>
+                                             <div class="metric-label">API Cost</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent1Products">--</div>
+                                             <div class="metric-label">Products Found</div>
+                                         </div>
+                                     </div>
+                                     
+                                     <div class="extraction-results">
+                                         <h4>Extraction Results</h4>
+                                         <div id="agent1Results" class="results-grid">
+                                             <!-- Results will be loaded here -->
+                                         </div>
+                                     </div>
+                                 </div>
+                                 
+                                 <div id="agent2" class="agent-content" style="display: none;">
+                                     <div class="agent-metrics">
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent2Accuracy">--</div>
+                                             <div class="metric-label">Accuracy</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent2Speed">--</div>
+                                             <div class="metric-label">Processing Time</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent2Cost">--</div>
+                                             <div class="metric-label">API Cost</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent2Products">--</div>
+                                             <div class="metric-label">Products Found</div>
+                                         </div>
+                                     </div>
+                                     
+                                     <div class="extraction-results">
+                                         <h4>Extraction Results</h4>
+                                         <div id="agent2Results" class="results-grid">
+                                             <!-- Results will be loaded here -->
+                                         </div>
+                                     </div>
+                                 </div>
+                                 
+                                 <div id="agent3" class="agent-content" style="display: none;">
+                                     <div class="agent-metrics">
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent3Accuracy">--</div>
+                                             <div class="metric-label">Accuracy</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent3Speed">--</div>
+                                             <div class="metric-label">Processing Time</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent3Cost">--</div>
+                                             <div class="metric-label">API Cost</div>
+                                         </div>
+                                         <div class="metric-card">
+                                             <div class="metric-value" id="agent3Products">--</div>
+                                             <div class="metric-label">Products Found</div>
+                                         </div>
+                                     </div>
+                                     
+                                     <div class="extraction-results">
+                                         <h4>Extraction Results</h4>
+                                         <div id="agent3Results" class="results-grid">
+                                             <!-- Results will be loaded here -->
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         <!-- Orchestrator Tab -->
+                         <div id="advanced-orchestrator" class="advanced-tab-content">
+                             <div class="orchestrator-container">
+                                 <div class="orchestrator-flow" id="orchestratorFlow">
+                                     <!-- Flow steps will be loaded here -->
+                                 </div>
+                             </div>
+                         </div>
                         
                         <div style="margin-top: 20px; display: flex; gap: 10px;">
                             <button class="btn btn-secondary" onclick="switchMode('simple')">Simple View</button>
@@ -2152,817 +2179,6 @@ async def root():
                 </div>
             </div>
         </div>
-        
-        <!-- Interactive Planogram Component - Embedded to avoid loading issues -->
-        <script>
-/**
- * Interactive Planogram Component - Phase 1: Visualization Only
- * Displays products in correct positions with proper stacking and gap detection
- */
-
-class InteractivePlanogram extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = {
-            planogramData: null,
-            loading: true,
-            error: null,
-            overlaySettings: {
-                showNames: true,
-                showPrices: true,
-                showFacings: true,
-                showConfidence: false,
-                showStacking: true
-            }
-        };
-    }
-
-    async componentDidMount() {
-        await this.loadPlanogramData();
-    }
-
-    async componentDidUpdate(prevProps) {
-        if (prevProps.imageId !== this.props.imageId) {
-            await this.loadPlanogramData();
-        }
-    }
-
-         async loadPlanogramData() {
-         if (!this.props.imageId) {
-             this.setState({ loading: false, error: "No image selected" });
-             return;
-         }
-
-         this.setState({ loading: true, error: null });
-
-         try {
-             const url = `/api/planogram/${this.props.imageId}/editable`;
-             console.log(`🔄 Loading planogram data for: ${this.props.imageId}`);
-             console.log(`🔗 Fetching URL: ${url}`);
-             
-             const response = await fetch(url);
-             console.log(`📡 Response status: ${response.status} ${response.statusText}`);
-             
-             if (!response.ok) {
-                 const errorText = await response.text();
-                 console.log(`❌ Error response body: ${errorText}`);
-                 throw new Error(`Failed to load planogram data: ${response.statusText}`);
-             }
-
-             const data = await response.json();
-             console.log('✅ Planogram data loaded:', data);
-             this.setState({ 
-                 planogramData: data,
-                 loading: false 
-             });
-
-         } catch (error) {
-             console.error('❌ Error loading planogram data:', error);
-             this.setState({ 
-                 loading: false, 
-                 error: error.message 
-             });
-         }
-     }
-
-         toggleOverlay = (setting) => {
-         this.setState(prevState => ({
-             overlaySettings: {
-                 ...prevState.overlaySettings,
-                 [setting]: !prevState.overlaySettings[setting]
-             }
-         }));
-     }
-
-     testDirectFetch = async () => {
-         try {
-             const url = `/api/planogram/demo/editable`;
-             console.log(`🧪 Testing direct fetch to: ${url}`);
-             const response = await fetch(url);
-             const data = await response.json();
-             console.log('🧪 Direct fetch result:', data);
-             alert('Direct fetch successful! Check console for details.');
-         } catch (error) {
-             console.error('🧪 Direct fetch failed:', error);
-             alert(`Direct fetch failed: ${error.message}`);
-         }
-     }
-
-    renderLoadingState() {
-        return React.createElement('div', { className: 'planogram-loading' },
-            React.createElement('div', { className: 'loading-spinner' }),
-            React.createElement('p', null, 'Loading planogram...')
-        );
-    }
-
-         renderErrorState() {
-         return React.createElement('div', { className: 'planogram-error' },
-             React.createElement('h3', null, '❌ Failed to Load Planogram'),
-             React.createElement('p', null, this.state.error),
-             React.createElement('button', { 
-                 className: 'btn btn-primary',
-                 onClick: () => this.loadPlanogramData()
-             }, '🔄 Retry'),
-             React.createElement('button', { 
-                 className: 'btn btn-secondary',
-                 style: { marginLeft: '10px' },
-                 onClick: () => this.testDirectFetch()
-             }, '🧪 Test Direct Fetch'),
-             React.createElement('details', { style: { marginTop: '20px' } },
-                 React.createElement('summary', null, '🔍 Debug Info'),
-                 React.createElement('pre', { style: { fontSize: '12px', background: '#f5f5f5', padding: '10px' } },
-                     `Image ID: ${this.props.imageId}\nMode: ${this.props.mode}\nError: ${this.state.error}`
-                 )
-             )
-         );
-     }
-
-         renderModernOverlayControls() {
-         const { overlaySettings } = this.state;
-
-         return React.createElement('div', { 
-             className: 'modern-overlay-controls',
-             style: {
-                 background: 'rgba(255, 255, 255, 0.95)',
-                 backdropFilter: 'blur(10px)',
-                 borderRadius: '16px',
-                 padding: '24px',
-                 marginTop: '24px',
-                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-                 border: '1px solid rgba(255, 255, 255, 0.2)'
-             }
-         },
-             React.createElement('h4', { 
-                 style: { 
-                     margin: '0 0 20px 0', 
-                     fontSize: '20px', 
-                     fontWeight: '700',
-                     color: '#2d3748',
-                     textAlign: 'center'
-                 } 
-             }, '🎛️ Display Controls'),
-             React.createElement('div', { 
-                 className: 'modern-overlay-toggles',
-                 style: {
-                     display: 'grid',
-                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                     gap: '16px'
-                 }
-             },
-                 React.createElement('label', {
-                     style: {
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '12px',
-                         padding: '12px 16px',
-                         background: overlaySettings.showNames ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' : '#f7fafc',
-                         color: overlaySettings.showNames ? 'white' : '#4a5568',
-                         borderRadius: '12px',
-                         cursor: 'pointer',
-                         transition: 'all 0.3s ease',
-                         fontWeight: '600',
-                         fontSize: '14px'
-                     }
-                 },
-                     React.createElement('input', {
-                         type: 'checkbox',
-                         checked: overlaySettings.showNames,
-                         onChange: () => this.toggleOverlay('showNames'),
-                         style: { display: 'none' }
-                     }),
-                     React.createElement('span', null, overlaySettings.showNames ? '✅' : '⬜'),
-                     ' Product Names'
-                 ),
-                 React.createElement('label', {
-                     style: {
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '12px',
-                         padding: '12px 16px',
-                         background: overlaySettings.showPrices ? 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' : '#f7fafc',
-                         color: overlaySettings.showPrices ? 'white' : '#4a5568',
-                         borderRadius: '12px',
-                         cursor: 'pointer',
-                         transition: 'all 0.3s ease',
-                         fontWeight: '600',
-                         fontSize: '14px'
-                     }
-                 },
-                     React.createElement('input', {
-                         type: 'checkbox',
-                         checked: overlaySettings.showPrices,
-                         onChange: () => this.toggleOverlay('showPrices'),
-                         style: { display: 'none' }
-                     }),
-                     React.createElement('span', null, overlaySettings.showPrices ? '✅' : '⬜'),
-                     ' Prices'
-                 ),
-                 React.createElement('label', {
-                     style: {
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '12px',
-                         padding: '12px 16px',
-                         background: overlaySettings.showFacings ? 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' : '#f7fafc',
-                         color: overlaySettings.showFacings ? '#2d3748' : '#4a5568',
-                         borderRadius: '12px',
-                         cursor: 'pointer',
-                         transition: 'all 0.3s ease',
-                         fontWeight: '600',
-                         fontSize: '14px'
-                     }
-                 },
-                     React.createElement('input', {
-                         type: 'checkbox',
-                         checked: overlaySettings.showFacings,
-                         onChange: () => this.toggleOverlay('showFacings'),
-                         style: { display: 'none' }
-                     }),
-                     React.createElement('span', null, overlaySettings.showFacings ? '✅' : '⬜'),
-                     ' Facing Counts'
-                 ),
-                 React.createElement('label', {
-                     style: {
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '12px',
-                         padding: '12px 16px',
-                         background: overlaySettings.showConfidence ? 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' : '#f7fafc',
-                         color: overlaySettings.showConfidence ? '#2d3748' : '#4a5568',
-                         borderRadius: '12px',
-                         cursor: 'pointer',
-                         transition: 'all 0.3s ease',
-                         fontWeight: '600',
-                         fontSize: '14px'
-                     }
-                 },
-                     React.createElement('input', {
-                         type: 'checkbox',
-                         checked: overlaySettings.showConfidence,
-                         onChange: () => this.toggleOverlay('showConfidence'),
-                         style: { display: 'none' }
-                     }),
-                     React.createElement('span', null, overlaySettings.showConfidence ? '✅' : '⬜'),
-                     ' Confidence Scores'
-                 ),
-                 React.createElement('label', {
-                     style: {
-                         display: 'flex',
-                         alignItems: 'center',
-                         gap: '12px',
-                         padding: '12px 16px',
-                         background: overlaySettings.showStacking ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f7fafc',
-                         color: overlaySettings.showStacking ? 'white' : '#4a5568',
-                         borderRadius: '12px',
-                         cursor: 'pointer',
-                         transition: 'all 0.3s ease',
-                         fontWeight: '600',
-                         fontSize: '14px'
-                     }
-                 },
-                     React.createElement('input', {
-                         type: 'checkbox',
-                         checked: overlaySettings.showStacking,
-                         onChange: () => this.toggleOverlay('showStacking'),
-                         style: { display: 'none' }
-                     }),
-                     React.createElement('span', null, overlaySettings.showStacking ? '✅' : '⬜'),
-                     ' Stacking Indicators'
-                 )
-             )
-         );
-     }
-
-         renderPlanogram() {
-         const { planogramData } = this.state;
-         
-         if (!planogramData || !planogramData.planogram) {
-             return React.createElement('div', { className: 'planogram-error' },
-                 React.createElement('p', null, 'Invalid planogram data structure')
-             );
-         }
-         
-         const { planogram } = planogramData;
-         const { shelves, structure } = planogram;
-         
-         if (!shelves || !Array.isArray(shelves)) {
-             return React.createElement('div', { className: 'planogram-error' },
-                 React.createElement('p', null, 'No shelf data available')
-             );
-         }
-
-         // Sort shelves from top to bottom (highest shelf number first)
-         const sortedShelves = shelves.sort((a, b) => b.shelf_number - a.shelf_number);
-         
-         // Calculate metadata from shelves
-         const totalProducts = shelves.reduce((sum, shelf) => sum + (shelf.product_count || 0), 0);
-         const hasStacking = shelves.some(shelf => 
-             shelf.sections && Object.values(shelf.sections).some(section =>
-                 section && section.some(slot => 
-                     slot.type === 'product' && slot.data && slot.data.quantity && slot.data.quantity.stack > 1
-                 )
-             )
-         );
-         const avgConfidence = 0.9; // Default for demo
-         
-         console.log('📊 Planogram stats:', { totalProducts, shelfCount: shelves.length, hasStacking });
-         console.log('🔍 Raw shelves data:', shelves);
-         console.log('🔍 First shelf sections:', shelves[0]?.sections);
-         console.log('🔍 First product example:', shelves[0]?.sections?.Left?.[0]);
-
-                          return React.createElement('div', { 
-             className: 'modern-planogram-container',
-             style: {
-                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                 minHeight: '100vh',
-                 padding: '20px',
-                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-             }
-         },
-             // Modern Header
-             React.createElement('div', { 
-                 className: 'modern-planogram-header',
-                 style: {
-                     background: 'rgba(255, 255, 255, 0.95)',
-                     backdropFilter: 'blur(10px)',
-                     borderRadius: '16px',
-                     padding: '24px',
-                     marginBottom: '24px',
-                     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-                     border: '1px solid rgba(255, 255, 255, 0.2)'
-                 }
-             },
-                 React.createElement('h2', { 
-                     style: { 
-                         margin: '0 0 16px 0', 
-                         fontSize: '28px', 
-                         fontWeight: '700',
-                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                         WebkitBackgroundClip: 'text',
-                         WebkitTextFillColor: 'transparent',
-                         backgroundClip: 'text'
-                     } 
-                 }, '🏪 Interactive Planogram'),
-                 React.createElement('div', { 
-                     style: { 
-                         display: 'grid', 
-                         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                         gap: '16px',
-                         marginTop: '16px'
-                     } 
-                 },
-                     React.createElement('div', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                             color: 'white',
-                             padding: '16px',
-                             borderRadius: '12px',
-                             textAlign: 'center',
-                             boxShadow: '0 4px 16px rgba(79, 172, 254, 0.3)'
-                         } 
-                     },
-                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, totalProducts),
-                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.9 } }, 'Products')
-                     ),
-                     React.createElement('div', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                             color: 'white',
-                             padding: '16px',
-                             borderRadius: '12px',
-                             textAlign: 'center',
-                             boxShadow: '0 4px 16px rgba(250, 112, 154, 0.3)'
-                         } 
-                     },
-                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, shelves.length),
-                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.9 } }, 'Shelves')
-                     ),
-                     React.createElement('div', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                             color: '#2d3748',
-                             padding: '16px',
-                             borderRadius: '12px',
-                             textAlign: 'center',
-                             boxShadow: '0 4px 16px rgba(168, 237, 234, 0.3)'
-                         } 
-                     },
-                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, `${Math.round(avgConfidence * 100)}%`),
-                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.8 } }, 'Confidence')
-                     ),
-                     hasStacking && React.createElement('div', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-                             color: '#2d3748',
-                             padding: '16px',
-                             borderRadius: '12px',
-                             textAlign: 'center',
-                             boxShadow: '0 4px 16px rgba(252, 182, 159, 0.3)'
-                         } 
-                     },
-                         React.createElement('div', { style: { fontSize: '18px', fontWeight: '700' } }, '📚'),
-                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.8 } }, 'Stacking')
-                     )
-                 )
-             ),
-             // Modern Shelf Container
-             React.createElement('div', { 
-                 className: 'modern-shelves-container',
-                 style: {
-                     display: 'flex',
-                     flexDirection: 'column',
-                     gap: '24px'
-                 }
-             },
-                 sortedShelves.map(shelf => 
-                     React.createElement(ModernShelfComponent, {
-                         key: shelf.shelf_number,
-                         shelfData: shelf,
-                         overlaySettings: this.state.overlaySettings
-                     })
-                 )
-             ),
-             // Modern Overlay Controls
-             this.renderModernOverlayControls()
-         );
-    }
-
-    render() {
-        const { loading, error, planogramData } = this.state;
-
-        if (loading) {
-            return this.renderLoadingState();
-        }
-
-        if (error) {
-            return this.renderErrorState();
-        }
-
-        if (!planogramData) {
-            return React.createElement('div', { className: 'planogram-empty' },
-                React.createElement('p', null, 'No planogram data available')
-            );
-        }
-
-        return this.renderPlanogram();
-    }
-}
-
-// Modern Shelf Component
-class ModernShelfComponent extends React.Component {
-         renderModernSection(sectionName, sectionSlots) {
-         if (!sectionSlots || sectionSlots.length === 0) {
-             return React.createElement('div', { 
-                 className: `modern-section-empty`,
-                 style: {
-                     background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
-                     borderRadius: '12px',
-                     padding: '20px',
-                     textAlign: 'center',
-                     border: '2px dashed #cbd5e0'
-                 }
-             },
-                 React.createElement('div', { style: { color: '#a0aec0', fontSize: '14px' } }, `${sectionName} Section`),
-                 React.createElement('div', { style: { color: '#a0aec0', fontSize: '12px' } }, 'No products')
-             );
-         }
-
-         return React.createElement('div', { 
-             className: `modern-shelf-section section-${sectionName.toLowerCase()}`,
-             style: {
-                 background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
-                 borderRadius: '12px',
-                 padding: '16px',
-                 border: '1px solid #e2e8f0'
-             }
-         },
-             React.createElement('div', { 
-                 className: 'modern-section-label',
-                 style: {
-                     fontSize: '14px',
-                     fontWeight: '600',
-                     color: '#4a5568',
-                     marginBottom: '12px',
-                     textAlign: 'center'
-                 }
-             }, `${sectionName} Section`),
-             React.createElement('div', { 
-                 className: 'modern-section-slots',
-                 style: {
-                     display: 'flex',
-                     flexDirection: 'column',
-                     gap: '8px'
-                 }
-             },
-                 sectionSlots.map((slot, index) =>
-                     React.createElement(ModernSlotComponent, {
-                         key: `${sectionName}-${slot.position}-${index}`,
-                         slot: slot,
-                         overlaySettings: this.props.overlaySettings
-                     })
-                 )
-             )
-         );
-     }
-
-         render() {
-         const { shelfData } = this.props;
-         const { shelf_number, sections, product_count, empty_count } = shelfData;
-
-         return React.createElement('div', { 
-             className: 'modern-shelf-component',
-             style: {
-                 background: 'rgba(255, 255, 255, 0.95)',
-                 backdropFilter: 'blur(10px)',
-                 borderRadius: '16px',
-                 padding: '24px',
-                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-                 border: '1px solid rgba(255, 255, 255, 0.2)'
-             }
-         },
-             // Modern Shelf Header
-             React.createElement('div', { 
-                 className: 'modern-shelf-header',
-                 style: {
-                     display: 'flex',
-                     justifyContent: 'space-between',
-                     alignItems: 'center',
-                     marginBottom: '20px',
-                     paddingBottom: '16px',
-                     borderBottom: '2px solid #e2e8f0'
-                 }
-             },
-                 React.createElement('h3', { 
-                     style: { 
-                         margin: 0, 
-                         fontSize: '24px', 
-                         fontWeight: '700',
-                         color: '#2d3748'
-                     } 
-                 }, `🏪 Shelf ${shelf_number}`),
-                 React.createElement('div', { 
-                     style: { 
-                         display: 'flex', 
-                         gap: '12px',
-                         alignItems: 'center'
-                     } 
-                 },
-                     React.createElement('span', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                             color: 'white',
-                             padding: '6px 12px',
-                             borderRadius: '20px',
-                             fontSize: '12px',
-                             fontWeight: '600'
-                         } 
-                     }, `${product_count} products`),
-                     empty_count > 0 && React.createElement('span', { 
-                         style: { 
-                             background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                             color: 'white',
-                             padding: '6px 12px',
-                             borderRadius: '20px',
-                             fontSize: '12px',
-                             fontWeight: '600'
-                         } 
-                     }, `${empty_count} gaps`)
-                 )
-             ),
-             // Modern Shelf Content
-             React.createElement('div', { 
-                 className: 'modern-shelf-content',
-                 style: {
-                     display: 'grid',
-                     gridTemplateColumns: '1fr 1fr 1fr',
-                     gap: '20px'
-                 }
-             },
-                 this.renderModernSection("Left", sections.Left),
-                 this.renderModernSection("Center", sections.Center),
-                 this.renderModernSection("Right", sections.Right)
-             )
-         );
-     }
-}
-
-// Modern Slot Component with Card Design
-class ModernSlotComponent extends React.Component {
-         renderProductSlot() {
-         const { slot, overlaySettings } = this.props;
-         const { data: product } = slot;
-
-         const isStacked = product.visual && !product.visual.uses_full_height;
-         const stackRows = product.visual ? product.visual.stack_rows : 1;
-         const confidenceColor = product.visual ? product.visual.confidence_color : '#e5e7eb';
-
-         return React.createElement('div', {
-             className: 'modern-product-card',
-             style: {
-                 background: 'white',
-                 borderRadius: '12px',
-                 padding: '16px',
-                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
-                 border: `3px solid ${confidenceColor}`,
-                 transition: 'all 0.3s ease',
-                 cursor: 'pointer',
-                 position: 'relative',
-                 overflow: 'hidden'
-             },
-             onMouseEnter: (e) => {
-                 e.target.style.transform = 'translateY(-4px)';
-                 e.target.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.15)';
-             },
-             onMouseLeave: (e) => {
-                 e.target.style.transform = 'translateY(0)';
-                 e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.1)';
-             }
-         },
-             // Confidence indicator
-             React.createElement('div', {
-                 style: {
-                     position: 'absolute',
-                     top: '8px',
-                     right: '8px',
-                     width: '12px',
-                     height: '12px',
-                     borderRadius: '50%',
-                     background: confidenceColor,
-                     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-                 }
-             }),
-             
-             // Product brand
-             React.createElement('div', {
-                 style: {
-                     fontSize: '12px',
-                     fontWeight: '600',
-                     color: '#718096',
-                     marginBottom: '4px',
-                     textTransform: 'uppercase',
-                     letterSpacing: '0.5px'
-                 }
-             }, product.brand),
-             
-             // Product name
-             React.createElement('div', {
-                 style: {
-                     fontSize: '14px',
-                     fontWeight: '700',
-                     color: '#2d3748',
-                     marginBottom: '8px',
-                     lineHeight: '1.3',
-                     minHeight: '36px'
-                 }
-             }, product.name),
-             
-             // Price and facings row
-             React.createElement('div', {
-                 style: {
-                     display: 'flex',
-                     justifyContent: 'space-between',
-                     alignItems: 'center',
-                     marginBottom: '8px'
-                 }
-             },
-                 // Price
-                 product.price && React.createElement('div', {
-                     style: {
-                         fontSize: '16px',
-                         fontWeight: '700',
-                         color: '#2b6cb0',
-                         background: 'linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%)',
-                         padding: '4px 8px',
-                         borderRadius: '6px'
-                     }
-                 }, `£${product.price.toFixed(2)}`),
-                 
-                 // Facings
-                 product.quantity && React.createElement('div', {
-                     style: {
-                         fontSize: '12px',
-                         fontWeight: '600',
-                         color: '#4a5568',
-                         background: '#f7fafc',
-                         padding: '4px 8px',
-                         borderRadius: '6px'
-                     }
-                 }, `${product.quantity.total_facings || 1} facings`)
-             ),
-             
-             // Stacking indicator
-             isStacked && React.createElement('div', {
-                 style: {
-                     fontSize: '11px',
-                     fontWeight: '600',
-                     color: '#d69e2e',
-                     background: 'linear-gradient(135deg, #fefcbf 0%, #faf089 100%)',
-                     padding: '4px 8px',
-                     borderRadius: '6px',
-                     textAlign: 'center',
-                     marginTop: '4px'
-                 }
-             }, `📚 Stacked ${stackRows} high`),
-             
-             // Confidence score (if enabled)
-             overlaySettings.showConfidence && product.metadata && React.createElement('div', {
-                 style: {
-                     fontSize: '10px',
-                     fontWeight: '600',
-                     color: '#4a5568',
-                     textAlign: 'center',
-                     marginTop: '8px',
-                     padding: '4px',
-                     background: '#f7fafc',
-                     borderRadius: '4px'
-                 }
-             }, `${Math.round((product.metadata.extraction_confidence || 0.9) * 100)}% confidence`)
-         );
-     }
-
-         renderEmptySlot() {
-         return React.createElement('div', {
-             className: 'modern-empty-slot',
-             style: {
-                 background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
-                 borderRadius: '12px',
-                 padding: '16px',
-                 border: '2px dashed #cbd5e0',
-                 textAlign: 'center',
-                 minHeight: '120px',
-                 display: 'flex',
-                 flexDirection: 'column',
-                 justifyContent: 'center',
-                 alignItems: 'center',
-                 transition: 'all 0.3s ease'
-             }
-         },
-             React.createElement('div', {
-                 style: {
-                     fontSize: '24px',
-                     marginBottom: '8px'
-                 }
-             }, '📭'),
-             React.createElement('div', {
-                 style: {
-                     fontSize: '12px',
-                     fontWeight: '600',
-                     color: '#a0aec0'
-                 }
-             }, 'Empty Slot'),
-             React.createElement('div', {
-                 style: {
-                     fontSize: '10px',
-                     color: '#cbd5e0',
-                     marginTop: '4px'
-                 }
-             }, 'Gap detected')
-         );
-     }
-
-         render() {
-         const { slot } = this.props;
-
-         return React.createElement('div', { 
-             className: `modern-slot-container position-${slot.position}`,
-             style: {
-                 marginBottom: '8px'
-             }
-         },
-             slot.type === 'product' ? this.renderProductSlot() : this.renderEmptySlot()
-         );
-     }
-}
-
-// Product Content Component
-class ProductContent extends React.Component {
-    render() {
-        const { product, overlaySettings, stackIndex, isStacked } = this.props;
-
-                 return React.createElement('div', { className: 'product-content' },
-             overlaySettings.showNames && React.createElement('div', { className: 'product-name' },
-                 `${product.brand} ${product.name}`
-             ),
-             overlaySettings.showPrices && product.price && React.createElement('div', { className: 'product-price' },
-                 `£${product.price.toFixed(2)}`
-             ),
-             overlaySettings.showFacings && product.quantity && React.createElement('div', { className: 'product-facings' },
-                 `${product.quantity.total_facings || 1} facings`
-             ),
-             overlaySettings.showConfidence && product.metadata && React.createElement('div', { className: 'product-confidence' },
-                 `${Math.round((product.metadata.extraction_confidence || 0.9) * 100)}%`
-             ),
-             overlaySettings.showStacking && isStacked && product.visual && React.createElement('div', { className: 'stacking-indicator' },
-                 `Stack ${stackIndex + 1}/${product.visual.stack_rows || 1}`
-             )
-         );
-    }
-}
-
-// Export for use in main dashboard
-window.InteractivePlanogram = InteractivePlanogram;
-console.log('✅ InteractivePlanogram component loaded directly');
-        </script>
         
         <!-- Initialize React Components -->
         <script>
@@ -3033,64 +2249,94 @@ console.log('✅ InteractivePlanogram component loaded directly');
             let autoScrollEnabled = true;
             let logRefreshInterval = null;
             
-            // Initialize application
-            document.addEventListener('DOMContentLoaded', function() {
-                // Collapse sidebar by default on queue page
-                sidebarCollapsed = true;
-                const sidebar = document.getElementById('leftSidebar');
-                const toggle = sidebar.querySelector('.sidebar-toggle');
-                sidebar.classList.add('collapsed');
-                toggle.innerHTML = '▶';
-                
-                loadQueue();
-                loadImages();
-                loadFilterData();
-            });
+            // Global planogram component reference
+            let currentPlanogramComponent = null;
+            
+                         // Initialize application
+             document.addEventListener('DOMContentLoaded', function() {
+                 // Initialize sidebar state - start in queue mode with sidebar hidden
+                 const sidebar = document.getElementById('leftSidebar');
+                 const toggle = sidebar.querySelector('.sidebar-toggle');
+                 
+                 // Start in queue mode with sidebar hidden
+                 sidebar.style.display = 'none';
+                 sidebarCollapsed = false;
+                 toggle.innerHTML = '◀';
+                 
+                 loadQueue();
+                 loadImages();
+                 loadFilterData();
+             });
             
             // Sidebar management
             function toggleSidebar() {
                 const sidebar = document.getElementById('leftSidebar');
                 const toggle = sidebar.querySelector('.sidebar-toggle');
+                const mainContent = document.querySelector('.main-content');
                 
                 sidebarCollapsed = !sidebarCollapsed;
                 
                 if (sidebarCollapsed) {
-                    sidebar.classList.add('collapsed');
+                    sidebar.style.transform = 'translateX(-380px)';
                     toggle.innerHTML = '▶';
+                    // Expand main content to fill the space
+                    mainContent.style.marginLeft = '20px';
                 } else {
-                    sidebar.classList.remove('collapsed');
+                    sidebar.style.transform = 'translateX(0)';
                     toggle.innerHTML = '◀';
+                    // Reset main content margin
+                    mainContent.style.marginLeft = '0';
                 }
             }
             
-            // Mode switching
-            function switchMode(mode) {
-                // Hide all modes
-                document.getElementById('queue-interface').style.display = 'none';
-                document.getElementById('simple-mode').classList.remove('active');
-                document.getElementById('comparison-mode').classList.remove('active');
-                document.getElementById('advanced-mode').classList.remove('active');
-                
-                // Update mode buttons
-                document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-                event.target.classList.add('active');
-                
-                // Manage sidebar based on mode
-                const sidebar = document.getElementById('leftSidebar');
-                const toggle = sidebar.querySelector('.sidebar-toggle');
-                
-                // Show selected mode
-                if (mode === 'queue') {
-                    document.getElementById('queue-interface').style.display = 'block';
-                    updateBreadcrumb('Extraction Queue');
-                    
-                    // Collapse sidebar for queue mode (not needed)
-                    if (!sidebarCollapsed) {
-                        sidebarCollapsed = true;
-                        sidebar.classList.add('collapsed');
-                        toggle.innerHTML = '▶';
-                    }
-                                 } else if (mode === 'simple') {
+                         // Mode switching
+             function switchMode(mode) {
+                 // Clean up React components before switching modes
+                 const planogramViewer = document.getElementById('planogramViewer');
+                 const advancedPlanogram = document.getElementById('advancedPlanogramViewer');
+                 
+                 if (planogramViewer && typeof ReactDOM !== 'undefined') {
+                     try {
+                         ReactDOM.unmountComponentAtNode(planogramViewer);
+                     } catch (e) {
+                         // Ignore unmount errors
+                     }
+                 }
+                 
+                 if (advancedPlanogram && typeof ReactDOM !== 'undefined') {
+                     try {
+                         ReactDOM.unmountComponentAtNode(advancedPlanogram);
+                     } catch (e) {
+                         // Ignore unmount errors
+                     }
+                 }
+                 
+                 // Hide all modes
+                 document.getElementById('queue-interface').classList.remove('active');
+                 document.getElementById('simple-mode').classList.remove('active');
+                 document.getElementById('advanced-mode').classList.remove('active');
+                 
+                 // Update mode buttons
+                 document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+                 // Find the button that was clicked for this mode
+                 const targetButton = document.querySelector(`[onclick="switchMode('${mode}')"]`);
+                 if (targetButton) {
+                     targetButton.classList.add('active');
+                 }
+                 
+                 // Show/hide sidebar based on mode
+                 const sidebar = document.querySelector('.left-sidebar');
+                 if (mode === 'queue') {
+                     sidebar.style.display = 'none';
+                 } else {
+                     sidebar.style.display = 'flex';
+                 }
+                 
+                 // Show selected mode
+                 if (mode === 'queue') {
+                     document.getElementById('queue-interface').classList.add('active');
+                     updateBreadcrumb('Extraction Queue');
+                 } else if (mode === 'simple') {
                      document.getElementById('simple-mode').classList.add('active');
                      
                      // Always default to demo for now since real extraction data isn't available
@@ -3102,39 +2348,14 @@ console.log('✅ InteractivePlanogram component loaded directly');
                      }
                      
                      loadSimpleModeData();
-                    
-                    // Expand sidebar for analysis modes (image selection needed)
-                    if (sidebarCollapsed) {
-                        sidebarCollapsed = false;
-                        sidebar.classList.remove('collapsed');
-                        toggle.innerHTML = '◀';
-                    }
-                } else if (mode === 'comparison') {
-                    document.getElementById('comparison-mode').classList.add('active');
-                    updateBreadcrumb(`Extraction #${selectedItemId} - System Comparison`);
-                    loadComparisonModeData();
-                    
-                    // Expand sidebar for analysis modes
-                    if (sidebarCollapsed) {
-                        sidebarCollapsed = false;
-                        sidebar.classList.remove('collapsed');
-                        toggle.innerHTML = '◀';
-                    }
-                } else if (mode === 'advanced') {
-                    document.getElementById('advanced-mode').classList.add('active');
-                    updateBreadcrumb(`Extraction #${selectedItemId} - Advanced Analysis`);
-                    loadAdvancedModeData();
-                    
-                    // Expand sidebar for analysis modes
-                    if (sidebarCollapsed) {
-                        sidebarCollapsed = false;
-                        sidebar.classList.remove('collapsed');
-                        toggle.innerHTML = '◀';
-                    }
-                }
-                
-                currentMode = mode;
-            }
+                 } else if (mode === 'advanced') {
+                     document.getElementById('advanced-mode').classList.add('active');
+                     updateBreadcrumb(`Extraction #${selectedItemId} - Advanced Analysis`);
+                     loadAdvancedModeData();
+                 }
+                 
+                 currentMode = mode;
+             }
             
             function updateBreadcrumb(text) {
                 document.getElementById('breadcrumb').innerHTML = `<span>${text}</span>`;
@@ -3283,13 +2504,13 @@ console.log('✅ InteractivePlanogram component loaded directly');
                 `;
             }
             
-            // Render queue items
+            // Render queue items as table
             function renderQueue() {
                 const grid = document.getElementById('queueGrid');
                 
                 if (queueData.length === 0) {
                     grid.innerHTML = `
-                        <div class="empty-state" style="grid-column: 1 / -1;">
+                        <div class="empty-state">
                             <h3>📭 No Queue Items</h3>
                             <p>No extraction items found in the queue. Upload some images to get started.</p>
                         </div>
@@ -3297,70 +2518,95 @@ console.log('✅ InteractivePlanogram component loaded directly');
                     return;
                 }
                 
-                grid.innerHTML = queueData.map(item => `
-                    <div class="queue-item ${item.human_review_required ? 'priority' : ''} ${selectedItemId === item.id ? 'selected' : ''}" 
-                         onclick="selectQueueItem(${item.id})" 
-                         data-item-id="${item.id}">
-                        <div class="item-header">
-                            <div class="item-title">Extraction #${item.id}</div>
-                            <div class="item-status ${getStatusClass(item.status)}">${getStatusText(item.status)}</div>
-                        </div>
-                        
-                        <div class="item-meta">
-                            Created: ${new Date(item.created_at).toLocaleDateString()}<br>
-                            ${item.comparison_group_id ? `Group: ${item.comparison_group_id}` : 'Not processed'}
-                            ${item.human_review_required ? '<br><strong>⚠️ Needs Human Review</strong>' : ''}
-                        </div>
-                        
-                        ${item.final_accuracy !== null ? `
-                            <div class="item-accuracy">
-                                <div class="accuracy-bar">
-                                    <div class="accuracy-fill" style="width: ${item.final_accuracy * 100}%"></div>
-                                </div>
-                                <div class="accuracy-text">${Math.round(item.final_accuracy * 100)}%</div>
-                            </div>
-                        ` : ''}
-                        
-                        ${item.status === 'pending' ? `
-                            <div class="system-selection">
-                                <div class="system-label">Select Extraction Systems:</div>
-                                <div class="system-checkboxes">
-                                    <div class="system-checkbox">
-                                        <input type="checkbox" id="custom_${item.id}" value="custom_consensus" 
-                                               onchange="updateSystemSelection(${item.id})" checked>
-                                        <label for="custom_${item.id}">Custom Consensus</label>
-                                    </div>
-                                    <div class="system-description">Direct API calls with weighted voting</div>
-                                    
-                                    <div class="system-checkbox">
-                                        <input type="checkbox" id="langgraph_${item.id}" value="langgraph" 
-                                               onchange="updateSystemSelection(${item.id})">
-                                        <label for="langgraph_${item.id}">LangGraph</label>
-                                    </div>
-                                    <div class="system-description">Professional workflow orchestration</div>
-                                    
-                                    <div class="system-checkbox">
-                                        <input type="checkbox" id="hybrid_${item.id}" value="hybrid" 
-                                               onchange="updateSystemSelection(${item.id})">
-                                        <label for="hybrid_${item.id}">Hybrid</label>
-                                    </div>
-                                    <div class="system-description">Combines both approaches</div>
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        <div class="item-actions">
-                            ${item.status === 'pending' ? `
-                                <button class="btn btn-primary" onclick="startProcessing(${item.id})">Start Processing</button>
-                            ` : `
-                                <button class="btn btn-success" onclick="viewResults(${item.id})">View Results</button>
-                            `}
-                            ${item.status === 'completed' ? `
-                                <button class="btn btn-secondary" onclick="reprocess(${item.id})">Reprocess</button>
-                            ` : ''}
+                // Transform to table format
+                grid.innerHTML = `
+                    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+                        <h3 style="margin: 0 0 20px 0; color: #2d3748; font-size: 20px; font-weight: 700;">📋 Extraction Queue (${queueData.length} items)</h3>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                                <thead>
+                                    <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Status</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Date</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 120px;">Store</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Category</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Country</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Upload ID</th>
+                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Accuracy</th>
+                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 120px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${queueData.map(item => {
+                                        const statusColor = getStatusColor(item.status);
+                                        const accuracy = item.final_accuracy ? Math.round(item.final_accuracy * 100) : null;
+                                        const accuracyColor = accuracy >= 90 ? '#10b981' : accuracy >= 70 ? '#f59e0b' : '#ef4444';
+                                        const uploadId = item.ready_media_id ? item.ready_media_id.substring(0, 8) + '...' : '-';
+                                        
+                                        return `
+                                            <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer; ${selectedItemId === item.id ? 'background-color: #f0f9ff;' : ''}" 
+                                                onclick="selectQueueItem(${item.id})" 
+                                                onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                                onmouseout="this.style.backgroundColor='${selectedItemId === item.id ? '#f0f9ff' : 'transparent'}'">
+                                                <td style="padding: 12px 8px;">
+                                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                                        <div style="width: 8px; height: 8px; border-radius: 50%; background-color: ${statusColor};"></div>
+                                                        <span style="font-weight: 600; color: ${statusColor};">${getStatusText(item.status)}</span>
+                                                        ${item.human_review_required ? '<span style="color: #f59e0b; margin-left: 4px;">⚠️</span>' : ''}
+                                                    </div>
+                                                </td>
+                                                <td style="padding: 12px 8px; color: #4a5568;">
+                                                    ${new Date(item.created_at).toLocaleDateString()}
+                                                    <div style="font-size: 12px; color: #64748b;">${new Date(item.created_at).toLocaleTimeString()}</div>
+                                                </td>
+                                                <td style="padding: 12px 8px; color: #2d3748; font-weight: 500;">
+                                                    ${item.store_name || 'Unknown Store'}
+                                                </td>
+                                                <td style="padding: 12px 8px; color: #4a5568;">
+                                                    ${item.category || 'General'}
+                                                </td>
+                                                <td style="padding: 12px 8px; color: #4a5568;">
+                                                    ${item.country || 'UK'}
+                                                </td>
+                                                <td style="padding: 12px 8px; color: #64748b; font-family: monospace; font-size: 12px;">
+                                                    ${uploadId}
+                                                </td>
+                                                <td style="padding: 12px 8px; text-align: center;">
+                                                    ${accuracy !== null ? `
+                                                        <span style="font-weight: 600; color: ${accuracyColor};">${accuracy}%</span>
+                                                    ` : '<span style="color: #94a3b8;">-</span>'}
+                                                </td>
+                                                <td style="padding: 12px 8px; text-align: center;">
+                                                    <div style="display: flex; gap: 4px; justify-content: center;">
+                                                        ${item.status === 'pending' ? `
+                                                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); startProcessing(${item.id})">Start</button>
+                                                        ` : `
+                                                            <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); viewResults(${item.id})">View</button>
+                                                        `}
+                                                        ${item.status === 'completed' ? `
+                                                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); reprocess(${item.id})">Retry</button>
+                                                        ` : ''}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                `).join('');
+                `;
+            }
+            
+            // Helper function for status colors
+            function getStatusColor(status) {
+                switch(status) {
+                    case 'completed': return '#10b981';
+                    case 'processing': return '#3b82f6';
+                    case 'pending': return '#f59e0b';
+                    case 'failed': return '#ef4444';
+                    default: return '#64748b';
+                }
             }
             
             // Render images error
@@ -3436,86 +2682,303 @@ console.log('✅ InteractivePlanogram component loaded directly');
             }
             
             // Load data for different modes
-            async function loadSimpleModeData() {
-                try {
-                    // Load original image (or show demo message)
-                    const imageElement = document.getElementById('originalImage');
-                    const loadingElement = document.getElementById('imageLoading');
-                    
-                    if (selectedItemId && selectedItemId !== 'demo') {
-                        imageElement.onload = function() {
-                            loadingElement.style.display = 'none';
-                            imageElement.style.display = 'block';
-                        };
-                        
-                        imageElement.onerror = function() {
-                            loadingElement.innerHTML = 'Failed to load image';
-                        };
-                        
-                        imageElement.src = `/api/queue/image/${selectedItemId}`;
-                    } else {
-                        // Show demo message for image
-                        loadingElement.innerHTML = '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>📷 Demo Mode</h3><p>Select a real image from the sidebar to see the original photo, or view the interactive planogram demo on the right.</p></div>';
-                        imageElement.style.display = 'none';
-                    }
-                    
-                    // Load interactive planogram - ALWAYS show demo if no real item
-                    const planogramViewer = document.getElementById('planogramViewer');
-                    const imageId = selectedItemId || 'demo';
-                    
-                    console.log('Loading planogram for:', imageId);
-                    
-                    try {
-                        // Clear existing content
-                        planogramViewer.innerHTML = '<div class="loading">Loading interactive planogram...</div>';
-                        
-                        // Check if React and components are available
-                        if (typeof React === 'undefined') {
-                            console.error('React not loaded!');
-                            planogramViewer.innerHTML = '<div class="loading">React library not loaded. Please refresh the page.</div>';
-                            return;
-                        }
-                        
-                        if (typeof ReactDOM === 'undefined') {
-                            console.error('ReactDOM not loaded!');
-                            planogramViewer.innerHTML = '<div class="loading">ReactDOM library not loaded. Please refresh the page.</div>';
-                            return;
-                        }
-                        
-                        // Function to try rendering the React component
-                        function tryRenderReactComponent() {
-                            if (window.InteractivePlanogram) {
-                                console.log('✅ React component found, rendering...');
-                                try {
-                                    ReactDOM.render(
-                                        React.createElement(window.InteractivePlanogram, {
-                                            imageId: imageId,
-                                            mode: 'simple'
-                                        }),
-                                        planogramViewer
-                                    );
-                                    console.log('✅ React component rendered successfully');
-                                } catch (error) {
-                                    console.error('❌ Error rendering React component:', error);
-                                    showFallbackPlanogram(planogramViewer);
-                                }
-                            } else {
-                                console.log('⏳ Component not ready, waiting...');
-                                setTimeout(tryRenderReactComponent, 200);
-                            }
-                        }
-                        
-                        // Start trying to render
-                        tryRenderReactComponent();
-                    } catch (error) {
-                        console.error('Error rendering planogram:', error);
-                        planogramViewer.innerHTML = '<div class="loading">Failed to load planogram: ' + error.message + '</div>';
-                    }
-                    
-                } catch (error) {
-                    console.error('Error loading simple mode data:', error);
-                }
-            }
+                         async function loadSimpleModeData() {
+                 try {
+                     // Load original image (or show demo message)
+                     const imageElement = document.getElementById('originalImage');
+                     const loadingElement = document.getElementById('imageLoading');
+                     
+                     if (selectedItemId && selectedItemId !== 'demo') {
+                         imageElement.onload = function() {
+                             loadingElement.style.display = 'none';
+                             imageElement.style.display = 'block';
+                         };
+                         
+                         imageElement.onerror = function() {
+                             loadingElement.innerHTML = 'Failed to load image';
+                         };
+                         
+                         imageElement.src = `/api/queue/image/${selectedItemId}`;
+                     } else {
+                         // Show demo message for image
+                         loadingElement.innerHTML = '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>📷 Demo Mode</h3><p>Select a real image from the sidebar to see the original photo, or view the interactive planogram demo on the right.</p></div>';
+                         imageElement.style.display = 'none';
+                     }
+                     
+                     // Load interactive planogram - ALWAYS show demo if no real item
+                     const planogramViewer = document.getElementById('planogramViewer');
+                     const imageId = selectedItemId || 'demo';
+                     
+                     console.log('Loading planogram for:', imageId);
+                     
+                     // Simple HTML/CSS Grid Approach - Convert React logic to pure HTML/CSS
+                     async function renderSimpleGridPlanogram() {
+                         console.log('🎯 Rendering Simple HTML/CSS Grid Planogram (converted from React)');
+                         
+                         try {
+                             // Fetch planogram data
+                             const response = await fetch(`/api/planogram/${imageId}/editable`);
+                             if (!response.ok) {
+                                 throw new Error(`Failed to load data: ${response.statusText}`);
+                             }
+                             
+                             const data = await response.json();
+                             console.log('📊 Planogram data loaded:', data);
+                             
+                             // Clear container
+                             planogramViewer.innerHTML = '';
+                             
+                             // Create the planogram using your React component logic but in pure HTML/CSS
+                             createSimpleGridPlanogram(planogramViewer, data.planogram);
+                             
+                             console.log('✅ Simple HTML/CSS planogram rendered');
+                             
+                         } catch (error) {
+                             console.error('❌ Error loading planogram:', error);
+                             planogramViewer.innerHTML = `
+                                 <div style="padding: 20px; text-align: center; color: #dc2626;">
+                                     <h3>❌ Failed to Load Planogram</h3>
+                                     <p>${error.message}</p>
+                                 </div>
+                             `;
+                         }
+                     }
+                     
+                     // Render the simple grid planogram
+                     renderSimpleGridPlanogram();
+                     
+                     // Load planogram controls
+                     await loadPlanogramControls(imageId);
+                     
+                     // Load compact stats dashboard
+                     await loadCompactStatsDashboard(imageId);
+                     
+                     // Load extracted products table
+                     await loadExtractedProductsTable(imageId);
+                     
+                 } catch (error) {
+                     console.error('Error loading simple mode data:', error);
+                 }
+             }
+             
+             async function loadPlanogramControls(imageId) {
+                 const controlsContainer = document.getElementById('planogramControls');
+                 
+                 // Create compact working controls that actually update the React component
+                 const controlsHTML = `
+                     <div style="background: white; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: 100%;">
+                         <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 14px; font-weight: 700; text-align: center;">🎛️ Display Controls</h4>
+                         
+                         <!-- Zoom Controls -->
+                         <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                             <div style="font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; text-align: center;">
+                                 🔍 Zoom: <span id="zoomPercentage">100%</span>
+                             </div>
+                             <div style="display: flex; gap: 6px; justify-content: center;">
+                                 <button onclick="updatePlanogramZoom(0.8)" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">Out</button>
+                                 <button onclick="updatePlanogramZoom(1, true)" style="padding: 4px 8px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">Reset</button>
+                                 <button onclick="updatePlanogramZoom(1.25)" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">In</button>
+                             </div>
+                         </div>
+                         
+                         <!-- Display Toggles -->
+                         <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #4facfe; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
+                                 <input type="checkbox" id="toggleBrands" checked onchange="updatePlanogramDisplay('showBrands', this.checked)" style="display: none;">
+                                 <span>✓</span> Brands
+                             </label>
+                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #fa709a; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
+                                 <input type="checkbox" id="toggleProducts" checked onchange="updatePlanogramDisplay('showProducts', this.checked)" style="display: none;">
+                                 <span>✓</span> Products
+                             </label>
+                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #a8edea; color: #2d3748; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
+                                 <input type="checkbox" id="togglePrices" checked onchange="updatePlanogramDisplay('showPrices', this.checked)" style="display: none;">
+                                 <span>✓</span> Prices
+                             </label>
+                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #f7fafc; color: #4a5568; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
+                                 <input type="checkbox" id="toggleConfidence" onchange="updatePlanogramDisplay('showConfidence', this.checked)" style="display: none;">
+                                 <span>○</span> Confidence
+                             </label>
+                         </div>
+                     </div>
+                 `;
+                 
+                 controlsContainer.innerHTML = controlsHTML;
+             }
+             
+             async function loadCompactStatsDashboard(imageId) {
+                 const dashboardContainer = document.getElementById('compactStatsDashboard');
+                 
+                 try {
+                     const response = await fetch(`/api/planogram/${imageId}/editable`);
+                     if (!response.ok) {
+                         dashboardContainer.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;">No stats data available</div>';
+                         return;
+                     }
+                     
+                     const data = await response.json();
+                     let totalProducts = 0;
+                     let totalFacings = 0;
+                     let hasStacking = false;
+                     let confidenceSum = 0;
+                     let confidenceCount = 0;
+                     
+                     // Calculate stats from shelves
+                     data.planogram.shelves.forEach(shelf => {
+                         Object.values(shelf.sections).forEach(section => {
+                             section.forEach(slot => {
+                                 if (slot.type === 'product') {
+                                     totalProducts++;
+                                     totalFacings += slot.data.quantity?.total_facings || 1;
+                                     if (slot.data.quantity?.stack > 1) {
+                                         hasStacking = true;
+                                     }
+                                     if (slot.data.metadata?.extraction_confidence) {
+                                         confidenceSum += slot.data.metadata.extraction_confidence;
+                                         confidenceCount++;
+                                     }
+                                 }
+                             });
+                         });
+                     });
+                     
+                     const avgConfidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 0.9;
+                     const shelfCount = data.planogram.shelves.length;
+                     
+                     // Generate compact stats dashboard HTML (25% height)
+                     const dashboardHTML = `
+                         <div style="background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: 100%;">
+                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px;">
+                                 <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(79, 172, 254, 0.3);">
+                                     <div style="font-size: 14px; font-weight: 700;">${totalProducts}</div>
+                                     <div style="font-size: 9px; opacity: 0.9;">Products</div>
+                                 </div>
+                                 <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(250, 112, 154, 0.3);">
+                                     <div style="font-size: 14px; font-weight: 700;">${shelfCount}</div>
+                                     <div style="font-size: 9px; opacity: 0.9;">Shelves</div>
+                                 </div>
+                                 <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2d3748; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(168, 237, 234, 0.3);">
+                                     <div style="font-size: 14px; font-weight: 700;">${Math.round(avgConfidence * 100)}%</div>
+                                     <div style="font-size: 9px; opacity: 0.8;">Confidence</div>
+                                 </div>
+                                 <div style="background: linear-gradient(135deg, #c084fc 0%, #a855f7 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(192, 132, 252, 0.3);">
+                                     <div style="font-size: 14px; font-weight: 700;">${totalFacings}</div>
+                                     <div style="font-size: 9px; opacity: 0.9;">Facings</div>
+                                 </div>
+                                 ${hasStacking ? `
+                                     <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #2d3748; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(252, 182, 159, 0.3);">
+                                         <div style="font-size: 12px; font-weight: 700;">📚</div>
+                                         <div style="font-size: 9px; opacity: 0.8;">Stacking</div>
+                                     </div>
+                                 ` : ''}
+                             </div>
+                         </div>
+                     `;
+                     
+                     dashboardContainer.innerHTML = dashboardHTML;
+                     
+                 } catch (error) {
+                     console.error('Error loading stats dashboard:', error);
+                     dashboardContainer.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">Failed to load stats dashboard</div>';
+                 }
+             }
+             
+             async function loadExtractedProductsTable(imageId) {
+                 const tableContainer = document.getElementById('extractedProductsTable');
+                 
+                 try {
+                     const response = await fetch(`/api/planogram/${imageId}/editable`);
+                     if (!response.ok) {
+                         tableContainer.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;">No extraction data available</div>';
+                         return;
+                     }
+                     
+                     const data = await response.json();
+                     const products = [];
+                     
+                     // Extract all products from shelves
+                     data.planogram.shelves.forEach(shelf => {
+                         Object.values(shelf.sections).forEach(section => {
+                             section.forEach(slot => {
+                                 if (slot.type === 'product') {
+                                     products.push({
+                                         ...slot.data,
+                                         shelf: shelf.shelf_number,
+                                         position: slot.position
+                                     });
+                                 }
+                             });
+                         });
+                     });
+                     
+                     // Sort by shelf and position
+                     products.sort((a, b) => {
+                         if (a.shelf !== b.shelf) return a.shelf - b.shelf;
+                         return a.position - b.position;
+                     });
+                     
+                     // Generate table HTML with ALL metadata
+                     const tableHTML = `
+                         <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+                             <h4 style="margin: 0 0 16px 0; color: #2d3748; font-size: 18px; font-weight: 700;">📋 Extracted Products (${products.length} items)</h4>
+                             <div style="overflow-x: auto;">
+                                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                     <thead>
+                                         <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 50px;">Shelf</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 40px;">Pos</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Section</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Brand</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 150px;">Product</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Price</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Facings</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Stack</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">Volume</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">Color</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Confidence</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">ID</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>
+                                         ${products.map(product => {
+                                             const confidence = Math.round((product.metadata?.extraction_confidence || 0.9) * 100);
+                                             const confidenceColor = confidence >= 90 ? '#10b981' : confidence >= 70 ? '#f59e0b' : '#ef4444';
+                                             const section = product.position?.section?.vertical || 'Unknown';
+                                             const stackHeight = product.quantity?.stack || 1;
+                                             const volume = product.metadata?.volume || product.volume || '-';
+                                             const color = product.metadata?.color || product.color || '-';
+                                             const productId = product.id || '-';
+                                             
+                                             return `
+                                                 <tr style="border-bottom: 1px solid #e2e8f0; hover: background-color: #f8fafc;">
+                                                     <td style="padding: 8px 6px; font-weight: 600; color: #2d3748;">${product.shelf}</td>
+                                                     <td style="padding: 8px 6px; color: #4a5568;">${product.position}</td>
+                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${section}</td>
+                                                     <td style="padding: 8px 6px; color: #4a5568; font-weight: 500;">${product.brand}</td>
+                                                     <td style="padding: 8px 6px; color: #2d3748;">${product.name}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600; color: #2b6cb0;">${product.price ? '£' + product.price.toFixed(2) : '-'}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; color: #4a5568;">${product.quantity?.total_facings || 1}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; color: ${stackHeight > 1 ? '#f59e0b' : '#4a5568'}; font-weight: ${stackHeight > 1 ? '600' : 'normal'};">${stackHeight}${stackHeight > 1 ? ' 📚' : ''}</td>
+                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${volume}</td>
+                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${color}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600; color: ${confidenceColor};">${confidence}%</td>
+                                                     <td style="padding: 8px 6px; color: #64748b; font-size: 11px; font-family: monospace;">${productId}</td>
+                                                 </tr>
+                                             `;
+                                         }).join('')}
+                                     </tbody>
+                                 </table>
+                             </div>
+                         </div>
+                     `;
+                     
+                     tableContainer.innerHTML = tableHTML;
+                     
+                 } catch (error) {
+                     console.error('Error loading products table:', error);
+                     tableContainer.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">Failed to load products table</div>';
+                 }
+             }
             
             async function loadComparisonModeData() {
                 if (!selectedItemId) return;
@@ -3927,19 +3390,22 @@ console.log('✅ InteractivePlanogram component loaded directly');
                 
                 currentAdvancedTab = tabName;
                 
-                // Load tab-specific data
-                if (tabName === 'logs') {
-                    loadLogs();
-                    startLogRefresh();
-                } else if (tabName === 'overview') {
-                    loadErrorSummary();
-                    stopLogRefresh();
-                } else if (tabName === 'iterations') {
-                    loadIterations();
-                    stopLogRefresh();
-                } else {
-                    stopLogRefresh();
-                }
+                                 // Load tab-specific data
+                 if (tabName === 'logs') {
+                     loadLogs();
+                     startLogRefresh();
+                 } else if (tabName === 'overview') {
+                     loadErrorSummary();
+                     stopLogRefresh();
+                 } else if (tabName === 'iterations') {
+                     loadIterations();
+                     stopLogRefresh();
+                 } else if (tabName === 'comparison') {
+                     loadComparisonModeData();
+                     stopLogRefresh();
+                 } else {
+                     stopLogRefresh();
+                 }
             }
             
             // Log Viewer Functions
@@ -4921,12 +4387,681 @@ console.log('✅ InteractivePlanogram component loaded directly');
                 `;
             }
             
+            // Global planogram control functions - working with HTML grid
+            let currentZoomLevel = 1.0;
+            let displaySettings = {
+                showBrands: true,
+                showProducts: true, 
+                showPrices: true,
+                showConfidence: false
+            };
+
+            function updatePlanogramZoom(factor, reset = false) {
+                const planogramViewer = document.getElementById('planogramViewer');
+                if (!planogramViewer) return;
+
+                if (reset) {
+                    currentZoomLevel = 1.0;
+                } else {
+                    currentZoomLevel *= factor;
+                    currentZoomLevel = Math.max(0.5, Math.min(3.0, currentZoomLevel)); // Limit zoom range
+                }
+
+                planogramViewer.style.transform = `scale(${currentZoomLevel})`;
+                planogramViewer.style.transformOrigin = 'top left';
+                
+                const zoomElement = document.getElementById('zoomPercentage');
+                if (zoomElement) {
+                    zoomElement.textContent = Math.round(currentZoomLevel * 100) + '%';
+                }
+                
+                console.log(`🔍 Zoom updated: ${Math.round(currentZoomLevel * 100)}%`);
+            }
+            
+            function updatePlanogramDisplay(setting, enabled) {
+                displaySettings[setting] = enabled;
+                
+                // Update button visual state
+                const button = document.querySelector(`#toggle${setting.charAt(0).toUpperCase() + setting.slice(1).replace('show', '')}`);
+                if (button) {
+                    const label = button.parentElement;
+                    const span = label.querySelector('span');
+                    if (enabled) {
+                        span.textContent = '✓';
+                        label.style.background = getToggleColor(setting);
+                        label.style.color = setting === 'showPrices' ? '#2d3748' : 'white';
+                    } else {
+                        span.textContent = '○';
+                        label.style.background = '#f7fafc';
+                        label.style.color = '#4a5568';
+                    }
+                }
+
+                // Apply display changes to all product cells
+                const productCells = document.querySelectorAll('[data-product-cell]');
+                productCells.forEach(cell => {
+                    const brandDiv = cell.querySelector('[data-brand]');
+                    const nameDiv = cell.querySelector('[data-name]');
+                    const priceDiv = cell.querySelector('[data-price]');
+                    const confidenceDiv = cell.querySelector('[data-confidence]');
+
+                    if (brandDiv) brandDiv.style.display = displaySettings.showBrands ? 'block' : 'none';
+                    if (nameDiv) nameDiv.style.display = displaySettings.showProducts ? 'block' : 'none';
+                    if (priceDiv) priceDiv.style.display = displaySettings.showPrices ? 'block' : 'none';
+                    if (confidenceDiv) confidenceDiv.style.display = displaySettings.showConfidence ? 'block' : 'none';
+                });
+                
+                console.log(`✅ Updated planogram display: ${setting} = ${enabled}`);
+            }
+            
+            function getToggleColor(setting) {
+                const colors = {
+                    'showBrands': '#4facfe',
+                    'showProducts': '#fa709a', 
+                    'showPrices': '#a8edea',
+                    'showConfidence': '#ffecd2'
+                };
+                return colors[setting] || '#f7fafc';
+            }
+            
+            // Dynamic Grid Planogram - GLOBAL width consistency + proper stacking
+            function createSimpleGridPlanogram(container, planogramData) {
+                console.log('🎯 Creating GLOBAL CONSISTENT GRID planogram with proper stacking');
+                
+                const { shelves } = planogramData;
+                
+                // Calculate GLOBAL dimensions across ALL shelves - CUMULATIVE APPROACH
+                let globalMaxPosition = 8; // Minimum shelf width
+                let globalMaxStackHeight = 1;
+                
+                console.log('🔍 Calculating global dimensions using CUMULATIVE positioning...');
+                
+                // First pass: calculate actual grid slots needed for each shelf
+                shelves.forEach(shelf => {
+                    console.log(`📏 Analyzing shelf ${shelf.shelf_number} for global dimensions`);
+                    
+                    let shelfGridPosition = 1; // Track cumulative position for this shelf
+                    
+                    ['Left', 'Center', 'Right'].forEach(sectionName => {
+                        if (shelf.sections[sectionName]) {
+                            shelf.sections[sectionName].forEach(slot => {
+                                if (slot.type === 'product' && slot.data) {
+                                    const product = slot.data;
+                                    const facings = product.quantity?.columns || 1;
+                                    const stackHeight = product.quantity?.stack || 1;
+                                    
+                                    console.log(`  📍 ${product.brand} ${product.name}: ${facings} facings starting at grid ${shelfGridPosition}`);
+                                    
+                                    shelfGridPosition += facings; // Move to next position
+                                    globalMaxStackHeight = Math.max(globalMaxStackHeight, stackHeight);
+                                    
+                                } else if (slot.type === 'empty') {
+                                    console.log(`  ⭕ Empty slot at grid ${shelfGridPosition}`);
+                                    shelfGridPosition += 1; // Empty takes 1 slot
+                                }
+                            });
+                        }
+                    });
+                    
+                    const shelfTotalSlots = shelfGridPosition - 1;
+                    console.log(`  📊 Shelf ${shelf.shelf_number} needs ${shelfTotalSlots} total grid slots`);
+                    globalMaxPosition = Math.max(globalMaxPosition, shelfTotalSlots);
+                });
+
+                console.log(`📏 Global dimensions: ${globalMaxPosition} positions × ${globalMaxStackHeight} stack height`);
+                
+                // DEBUG: Test the logic with Coke Zero example
+                console.log('🧪 TESTING LOGIC: Coke Zero at position 1 with 3 facings should fill grid slots 1, 2, 3');
+                console.log('🧪 Grid calculation: position 1 → grid columns 0, 1, 2 (0-based)');
+                console.log('🧪 Display: Should show 3 separate Coke Zero cells');
+
+                // Create main container
+                const planogramDiv = document.createElement('div');
+                planogramDiv.style.cssText = `
+                    background: #f8fafc;
+                    height: 100%;
+                    padding: 16px;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    overflow: auto;
+                    display: flex;
+                    flex-direction: column;
+                `;
+                
+                // Create shelves container
+                const shelvesContainer = document.createElement('div');
+                shelvesContainer.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                    min-height: 100%;
+                    overflow: visible;
+                    padding: 8px;
+                    min-width: max-content;
+                `;
+
+                // Sort shelves from top to bottom (highest shelf number first)
+                const sortedShelves = shelves.sort((a, b) => b.shelf_number - a.shelf_number);
+
+                // ALL shelves use the SAME global dimensions
+                sortedShelves.forEach(shelf => {
+                    const shelfDiv = createGlobalConsistentShelfGrid(shelf, globalMaxPosition, globalMaxStackHeight);
+                    shelvesContainer.appendChild(shelfDiv);
+                });
+                
+                planogramDiv.appendChild(shelvesContainer);
+                container.appendChild(planogramDiv);
+            }
+            
+
+            
+            function getConfidenceColor(confidence) {
+                // Use EXACT confidence values from JSON to determine colors
+                // Map to the exact colors used in the JSON data
+                if (confidence >= 0.96) return '#22c55e'; // Very high confidence - bright green (96%+)
+                if (confidence >= 0.92) return '#10b981'; // High confidence - green (92-95%)
+                if (confidence >= 0.88) return '#3b82f6'; // Good confidence - blue (88-91%)
+                if (confidence >= 0.82) return '#6366f1'; // Medium confidence - indigo (82-87%)
+                if (confidence >= 0.76) return '#f59e0b'; // Lower confidence - orange (76-81%)
+                return '#ef4444'; // Low confidence - red (75% and below)
+            }
+            
+            function getTotalProducts(shelves) {
+                let total = 0;
+                shelves.forEach(shelf => {
+                    total += shelf.product_count || 0;
+                });
+                return total;
+            }
+            
+            function getMaxStackHeight(shelf) {
+                let maxStack = 1;
+                Object.values(shelf.sections).forEach(section => {
+                    section.forEach(slot => {
+                        if (slot.type === 'product') {
+                            const stack = slot.data.quantity?.stack || 1;
+                            maxStack = Math.max(maxStack, stack);
+                        }
+                    });
+                });
+                return maxStack;
+            }
+            
+            // Create GLOBAL CONSISTENT shelf grid - all shelves same width
+            function createGlobalConsistentShelfGrid(shelf, globalMaxPosition, globalMaxStackHeight) {
+                console.log(`🏗️ Creating GLOBAL CONSISTENT grid for Shelf ${shelf.shelf_number}: ${globalMaxPosition} positions × ${globalMaxStackHeight} stack (SAME for all shelves)`);
+                
+                const shelfDiv = document.createElement('div');
+                shelfDiv.style.cssText = `
+                    background: white;
+                    border-radius: 8px;
+                    border: 1px solid #e2e8f0;
+                    padding: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    display: flex;
+                    align-items: stretch;
+                `;
+
+                // Shelf number on the left side
+                const shelfNumber = document.createElement('div');
+                shelfNumber.style.cssText = `
+                    background: transparent;
+                    color: #64748b;
+                    font-weight: 600;
+                    font-size: 16px;
+                    padding: 8px 4px;
+                    margin-right: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 25px;
+                    flex-shrink: 0;
+                `;
+                shelfNumber.textContent = shelf.shelf_number;
+                shelfDiv.appendChild(shelfNumber);
+
+                // Grid container (no header)
+                const gridWrapper = document.createElement('div');
+                gridWrapper.style.cssText = `
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    min-width: 0;
+                `;
+
+                // Create 2D grid array using GLOBAL dimensions
+                const grid = createGlobal2DGrid(shelf, globalMaxPosition, globalMaxStackHeight);
+                
+                // Calculate ACTUAL stack height for THIS shelf (not global)
+                let actualShelfStackHeight = 1;
+                ['Left', 'Center', 'Right'].forEach(sectionName => {
+                    if (shelf.sections[sectionName]) {
+                        shelf.sections[sectionName].forEach(slot => {
+                            if (slot.type === 'product' && slot.data) {
+                                const stackHeight = slot.data.quantity?.stack || 1;
+                                actualShelfStackHeight = Math.max(actualShelfStackHeight, stackHeight);
+                            }
+                        });
+                    }
+                });
+
+                console.log(`📐 Shelf ${shelf.shelf_number}: Using actual stack height ${actualShelfStackHeight} (not global ${globalMaxStackHeight})`);
+
+                // Create the visual grid container with CORRECT dimensions
+                const gridContainer = document.createElement('div');
+                gridContainer.style.cssText = `
+                    display: grid;
+                    grid-template-columns: repeat(${globalMaxPosition}, minmax(80px, 1fr));
+                    grid-template-rows: repeat(${actualShelfStackHeight}, 1fr);
+                    gap: 2px;
+                    background: #f7fafc;
+                    border-radius: 4px;
+                    padding: 8px;
+                    min-height: ${actualShelfStackHeight * 50}px;
+                    min-width: max-content;
+                    box-sizing: border-box;
+                    overflow: visible;
+                `;
+
+                // DEBUG: Check what's actually in the grid before rendering
+                console.log(`🔍 GRID CONTENTS for shelf ${shelf.shelf_number}:`);
+                for (let stackLevel = 0; stackLevel < actualShelfStackHeight; stackLevel++) {
+                    let rowContents = [];
+                    for (let position = 0; position < globalMaxPosition; position++) {
+                        const cellData = grid[stackLevel][position];
+                        if (cellData.type === 'product') {
+                            rowContents.push(`${cellData.product.brand}(F${cellData.facingIndex})`);
+                        } else {
+                            rowContents.push('EMPTY');
+                        }
+                    }
+                    console.log(`  Row ${stackLevel}: [${rowContents.join(', ')}]`);
+                }
+
+                // Fill grid with cells using ACTUAL shelf stack height
+                for (let stackLevel = actualShelfStackHeight - 1; stackLevel >= 0; stackLevel--) {
+                    for (let position = 0; position < globalMaxPosition; position++) {
+                        const cellData = grid[stackLevel][position];
+                        const cell = createGlobalGridCell(cellData, position + 1, stackLevel + 1);
+                        gridContainer.appendChild(cell);
+                    }
+                }
+
+                gridWrapper.appendChild(gridContainer);
+                shelfDiv.appendChild(gridWrapper);
+                return shelfDiv;
+            }
+            
+            // Create GLOBAL 2D grid array using ACTUAL JSON data
+            function createGlobal2DGrid(shelf, globalMaxPosition, globalMaxStackHeight) {
+                console.log(`📊 Creating GLOBAL 2D grid from JSON: ${globalMaxPosition} × ${globalMaxStackHeight}`);
+                
+                // Initialize empty grid with GLOBAL dimensions
+                const grid = [];
+                for (let stackLevel = 0; stackLevel < globalMaxStackHeight; stackLevel++) {
+                    grid[stackLevel] = [];
+                    for (let position = 0; position < globalMaxPosition; position++) {
+                        grid[stackLevel][position] = { 
+                            type: 'empty', 
+                            position: position + 1, 
+                            stackLevel: stackLevel + 1 
+                        };
+                    }
+                }
+                
+                // Place products from ACTUAL JSON data - CALCULATE REAL GRID POSITIONS
+                console.log(`🏗️ Shelf ${shelf.shelf_number}: Starting product placement`);
+                console.log(`📊 Raw shelf data:`, shelf);
+                
+                let currentGridPosition = 1; // Track actual grid position
+                
+                ['Left', 'Center', 'Right'].forEach(sectionName => {
+                    if (shelf.sections[sectionName]) {
+                        console.log(`📂 Section ${sectionName}: ${shelf.sections[sectionName].length} slots`);
+                        console.log(`📋 Section ${sectionName} raw data:`, shelf.sections[sectionName]);
+                        
+                        shelf.sections[sectionName].forEach((slot, index) => {
+                            console.log(`🔍 Processing slot ${index + 1}:`, slot);
+                            
+                            if (slot.type === 'product' && slot.data) {
+                                const facings = slot.data.quantity?.columns || 1;
+                                console.log(`📍 PRODUCT: ${slot.data.brand} ${slot.data.name}`);
+                                console.log(`📐 JSON position: ${slot.position} (sequence in section)`);
+                                console.log(`📐 REAL grid position: ${currentGridPosition} (calculated)`);
+                                console.log(`📐 Facings: ${facings} → will occupy grid slots ${currentGridPosition} to ${currentGridPosition + facings - 1}`);
+                                
+                                placeProductInGlobalGrid(grid, slot.data, currentGridPosition);
+                                currentGridPosition += facings; // Move to next available position
+                                
+                            } else if (slot.type === 'empty') {
+                                console.log(`⭕ EMPTY: JSON position ${slot.position} → grid position ${currentGridPosition}`);
+                                currentGridPosition += 1; // Empty slot takes 1 position
+                            } else {
+                                console.log(`❓ UNKNOWN SLOT TYPE: ${slot.type}`, slot);
+                            }
+                        });
+                    } else {
+                        console.log(`📂 Section ${sectionName}: No data`);
+                    }
+                });
+                console.log(`✅ Shelf ${shelf.shelf_number}: Product placement complete. Total grid positions used: ${currentGridPosition - 1}`);
+                
+                return grid;
+            }
+            
+            // Place product in GLOBAL grid - DECOUPLE JSON position from grid positions
+            function placeProductInGlobalGrid(grid, product, jsonPosition) {
+                // Extract EXACT values from JSON data
+                const facings = product.quantity?.columns || 1;
+                const stackHeight = product.quantity?.stack || 1;
+                
+                console.log(`📦 PRODUCT: ${product.brand} ${product.name}`);
+                console.log(`📍 JSON position: ${jsonPosition} (starting position of this product)`);
+                console.log(`📐 Facings: ${facings} (will occupy ${facings} grid slots)`);
+                console.log(`📚 Stack: ${stackHeight} (height in each slot)`);
+                console.log(`🎯 GRID SLOTS TO FILL: ${jsonPosition} to ${jsonPosition + facings - 1}`);
+                
+                // FILL GRID SLOTS: Each facing gets its own grid column
+                for (let stackLevel = 0; stackLevel < stackHeight; stackLevel++) {
+                    for (let facing = 0; facing < facings; facing++) {
+                        // GRID POSITION CALCULATION:
+                        // - jsonPosition is 1-based (e.g., position 4)
+                        // - grid is 0-based (e.g., grid[0][3])
+                        // - facing 0 goes to jsonPosition, facing 1 goes to jsonPosition+1, etc.
+                        const gridRow = stackLevel;
+                        const gridCol = (jsonPosition - 1) + facing; // Convert to 0-based and add facing offset
+                        
+                        console.log(`  🔲 SLOT ${gridCol + 1}: grid[${gridRow}][${gridCol}] = ${product.brand} facing ${facing + 1}/${facings}, stack ${stackLevel + 1}/${stackHeight}`);
+                        
+                        if (gridRow < grid.length && gridCol < grid[0].length) {
+                            grid[gridRow][gridCol] = {
+                                type: 'product',
+                                product: product,
+                                jsonPosition: jsonPosition, // Original JSON position
+                                gridPosition: gridCol + 1, // Actual grid slot (1-based)
+                                stackLevel: stackLevel + 1,
+                                facingIndex: facing + 1,
+                                totalFacings: facings,
+                                totalStack: stackHeight,
+                                cellId: `${product.id || product.brand}-JSON${jsonPosition}-GRID${gridCol + 1}-F${facing + 1}S${stackLevel + 1}`
+                            };
+                            console.log(`    ✅ FILLED grid slot ${gridCol + 1} with ${product.brand} facing ${facing + 1}`);
+                        } else {
+                            console.error(`❌ GRID OVERFLOW: grid[${gridRow}][${gridCol}] for ${product.brand} facing ${facing + 1}`);
+                        }
+                    }
+                }
+                console.log(`✅ ${product.brand}: JSON position ${jsonPosition} → FILLED grid slots ${jsonPosition} to ${jsonPosition + facings - 1}`);
+            }
+            
+            // Create grid cell using EXACT JSON data - truly empty slots are invisible
+            function createGlobalGridCell(cellData, position, stackLevel) {
+                const cell = document.createElement('div');
+                
+                if (cellData.type === 'empty') {
+                    // TRULY EMPTY cell - completely transparent/invisible as requested
+                    cell.style.cssText = `
+                        background: transparent;
+                        border: none;
+                        height: 48px;
+                        width: 100%;
+                        box-sizing: border-box;
+                    `;
+                    return cell;
+                }
+
+                // Product cell using EXACT JSON data
+                const { product, jsonPosition, gridPosition, facingIndex, stackLevel: productStackLevel, totalFacings, totalStack, cellId } = cellData;
+                
+                // Use EXACT confidence from JSON - prioritize visual.confidence_color if available
+                const confidence = product.metadata?.extraction_confidence || product.extraction_confidence || 0.9;
+                const confidenceColor = product.visual?.confidence_color || getConfidenceColor(confidence);
+                
+                console.log(`🎨 Cell: ${cellId}, JSON pos: ${jsonPosition}, Grid pos: ${gridPosition}, Facing: ${facingIndex}/${totalFacings}, Stack: ${productStackLevel}/${totalStack}, Confidence: ${confidence}`);
+                
+                // Style product cell - ensure equal width for all cells
+                cell.style.cssText = `
+                    background: linear-gradient(135deg, ${confidenceColor} 0%, ${adjustColor(confidenceColor, -20)} 100%);
+                    color: white;
+                    border-radius: 4px;
+                    height: 48px;
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 9px;
+                    font-weight: 500;
+                    border: 2px solid ${confidenceColor};
+                    position: relative;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    box-sizing: border-box;
+                `;
+
+                // Add hover effect
+                cell.addEventListener('mouseenter', () => {
+                    cell.style.transform = 'scale(1.05)';
+                    cell.style.zIndex = '10';
+                    cell.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                });
+                cell.addEventListener('mouseleave', () => {
+                    cell.style.transform = 'scale(1)';
+                    cell.style.zIndex = '1';
+                    cell.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                });
+
+                // Add data attribute for display controls
+                cell.setAttribute('data-product-cell', 'true');
+
+                // ALL CELLS show the same product info - no "main cell" concept for facings
+                const brandDiv = document.createElement('div');
+                brandDiv.setAttribute('data-brand', 'true');
+                brandDiv.style.cssText = `
+                    font-weight: 700;
+                    font-size: 8px;
+                    text-align: center;
+                    margin-bottom: 1px;
+                    text-overflow: ellipsis;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    max-width: 100%;
+                `;
+                brandDiv.textContent = product.brand || 'Unknown';
+
+                const nameDiv = document.createElement('div');
+                nameDiv.setAttribute('data-name', 'true');
+                nameDiv.style.cssText = `
+                    font-size: 7px;
+                    text-align: center;
+                    opacity: 0.9;
+                    text-overflow: ellipsis;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    max-width: 100%;
+                    margin-bottom: 1px;
+                `;
+                nameDiv.textContent = product.name || 'Product';
+
+                if (product.price) {
+                    const priceDiv = document.createElement('div');
+                    priceDiv.setAttribute('data-price', 'true');
+                    priceDiv.style.cssText = `
+                        font-size: 7px;
+                        font-weight: 700;
+                        text-align: center;
+                        background: rgba(255,255,255,0.2);
+                        padding: 1px 3px;
+                        border-radius: 2px;
+                    `;
+                    priceDiv.textContent = `£${product.price.toFixed(2)}`;
+                    cell.appendChild(priceDiv);
+                }
+
+                const confidenceDiv = document.createElement('div');
+                confidenceDiv.setAttribute('data-confidence', 'true');
+                confidenceDiv.style.cssText = `
+                    font-size: 6px;
+                    font-weight: 700;
+                    text-align: center;
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    padding: 1px 2px;
+                    border-radius: 2px;
+                    margin-top: 1px;
+                    display: none;
+                `;
+                confidenceDiv.textContent = `${Math.round(confidence * 100)}%`;
+                cell.appendChild(confidenceDiv);
+
+                cell.appendChild(brandDiv);
+                cell.appendChild(nameDiv);
+
+                // Add facing indicator for debugging (optional)
+                if (totalFacings > 1) {
+                    const indicator = document.createElement('div');
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: 2px;
+                        right: 2px;
+                        background: rgba(0,0,0,0.7);
+                        color: white;
+                        font-size: 6px;
+                        padding: 1px 3px;
+                        border-radius: 2px;
+                        font-weight: 700;
+                        line-height: 1;
+                    `;
+                    indicator.textContent = `F${facingIndex}`;
+                    cell.appendChild(indicator);
+                }
+
+                // Add click handler with EXACT JSON data
+                cell.addEventListener('click', () => {
+                    console.log(`🖱️ Clicked cell: ${cellId}`);
+                    console.log(`📍 Product: ${product.brand} ${product.name}`);
+                    console.log(`📐 JSON position: ${jsonPosition}, Grid position: ${gridPosition}`);
+                    console.log(`📊 Facing: ${facingIndex}/${totalFacings}, Stack: ${productStackLevel}/${totalStack}`);
+                    console.log('Full product data:', product);
+                });
+
+                return cell;
+            }
+            
+            // Utility function to adjust color brightness
+            function adjustColor(color, amount) {
+                const usePound = color[0] === '#';
+                const col = usePound ? color.slice(1) : color;
+                const num = parseInt(col, 16);
+                let r = (num >> 16) + amount;
+                let g = (num >> 8 & 0x00FF) + amount;
+                let b = (num & 0x0000FF) + amount;
+                r = r > 255 ? 255 : r < 0 ? 0 : r;
+                g = g > 255 ? 255 : g < 0 ? 0 : g;
+                b = b > 255 ? 255 : b < 0 ? 0 : b;
+                return (usePound ? '#' : '') + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
+            }
+
+
+
             // Utility function
             function escapeHtml(text) {
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
             }
+            
+            // Load React component after React libraries are ready
+            function loadReactComponent() {
+                console.log('📦 Loading React component...');
+                
+                // Check if React is available
+                if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+                    console.log('⏳ React not ready, waiting...');
+                    setTimeout(loadReactComponent, 100);
+                    return;
+                }
+                
+                // Load the component script
+                const script = document.createElement('script');
+                script.src = '/static/components/InteractivePlanogram.js';
+                script.onload = function() {
+                    console.log('✅ React component script loaded');
+                    initializePlanogramComponent();
+                };
+                script.onerror = function() {
+                    console.error('❌ Failed to load React component script');
+                };
+                document.head.appendChild(script);
+            }
+            
+            // Initialize React Planogram Component
+            function initializePlanogramComponent() {
+                console.log('🚀 Initializing React Planogram Component...');
+                
+                // Check if everything is loaded
+                if (typeof React === 'undefined') {
+                    console.error('❌ React not loaded');
+                    return false;
+                }
+                
+                if (typeof ReactDOM === 'undefined') {
+                    console.error('❌ ReactDOM not loaded');
+                    return false;
+                }
+                
+                if (typeof window.InteractivePlanogram === 'undefined') {
+                    console.error('❌ InteractivePlanogram component not loaded');
+                    return false;
+                }
+                
+                // Find the planogram container
+                const planogramContainer = document.getElementById('planogramViewer');
+                if (!planogramContainer) {
+                    console.log('⚠️ Planogram container not found (will try later)');
+                    return false;
+                }
+                
+                try {
+                    // Clear existing content
+                    planogramContainer.innerHTML = '';
+                    
+                    // Create and render React component
+                    const planogramElement = React.createElement(window.InteractivePlanogram, {
+                        imageId: 'demo'
+                    });
+                    
+                    ReactDOM.render(planogramElement, planogramContainer);
+                    console.log('✅ React Planogram Component rendered successfully');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Error rendering React component:', error);
+                    planogramContainer.innerHTML = `
+                        <div style="padding: 20px; text-align: center; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626;">
+                            <h3>⚠️ Component Error</h3>
+                            <p>Failed to render planogram: ${error.message}</p>
+                        </div>
+                    `;
+                    return false;
+                }
+            }
+            
+            // Start loading when DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('🔄 DOM loaded, starting React component loading...');
+                loadReactComponent();
+                
+                // Also try to load it when switching to simple mode
+                window.forceLoadPlanogram = function() {
+                    console.log('🔧 Force loading planogram...');
+                    if (typeof window.InteractivePlanogram !== 'undefined') {
+                        initializePlanogramComponent();
+                    } else {
+                        loadReactComponent();
+                    }
+                };
+            });
         </script>
     </body>
     </html>

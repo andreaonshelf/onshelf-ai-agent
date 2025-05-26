@@ -1,6 +1,7 @@
 /**
  * Interactive Planogram Component - Phase 1: Visualization Only
  * Displays products in correct positions with proper stacking and gap detection
+ * Using React.createElement for browser compatibility (no JSX transpilation needed)
  */
 
 class InteractivePlanogram extends React.Component {
@@ -16,8 +17,12 @@ class InteractivePlanogram extends React.Component {
                 showFacings: true,
                 showConfidence: false,
                 showStacking: true
-            }
+            },
+            zoomLevel: 1.0
         };
+        
+        // Store reference for global controls
+        window.currentPlanogramComponent = this;
     }
 
     async componentDidMount() {
@@ -69,128 +74,142 @@ class InteractivePlanogram extends React.Component {
         }));
     }
 
+    handleZoom = (factor, reset = false) => {
+        this.setState(prevState => ({
+            zoomLevel: reset ? 1.0 : prevState.zoomLevel * factor
+        }));
+    }
+
     renderLoadingState() {
-        return (
-            <div className="planogram-loading">
-                <div className="loading-spinner"></div>
-                <p>Loading planogram...</p>
-            </div>
+        return React.createElement('div', { className: 'planogram-loading' },
+            React.createElement('div', { className: 'loading-spinner' }),
+            React.createElement('p', null, 'Loading planogram...')
         );
     }
 
     renderErrorState() {
-        return (
-            <div className="planogram-error">
-                <h3>❌ Failed to Load Planogram</h3>
-                <p>{this.state.error}</p>
-                <button 
-                    className="btn btn-primary" 
-                    onClick={() => this.loadPlanogramData()}
-                >
-                    🔄 Retry
-                </button>
-            </div>
+        return React.createElement('div', { className: 'planogram-error' },
+            React.createElement('h3', null, '❌ Failed to Load Planogram'),
+            React.createElement('p', null, this.state.error),
+            React.createElement('button', {
+                className: 'btn btn-primary',
+                onClick: () => this.loadPlanogramData()
+            }, '🔄 Retry')
         );
     }
 
     renderOverlayControls() {
         const { overlaySettings } = this.state;
 
-        return (
-            <div className="planogram-overlay-controls">
-                <h4>Display Options</h4>
-                <div className="overlay-toggles">
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            checked={overlaySettings.showNames}
-                            onChange={() => this.toggleOverlay('showNames')}
-                        />
-                        Product Names
-                    </label>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            checked={overlaySettings.showPrices}
-                            onChange={() => this.toggleOverlay('showPrices')}
-                        />
-                        Prices
-                    </label>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            checked={overlaySettings.showFacings}
-                            onChange={() => this.toggleOverlay('showFacings')}
-                        />
-                        Facing Counts
-                    </label>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            checked={overlaySettings.showConfidence}
-                            onChange={() => this.toggleOverlay('showConfidence')}
-                        />
-                        Confidence Scores
-                    </label>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            checked={overlaySettings.showStacking}
-                            onChange={() => this.toggleOverlay('showStacking')}
-                        />
-                        Stacking Indicators
-                    </label>
-                </div>
-            </div>
+        return React.createElement('div', { className: 'planogram-overlay-controls' },
+            React.createElement('h4', null, 'Display Options'),
+            React.createElement('div', { className: 'overlay-toggles' },
+                React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: overlaySettings.showNames,
+                        onChange: () => this.toggleOverlay('showNames')
+                    }),
+                    ' Product Names'
+                ),
+                React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: overlaySettings.showPrices,
+                        onChange: () => this.toggleOverlay('showPrices')
+                    }),
+                    ' Prices'
+                ),
+                React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: overlaySettings.showFacings,
+                        onChange: () => this.toggleOverlay('showFacings')
+                    }),
+                    ' Facing Counts'
+                ),
+                React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: overlaySettings.showConfidence,
+                        onChange: () => this.toggleOverlay('showConfidence')
+                    }),
+                    ' Confidence Scores'
+                ),
+                React.createElement('label', null,
+                    React.createElement('input', {
+                        type: 'checkbox',
+                        checked: overlaySettings.showStacking,
+                        onChange: () => this.toggleOverlay('showStacking')
+                    }),
+                    ' Stacking Indicators'
+                )
+            )
         );
     }
 
     renderPlanogram() {
         const { planogramData } = this.state;
         const { planogram } = planogramData;
-        const { shelves, metadata } = planogram;
+        const { shelves } = planogram;
 
         // Sort shelves from top to bottom (highest shelf number first)
         const sortedShelfNumbers = Object.keys(shelves)
             .map(num => parseInt(num))
             .sort((a, b) => b - a);
 
-        return (
-            <div className="interactive-planogram">
-                {/* Planogram Header */}
-                <div className="planogram-header">
-                    <div className="planogram-stats">
-                        <span className="stat">
-                            📦 {planogram.total_products} Products
-                        </span>
-                        <span className="stat">
-                            📚 {planogram.shelf_count} Shelves
-                        </span>
-                        <span className="stat">
-                            🎯 {Math.round(metadata.extraction_confidence * 100)}% Confidence
-                        </span>
-                        {metadata.has_stacking && (
-                            <span className="stat stacking-indicator">
-                                📚 Stacking Detected
-                            </span>
-                        )}
-                    </div>
-                </div>
+        // Calculate total products and check for stacking
+        let totalProducts = 0;
+        let hasStacking = false;
+        let avgConfidence = 0;
+        let confidenceCount = 0;
 
-                {/* Shelf Container */}
-                <div className="shelves-container">
-                    {sortedShelfNumbers.map(shelfNum => (
-                        <ShelfComponent
-                            key={shelfNum}
-                            shelfData={shelves[shelfNum]}
-                            overlaySettings={this.state.overlaySettings}
-                        />
-                    ))}
-                </div>
+        Object.values(shelves).forEach(shelf => {
+            Object.values(shelf.sections).forEach(section => {
+                section.forEach(slot => {
+                    if (slot.type === 'product') {
+                        totalProducts++;
+                        if (slot.data.quantity.stack > 1) {
+                            hasStacking = true;
+                        }
+                        if (slot.data.metadata && slot.data.metadata.extraction_confidence) {
+                            avgConfidence += slot.data.metadata.extraction_confidence;
+                            confidenceCount++;
+                        }
+                    }
+                });
+            });
+        });
 
-                {/* Overlay Controls */}
-                {this.renderOverlayControls()}
-            </div>
+        avgConfidence = confidenceCount > 0 ? avgConfidence / confidenceCount : 0.9;
+
+        return React.createElement('div', { 
+            className: 'interactive-planogram',
+            style: { transform: `scale(${this.state.zoomLevel})`, transformOrigin: 'top left' }
+        },
+            // Planogram Header
+            React.createElement('div', { className: 'planogram-header' },
+                React.createElement('div', { className: 'planogram-stats' },
+                    React.createElement('span', { className: 'stat' }, `📦 ${totalProducts} Products`),
+                    React.createElement('span', { className: 'stat' }, `📚 ${sortedShelfNumbers.length} Shelves`),
+                    React.createElement('span', { className: 'stat' }, `🎯 ${Math.round(avgConfidence * 100)}% Confidence`),
+                    hasStacking && React.createElement('span', { className: 'stat stacking-indicator' }, '📚 Stacking Detected')
+                )
+            ),
+
+            // Shelf Container
+            React.createElement('div', { className: 'shelves-container' },
+                sortedShelfNumbers.map(shelfNum => 
+                    React.createElement(ShelfComponent, {
+                        key: shelfNum,
+                        shelfData: shelves[shelfNum],
+                        overlaySettings: this.state.overlaySettings
+                    })
+                )
+            ),
+
+            // Overlay Controls
+            this.renderOverlayControls()
         );
     }
 
@@ -206,10 +225,8 @@ class InteractivePlanogram extends React.Component {
         }
 
         if (!planogramData) {
-            return (
-                <div className="planogram-empty">
-                    <p>No planogram data available</p>
-                </div>
+            return React.createElement('div', { className: 'planogram-empty' },
+                React.createElement('p', null, 'No planogram data available')
             );
         }
 
@@ -226,19 +243,17 @@ class ShelfComponent extends React.Component {
             return null;
         }
 
-        return (
-            <div className={`shelf-section section-${sectionName.toLowerCase()}`}>
-                <div className="section-label">{sectionName}</div>
-                <div className="section-slots">
-                    {sectionSlots.map((slot, index) => (
-                        <SlotComponent
-                            key={`${sectionName}-${slot.position}-${index}`}
-                            slot={slot}
-                            overlaySettings={this.props.overlaySettings}
-                        />
-                    ))}
-                </div>
-            </div>
+        return React.createElement('div', { className: `shelf-section section-${sectionName.toLowerCase()}` },
+            React.createElement('div', { className: 'section-label' }, sectionName),
+            React.createElement('div', { className: 'section-slots' },
+                sectionSlots.map((slot, index) => 
+                    React.createElement(SlotComponent, {
+                        key: `${sectionName}-${slot.position}-${index}`,
+                        slot: slot,
+                        overlaySettings: this.props.overlaySettings
+                    })
+                )
+            )
         );
     }
 
@@ -246,27 +261,22 @@ class ShelfComponent extends React.Component {
         const { shelfData } = this.props;
         const { shelf_number, sections, product_count, empty_count } = shelfData;
 
-        return (
-            <div className="shelf-component">
-                {/* Shelf Header */}
-                <div className="shelf-header">
-                    <h3>Shelf {shelf_number}</h3>
-                    <div className="shelf-stats">
-                        <span className="products-count">{product_count} products</span>
-                        {empty_count > 0 && (
-                            <span className="gaps-count">{empty_count} gaps</span>
-                        )}
-                    </div>
-                </div>
+        return React.createElement('div', { className: 'shelf-component' },
+            // Shelf Header
+            React.createElement('div', { className: 'shelf-header' },
+                React.createElement('h3', null, `Shelf ${shelf_number}`),
+                React.createElement('div', { className: 'shelf-stats' },
+                    React.createElement('span', { className: 'products-count' }, `${product_count} products`),
+                    empty_count > 0 && React.createElement('span', { className: 'gaps-count' }, `${empty_count} gaps`)
+                )
+            ),
 
-                {/* Shelf Content */}
-                <div className="shelf-content">
-                    {/* Render sections: Left, Center, Right */}
-                    {this.renderSection("Left", sections.Left)}
-                    {this.renderSection("Center", sections.Center)}
-                    {this.renderSection("Right", sections.Right)}
-                </div>
-            </div>
+            // Shelf Content
+            React.createElement('div', { className: 'shelf-content' },
+                this.renderSection("Left", sections.Left),
+                this.renderSection("Center", sections.Center),
+                this.renderSection("Right", sections.Right)
+            )
         );
     }
 }
@@ -285,61 +295,51 @@ class SlotComponent extends React.Component {
 
         if (isStacked) {
             // Render stacked products (multiple rows)
-            return (
-                <div className="product-slot stacked">
-                    {Array.from({ length: stackRows }, (_, stackIndex) => (
-                        <div 
-                            key={stackIndex}
-                            className={`stack-row stack-${stackIndex === 0 ? 'bottom' : 'top'}`}
-                            style={{ backgroundColor: product.visual.confidence_color }}
-                        >
-                            <ProductContent 
-                                product={product}
-                                overlaySettings={overlaySettings}
-                                stackIndex={stackIndex}
-                                isStacked={true}
-                            />
-                        </div>
-                    ))}
-                </div>
+            return React.createElement('div', { className: 'product-slot stacked' },
+                Array.from({ length: stackRows }, (_, stackIndex) => 
+                    React.createElement('div', {
+                        key: stackIndex,
+                        className: `stack-row stack-${stackIndex === 0 ? 'bottom' : 'top'}`,
+                        style: { backgroundColor: product.visual.confidence_color }
+                    },
+                        React.createElement(ProductContent, {
+                            product: product,
+                            overlaySettings: overlaySettings,
+                            stackIndex: stackIndex,
+                            isStacked: true
+                        })
+                    )
+                )
             );
         } else {
             // Render full-height product
-            return (
-                <div 
-                    className="product-slot full-height"
-                    style={{ backgroundColor: product.visual.confidence_color }}
-                >
-                    <ProductContent 
-                        product={product}
-                        overlaySettings={overlaySettings}
-                        isStacked={false}
-                    />
-                </div>
+            return React.createElement('div', {
+                className: 'product-slot full-height',
+                style: { backgroundColor: product.visual.confidence_color }
+            },
+                React.createElement(ProductContent, {
+                    product: product,
+                    overlaySettings: overlaySettings,
+                    isStacked: false
+                })
             );
         }
     }
 
     renderEmptySlot() {
-        const { slot } = this.props;
-
-        return (
-            <div className="empty-slot">
-                <div className="empty-content">
-                    <span className="empty-icon">📭</span>
-                    <span className="empty-text">Empty</span>
-                </div>
-            </div>
+        return React.createElement('div', { className: 'empty-slot' },
+            React.createElement('div', { className: 'empty-content' },
+                React.createElement('span', { className: 'empty-icon' }, '📭'),
+                React.createElement('span', { className: 'empty-text' }, 'Empty')
+            )
         );
     }
 
     render() {
         const { slot } = this.props;
 
-        return (
-            <div className={`slot-container position-${slot.position}`}>
-                {slot.type === 'product' ? this.renderProductSlot() : this.renderEmptySlot()}
-            </div>
+        return React.createElement('div', { className: `slot-container position-${slot.position}` },
+            slot.type === 'product' ? this.renderProductSlot() : this.renderEmptySlot()
         );
     }
 }
@@ -351,44 +351,59 @@ class ProductContent extends React.Component {
     render() {
         const { product, overlaySettings, stackIndex, isStacked } = this.props;
 
-        return (
-            <div className="product-content">
-                {/* Product Name */}
-                {overlaySettings.showNames && (
-                    <div className="product-name">
-                        {product.brand} {product.name}
-                    </div>
-                )}
+        const elements = [];
 
-                {/* Product Price */}
-                {overlaySettings.showPrices && product.price && (
-                    <div className="product-price">
-                        £{product.price.toFixed(2)}
-                    </div>
-                )}
+        // Product Name
+        if (overlaySettings.showNames) {
+            elements.push(
+                React.createElement('div', { 
+                    key: 'name',
+                    className: 'product-name' 
+                }, `${product.brand} ${product.name}`)
+            );
+        }
 
-                {/* Facing Count */}
-                {overlaySettings.showFacings && (
-                    <div className="product-facings">
-                        {product.quantity.total_facings} facings
-                    </div>
-                )}
+        // Product Price
+        if (overlaySettings.showPrices && product.price) {
+            elements.push(
+                React.createElement('div', { 
+                    key: 'price',
+                    className: 'product-price' 
+                }, `£${product.price.toFixed(2)}`)
+            );
+        }
 
-                {/* Confidence Score */}
-                {overlaySettings.showConfidence && (
-                    <div className="product-confidence">
-                        {Math.round(product.metadata.extraction_confidence * 100)}%
-                    </div>
-                )}
+        // Facing Count
+        if (overlaySettings.showFacings) {
+            elements.push(
+                React.createElement('div', { 
+                    key: 'facings',
+                    className: 'product-facings' 
+                }, `${product.quantity.total_facings} facings`)
+            );
+        }
 
-                {/* Stacking Indicator */}
-                {overlaySettings.showStacking && isStacked && (
-                    <div className="stacking-indicator">
-                        Stack {stackIndex + 1}/{product.visual.stack_rows}
-                    </div>
-                )}
-            </div>
-        );
+        // Confidence Score
+        if (overlaySettings.showConfidence) {
+            elements.push(
+                React.createElement('div', { 
+                    key: 'confidence',
+                    className: 'product-confidence' 
+                }, `${Math.round(product.metadata.extraction_confidence * 100)}%`)
+            );
+        }
+
+        // Stacking Indicator
+        if (overlaySettings.showStacking && isStacked) {
+            elements.push(
+                React.createElement('div', { 
+                    key: 'stacking',
+                    className: 'stacking-indicator' 
+                }, `Stack ${stackIndex + 1}/${product.visual.stack_rows}`)
+            );
+        }
+
+        return React.createElement('div', { className: 'product-content' }, ...elements);
     }
 }
 
