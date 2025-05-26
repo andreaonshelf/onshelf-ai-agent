@@ -573,6 +573,61 @@ async def get_queue_item_flow(item_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to get flow: {str(e)}")
 
 
+@router.post("/approve/{upload_id}")
+async def approve_upload_for_processing(upload_id: str):
+    """Manually create queue entry for approved upload"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Check if upload exists
+        upload_result = supabase.table("uploads").select("*").eq("id", upload_id).execute()
+        
+        if not upload_result.data:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        
+        upload = upload_result.data[0]
+        
+        # Check if already queued
+        existing = supabase.table("ai_extraction_queue").select("id").eq("upload_id", upload_id).execute()
+        
+        if existing.data:
+            return {
+                "message": "Already queued",
+                "queue_id": existing.data[0]["id"],
+                "status": "existing"
+            }
+        
+        # Create queue entry
+        queue_data = {
+            "upload_id": upload_id,
+            "status": "pending",
+            "ready_media_id": upload_id,
+            "enhanced_image_path": upload.get("file_path", ""),
+            "current_extraction_system": "custom_consensus",
+            "processing_attempts": 0
+        }
+        
+        result = supabase.table("ai_extraction_queue").insert(queue_data).execute()
+        
+        if result.data:
+            logger.info(f"Created queue entry for approved upload: {upload_id}", component="queue_api")
+            return {
+                "message": "Queue entry created",
+                "queue_id": result.data[0]["id"],
+                "status": "created"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create queue entry")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to approve upload {upload_id}: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to approve upload: {str(e)}")
+
+
 @router.get("/logs")
 async def get_logs():
     """Get logs for the system"""

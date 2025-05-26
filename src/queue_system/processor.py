@@ -113,13 +113,20 @@ class AIExtractionQueueProcessor:
             # Get image data - try multiple sources
             image_data = None
             if enhanced_image_path:
-                # Try to load from enhanced image path
+                # Try to load from Supabase storage
                 try:
-                    with open(enhanced_image_path, 'rb') as f:
-                        image_data = f.read()
-                    logger.info(f"Loaded image from enhanced_image_path: {enhanced_image_path}")
+                    # Download from Supabase storage
+                    image_data = self.supabase.storage.from_("retail-captures").download(enhanced_image_path)
+                    logger.info(f"Loaded image from Supabase storage: {enhanced_image_path}")
                 except Exception as e:
-                    logger.warning(f"Failed to load from enhanced_image_path: {e}")
+                    logger.warning(f"Failed to load from Supabase storage: {e}")
+                    # Fallback to local file
+                    try:
+                        with open(enhanced_image_path, 'rb') as f:
+                            image_data = f.read()
+                        logger.info(f"Loaded image from local path: {enhanced_image_path}")
+                    except Exception as e2:
+                        logger.warning(f"Failed to load from local path: {e2}")
             
             if not image_data and ready_media_id:
                 # Try to get from ready_media table or other source

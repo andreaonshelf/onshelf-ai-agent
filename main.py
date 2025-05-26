@@ -36,6 +36,10 @@ app.include_router(progressive_router)
 from src.api.strategic_interface import router as strategic_router
 app.include_router(strategic_router)
 
+# Include planogram editor API
+from src.api.planogram_editor import router as planogram_editor_router
+app.include_router(planogram_editor_router)
+
 # Include planogram rendering
 from src.api.planogram_renderer import router as planogram_router
 app.include_router(planogram_router)
@@ -58,6 +62,14 @@ async def root():
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>OnShelf AI - Extraction Dashboard</title>
+        
+        <!-- React and Dependencies -->
+        <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+        <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+        
+        <!-- Planogram Styles -->
+        <link rel="stylesheet" href="/static/css/planogram.css">
+        
         <style>
             * {
                 margin: 0;
@@ -1746,6 +1758,9 @@ async def root():
             </div>
         </div>
         
+        <!-- Interactive Planogram Component -->
+        <script src="/static/components/InteractivePlanogram.js"></script>
+        
         <script>
             // Global state
             let currentMode = 'queue';
@@ -2178,15 +2193,30 @@ async def root():
                     
                     imageElement.src = `/api/queue/image/${selectedItemId}`;
                     
-                    // Load planogram
+                    // Load interactive planogram
                     const planogramViewer = document.getElementById('planogramViewer');
                     try {
-                        const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=product_view`);
-                        if (planogramResponse.ok) {
-                            const svgContent = await planogramResponse.text();
-                            planogramViewer.innerHTML = svgContent;
+                        // Clear existing content
+                        planogramViewer.innerHTML = '';
+                        
+                        // Render interactive planogram component
+                        if (window.InteractivePlanogram) {
+                            ReactDOM.render(
+                                React.createElement(window.InteractivePlanogram, {
+                                    imageId: selectedItemId,
+                                    mode: 'simple'
+                                }),
+                                planogramViewer
+                            );
                         } else {
-                            planogramViewer.innerHTML = '<div class="loading">Planogram not available</div>';
+                            // Fallback to static SVG if React component not loaded
+                            const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=product_view`);
+                            if (planogramResponse.ok) {
+                                const svgContent = await planogramResponse.text();
+                                planogramViewer.innerHTML = svgContent;
+                            } else {
+                                planogramViewer.innerHTML = '<div class="loading">Planogram not available</div>';
+                            }
                         }
                     } catch (error) {
                         planogramViewer.innerHTML = '<div class="loading">Failed to load planogram</div>';
@@ -2224,15 +2254,30 @@ async def root():
                     const advancedImage = document.getElementById('advancedOriginalImage');
                     advancedImage.src = `/api/queue/image/${selectedItemId}`;
                     
-                    // Load planogram in advanced mode
+                    // Load interactive planogram in advanced mode
                     const advancedPlanogram = document.getElementById('advancedPlanogramViewer');
                     try {
-                        const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
-                        if (planogramResponse.ok) {
-                            const svgContent = await planogramResponse.text();
-                            advancedPlanogram.innerHTML = svgContent;
+                        // Clear existing content
+                        advancedPlanogram.innerHTML = '';
+                        
+                        // Render interactive planogram component
+                        if (window.InteractivePlanogram) {
+                            ReactDOM.render(
+                                React.createElement(window.InteractivePlanogram, {
+                                    imageId: selectedItemId,
+                                    mode: 'advanced'
+                                }),
+                                advancedPlanogram
+                            );
                         } else {
-                            advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                            // Fallback to static SVG if React component not loaded
+                            const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
+                            if (planogramResponse.ok) {
+                                const svgContent = await planogramResponse.text();
+                                advancedPlanogram.innerHTML = svgContent;
+                            } else {
+                                advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                            }
                         }
                     } catch (error) {
                         advancedPlanogram.innerHTML = '<div class="loading">Failed to load planogram</div>';
