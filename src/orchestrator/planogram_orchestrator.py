@@ -153,20 +153,27 @@ class PlanogramOrchestrator:
                                                 abstraction_level: str) -> VisualPlanogram:
         """Generate planogram with specified abstraction level"""
         
-        # Convert to appropriate abstraction level
-        if abstraction_level == "brand_view":
-            planogram_data = self.abstraction_manager.generate_brand_view(extraction_result.products)
-        elif abstraction_level == "sku_view":
-            planogram_data = self.abstraction_manager.generate_sku_view(extraction_result.products)
-        else:  # Default to product_view
-            planogram_data = self.abstraction_manager.generate_product_view(extraction_result.products)
-        
-        # Generate visual planogram
-        planogram = await self.generator.generate_from_abstraction(
-            planogram_data,
-            structure_context,
-            abstraction_level
-        )
+        # For product view, use the new extraction-based renderer
+        if abstraction_level == "product_view":
+            planogram = await self.generator.generate_from_extraction_result(
+                extraction_result,
+                structure_context
+            )
+        else:
+            # For other abstraction levels, use the existing method
+            if abstraction_level == "brand_view":
+                planogram_data = self.abstraction_manager.generate_brand_view(extraction_result.products)
+            elif abstraction_level == "sku_view":
+                planogram_data = self.abstraction_manager.generate_sku_view(extraction_result.products)
+            else:
+                planogram_data = self.abstraction_manager.generate_product_view(extraction_result.products)
+            
+            # Generate visual planogram
+            planogram = await self.generator.generate_from_abstraction(
+                planogram_data,
+                structure_context,
+                abstraction_level
+            )
         
         return planogram
     

@@ -79,6 +79,41 @@ EXTRACTION REQUIREMENTS:
 IMPORTANT: Focus on relative positioning (shelf level, position on shelf) rather than pixel measurements.
 """,
             
+            "shelf_by_shelf_extraction": """
+You are an expert retail product extractor. Focus on ONLY ONE SHELF at a time.
+
+CURRENT TASK: Extract all products from SHELF {shelf_number} ONLY.
+Total shelves in image: {total_shelves} (numbered 1=bottom to {total_shelves}=top)
+
+CRITICAL INSTRUCTIONS:
+1. ONLY extract products from shelf number {shelf_number}
+2. IGNORE all products on other shelves completely
+3. Work methodically from LEFT to RIGHT across this shelf only
+
+FOR EACH PRODUCT ON SHELF {shelf_number}:
+- Position on shelf (1=leftmost, incrementing rightward)
+- Brand name (be specific)
+- Product name/description
+- Price if visible
+- Facing count (how many units side-by-side, usually 1-3)
+- Any visible size/volume (e.g., '250ml', '100g')
+- Color of packaging
+- Confidence level (0.0-1.0)
+
+QUALITY GUIDELINES:
+- If you can't clearly read a product, still include it with lower confidence
+- Each distinct product gets one position number
+- If multiple facings of same product, the facing_count captures this
+- Empty spaces are NOT products - skip them
+- Be precise with positioning - count carefully from left edge
+
+EXPECTED OUTPUT: 
+Typically 5-15 products per shelf depending on shelf width and product sizes.
+Standard shelf width ~1m holds approximately 8-12 average products.
+
+REMEMBER: You are ONLY looking at shelf {shelf_number}. Completely ignore all other shelves.
+""",
+            
             "price_extraction_specialized": """
 You are a specialist in retail price extraction. Focus EXCLUSIVELY on prices.
 

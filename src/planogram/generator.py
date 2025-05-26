@@ -34,6 +34,46 @@ class PlanogramGenerator:
             'low': '#ef4444'         # Red
         }
     
+    async def generate_from_extraction_result(self,
+                                            extraction_result: ExtractionResult,
+                                            structure_context: ShelfStructure) -> VisualPlanogram:
+        """Generate visual planogram from extraction result"""
+        
+        print(f"🏗️ Generating planogram from extraction result")
+        
+        # Calculate dimensions
+        total_width_cm = structure_context.estimated_width_meters * 100
+        total_height_cm = structure_context.shelf_count * self.standard_shelf_height_cm
+        
+        # Create planogram
+        planogram = VisualPlanogram(
+            extraction_id=f"extraction_{extraction_result.agent_number}",
+            shelf_count=structure_context.shelf_count,
+            total_width_cm=total_width_cm,
+            total_height_cm=total_height_cm,
+            shelves=[],  # Not used for SVG generation from extractions
+            accuracy_score=extraction_result.accuracy_estimate,
+            total_products=extraction_result.total_products,
+            total_facings=sum(p.position.facing_count for p in extraction_result.products),
+            space_utilization=0.85,  # Estimate
+            original_image_dimensions={
+                'width': 1920,
+                'height': 1080
+            },
+            scale_factor=1.0
+        )
+        
+        # Generate SVG using the new unified renderer
+        renderer = PlanogramRenderer()
+        planogram.svg_data = renderer.generate_svg_from_extractions(
+            products=extraction_result.products,
+            width=800,
+            height=600
+        )
+        
+        print(f"✅ Planogram generated: {structure_context.shelf_count} shelves, {extraction_result.total_products} products")
+        return planogram
+    
     async def generate_from_abstraction(self, 
                                       planogram_data: Any,
                                       structure_context: ShelfStructure,

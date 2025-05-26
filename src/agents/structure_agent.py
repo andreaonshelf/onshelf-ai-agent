@@ -107,9 +107,50 @@ class StructureAnalysisAgent:
             raise
     
     def _encode_image(self, image_bytes: bytes) -> str:
-        """Encode image to base64"""
+        """Encode image to base64 with compression if needed"""
         import base64
-        return base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Compress image if needed for Claude's 5MB limit
+        compressed_bytes = self._compress_image_if_needed(image_bytes)
+        return base64.b64encode(compressed_bytes).decode('utf-8')
+    
+    def _compress_image_if_needed(self, img_data: bytes) -> bytes:
+        """Compress image if it exceeds Claude's 5MB limit"""
+        # Claude has a 5MB limit, but base64 encoding increases size by ~33%
+        # So we need to ensure the image is under 3.75MB before encoding
+        MAX_SIZE = 3.75 * 1024 * 1024  # 3.75MB to account for base64 overhead
+        
+        if len(img_data) <= MAX_SIZE:
+            return img_data  # No compression needed
+        
+        logger.info(
+            f"Compressing image for Claude: {len(img_data) / 1024 / 1024:.2f}MB -> <3.75MB",
+            component="structure_agent",
+            original_size_mb=len(img_data) / 1024 / 1024
+        )
+        
+        from PIL import Image
+        import io
+        
+        img = Image.open(io.BytesIO(img_data))
+        
+        # Calculate resize ratio to fit within limit
+        resize_ratio = (MAX_SIZE / len(img_data)) ** 0.5
+        new_size = (int(img.width * resize_ratio), int(img.height * resize_ratio))
+        
+        # Resize with high quality
+        img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
+        output = io.BytesIO()
+        img_resized.save(output, format='JPEG', quality=90, optimize=True)
+        
+        compressed_data = output.getvalue()
+        logger.info(
+            f"Image compressed: {len(compressed_data) / 1024 / 1024:.2f}MB",
+            component="structure_agent",
+            compressed_size_mb=len(compressed_data) / 1024 / 1024
+        )
+        
+        return compressed_data
     
     def validate_structure(self, structure: ShelfStructure) -> Dict[str, any]:
         """Validate structure analysis results"""

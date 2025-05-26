@@ -67,6 +67,12 @@ class MasterOrchestrator:
         structure_context = None
         previous_attempts = []
         
+        # Store detailed iteration data for debugging
+        self.iteration_details = {
+            'upload_id': upload_id,
+            'iterations': []
+        }
+        
         for iteration in range(1, max_iterations + 1):
             logger.info(
                 f"Master Orchestrator Iteration {iteration}/{max_iterations}",
@@ -111,7 +117,7 @@ class MasterOrchestrator:
             
             current_accuracy = accuracy_analysis.overall_accuracy
             
-            # Step 5: Track iteration
+            # Step 5: Track iteration with detailed data for debugging
             iteration_data = {
                 "iteration": iteration,
                 "accuracy": current_accuracy,
@@ -125,6 +131,25 @@ class MasterOrchestrator:
             }
             iteration_history.append(iteration_data)
             previous_attempts.append(extraction_result)
+            
+            # Store detailed iteration data for dashboard
+            self.iteration_details['iterations'].append({
+                "iteration": iteration,
+                "accuracy": current_accuracy,
+                "timestamp": datetime.utcnow().isoformat(),
+                "extraction_data": {
+                    "total_products": len(extraction_result.products),
+                    "products": [p.dict() for p in extraction_result.products],
+                    "model_used": extraction_result.model_used,
+                    "confidence": extraction_result.overall_confidence
+                },
+                "planogram_svg": planogram_result.planogram.svg_data if hasattr(planogram_result.planogram, 'svg_data') else None,
+                "structure": {
+                    "shelves": structure_context.shelf_count,
+                    "width": structure_context.estimated_width_meters
+                },
+                "failure_areas": [area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
+            })
             
             # Update best result
             if current_accuracy > best_accuracy:
@@ -189,6 +214,25 @@ class MasterOrchestrator:
         if needs_human_review:
             await self._trigger_human_evaluation(upload_id, result)
         
+        # Store iteration data for dashboard viewing
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                # Assuming queue_item_id is the upload_id or we need to get it
+                # For now, use a hash of upload_id as a simple ID
+                queue_item_id = abs(hash(upload_id)) % 100000
+                
+                async with session.post(
+                    f"http://localhost:8000/api/iterations/store/{queue_item_id}",
+                    json=self.iteration_details
+                ) as response:
+                    if response.status == 200:
+                        logger.info(f"Stored iteration data for queue item {queue_item_id}", component="master_orchestrator")
+                    else:
+                        logger.warning(f"Failed to store iteration data: {response.status}", component="master_orchestrator")
+        except Exception as e:
+            logger.error(f"Failed to store iteration data: {e}", component="master_orchestrator")
+        
         logger.info(
             f"Master orchestration complete",
             component="master_orchestrator",
@@ -208,13 +252,16 @@ class MasterOrchestrator:
         try:
             supabase = create_client(self.config.supabase_url, self.config.supabase_service_key)
             
-            # Get upload info from uploads table
-            upload_result = supabase.table("uploads").select("file_path").eq("id", upload_id).execute()
+            # Get file path from queue item (more reliable than uploads table)
+            queue_result = supabase.table("ai_extraction_queue").select("enhanced_image_path").eq("upload_id", upload_id).execute()
             
-            if not upload_result.data:
-                raise Exception(f"Upload {upload_id} not found in uploads table")
+            if not queue_result.data:
+                raise Exception(f"No queue item found for upload {upload_id}")
             
-            file_path = upload_result.data[0]["file_path"]
+            file_path = queue_result.data[0]["enhanced_image_path"]
+            
+            if not file_path:
+                raise Exception(f"No image path found for upload {upload_id}")
             
             # Download image from Supabase storage
             image_data = supabase.storage.from_("retail-captures").download(file_path)
@@ -241,7 +288,7 @@ class MasterOrchestrator:
                 upload_id=upload_id,
                 error=str(e)
             )
-            raise Exception(f"No image data found for queue item {upload_id}: {e}")
+            raise Exception(f"No image data found for upload {upload_id}: {e}")
     
     def _get_focus_areas_from_previous(self, iteration_history: List[Dict]) -> List[Dict]:
         """Extract focus areas from previous iteration failures"""

@@ -28,6 +28,10 @@ except Exception as e:
 async def get_editable_planogram_data(image_id: str):
     """Get planogram data merged with human corrections for editing"""
     
+    # Return demo data for demo image ID
+    if image_id == "demo" or image_id == "12345":
+        return get_demo_planogram_data()
+    
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
@@ -58,6 +62,198 @@ async def get_editable_planogram_data(image_id: str):
     except Exception as e:
         logger.error(f"Failed to get editable planogram data for {image_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get planogram data: {str(e)}")
+
+
+def get_demo_planogram_data():
+    """Return demo planogram data with 18 products for testing"""
+    return {
+        "image_id": "demo",
+        "planogram": {
+            "structure": {
+                "shelf_count": 3,
+                "total_width": 250,
+                "total_height": 180
+            },
+            "shelves": [
+                # Shelf 1 (Bottom)
+                {
+                    "shelf_number": 1,
+                    "sections": {
+                        "Left": [
+                            {"type": "product", "position": 1, "data": {
+                                "id": "coke_1", "brand": "Coca-Cola", "name": "Coke Zero 330ml", "price": 1.29,
+                                "position": {"shelf_level": 1, "position_on_shelf": 1, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 3, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.98, "color": "black", "volume": "330ml"}
+                            }},
+                            {"type": "product", "position": 2, "data": {
+                                "id": "sprite_1", "brand": "Coca-Cola", "name": "Sprite 330ml", "price": 1.29,
+                                "position": {"shelf_level": 1, "position_on_shelf": 2, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.92, "color": "green", "volume": "330ml"}
+                            }},
+                            {"type": "product", "position": 3, "data": {
+                                "id": "fanta_1", "brand": "Coca-Cola", "name": "Fanta Orange 330ml", "price": 1.29,
+                                "position": {"shelf_level": 1, "position_on_shelf": 3, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.89, "color": "orange", "volume": "330ml"}
+                            }}
+                        ],
+                        "Center": [
+                            {"type": "product", "position": 4, "data": {
+                                "id": "pepsi_1", "brand": "Pepsi", "name": "Pepsi Max 330ml", "price": 1.19,
+                                "position": {"shelf_level": 1, "position_on_shelf": 4, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 3, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.95, "color": "blue", "volume": "330ml"}
+                            }},
+                            {"type": "product", "position": 5, "data": {
+                                "id": "7up_1", "brand": "Pepsi", "name": "7UP 330ml", "price": 1.19,
+                                "position": {"shelf_level": 1, "position_on_shelf": 5, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.87, "color": "green", "volume": "330ml"}
+                            }},
+                            {"type": "empty", "position": 6, "reason": "gap_detected"}
+                        ],
+                        "Right": [
+                            {"type": "product", "position": 7, "data": {
+                                "id": "redbull_1", "brand": "Red Bull", "name": "Red Bull Energy 250ml", "price": 1.89,
+                                "position": {"shelf_level": 1, "position_on_shelf": 7, "section": {"vertical": "Right"}},
+                                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                                "visual": {"uses_full_height": False, "stack_rows": 2, "facing_width": 2, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.96, "color": "blue", "volume": "250ml"}
+                            }},
+                            {"type": "product", "position": 8, "data": {
+                                "id": "monster_1", "brand": "Monster", "name": "Monster Energy 500ml", "price": 2.15,
+                                "position": {"shelf_level": 1, "position_on_shelf": 8, "section": {"vertical": "Right"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.91, "color": "green", "volume": "500ml"}
+                            }}
+                        ]
+                    },
+                    "total_positions": 8,
+                    "product_count": 7,
+                    "empty_count": 1
+                },
+                # Shelf 2 (Middle)
+                {
+                    "shelf_number": 2,
+                    "sections": {
+                        "Left": [
+                            {"type": "product", "position": 1, "data": {
+                                "id": "water_1", "brand": "Evian", "name": "Natural Water 500ml", "price": 0.89,
+                                "position": {"shelf_level": 2, "position_on_shelf": 1, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 3, "columns": 2, "total_facings": 6},
+                                "visual": {"uses_full_height": False, "stack_rows": 3, "facing_width": 2, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.97, "color": "clear", "volume": "500ml"}
+                            }},
+                            {"type": "product", "position": 2, "data": {
+                                "id": "smartwater_1", "brand": "Coca-Cola", "name": "Smartwater 600ml", "price": 1.49,
+                                "position": {"shelf_level": 2, "position_on_shelf": 2, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                                "visual": {"uses_full_height": False, "stack_rows": 2, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.88, "color": "clear", "volume": "600ml"}
+                            }}
+                        ],
+                        "Center": [
+                            {"type": "product", "position": 3, "data": {
+                                "id": "juice_1", "brand": "Innocent", "name": "Orange Juice 330ml", "price": 2.29,
+                                "position": {"shelf_level": 2, "position_on_shelf": 3, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 3, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.94, "color": "orange", "volume": "330ml"}
+                            }},
+                            {"type": "product", "position": 4, "data": {
+                                "id": "apple_juice_1", "brand": "Innocent", "name": "Apple Juice 330ml", "price": 2.29,
+                                "position": {"shelf_level": 2, "position_on_shelf": 4, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.90, "color": "green", "volume": "330ml"}
+                            }},
+                            {"type": "product", "position": 5, "data": {
+                                "id": "smoothie_1", "brand": "Innocent", "name": "Berry Smoothie 250ml", "price": 2.79,
+                                "position": {"shelf_level": 2, "position_on_shelf": 5, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#f59e0b"},
+                                "metadata": {"extraction_confidence": 0.76, "color": "purple", "volume": "250ml"}
+                            }}
+                        ],
+                        "Right": [
+                            {"type": "product", "position": 6, "data": {
+                                "id": "tea_1", "brand": "Lipton", "name": "Ice Tea Lemon 500ml", "price": 1.59,
+                                "position": {"shelf_level": 2, "position_on_shelf": 6, "section": {"vertical": "Right"}},
+                                "quantity": {"stack": 2, "columns": 3, "total_facings": 6},
+                                "visual": {"uses_full_height": False, "stack_rows": 2, "facing_width": 3, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.93, "color": "yellow", "volume": "500ml"}
+                            }},
+                            {"type": "empty", "position": 7, "reason": "gap_detected"}
+                        ]
+                    },
+                    "total_positions": 7,
+                    "product_count": 6,
+                    "empty_count": 1
+                },
+                # Shelf 3 (Top)
+                {
+                    "shelf_number": 3,
+                    "sections": {
+                        "Left": [
+                            {"type": "product", "position": 1, "data": {
+                                "id": "coffee_1", "brand": "Starbucks", "name": "Frappuccino Vanilla 250ml", "price": 2.49,
+                                "position": {"shelf_level": 3, "position_on_shelf": 1, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 3, "confidence_color": "#22c55e"},
+                                "metadata": {"extraction_confidence": 0.96, "color": "beige", "volume": "250ml"}
+                            }},
+                            {"type": "product", "position": 2, "data": {
+                                "id": "coffee_2", "brand": "Starbucks", "name": "Frappuccino Mocha 250ml", "price": 2.49,
+                                "position": {"shelf_level": 3, "position_on_shelf": 2, "section": {"vertical": "Left"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.89, "color": "brown", "volume": "250ml"}
+                            }}
+                        ],
+                        "Center": [
+                            {"type": "product", "position": 3, "data": {
+                                "id": "sports_1", "brand": "Powerade", "name": "Blue Sport Drink 500ml", "price": 1.79,
+                                "position": {"shelf_level": 3, "position_on_shelf": 3, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                                "visual": {"uses_full_height": False, "stack_rows": 2, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.85, "color": "blue", "volume": "500ml"}
+                            }},
+                            {"type": "product", "position": 4, "data": {
+                                "id": "sports_2", "brand": "Gatorade", "name": "Orange Sport Drink 500ml", "price": 1.79,
+                                "position": {"shelf_level": 3, "position_on_shelf": 4, "section": {"vertical": "Center"}},
+                                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                                "visual": {"uses_full_height": False, "stack_rows": 2, "facing_width": 2, "confidence_color": "#f59e0b"},
+                                "metadata": {"extraction_confidence": 0.78, "color": "orange", "volume": "500ml"}
+                            }}
+                        ],
+                        "Right": [
+                            {"type": "product", "position": 5, "data": {
+                                "id": "energy_1", "brand": "Rockstar", "name": "Energy Drink 500ml", "price": 1.99,
+                                "position": {"shelf_level": 3, "position_on_shelf": 5, "section": {"vertical": "Right"}},
+                                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                                "visual": {"uses_full_height": True, "stack_rows": 1, "facing_width": 2, "confidence_color": "#3b82f6"},
+                                "metadata": {"extraction_confidence": 0.86, "color": "black", "volume": "500ml"}
+                            }},
+                            {"type": "empty", "position": 6, "reason": "gap_detected"}
+                        ]
+                    },
+                    "total_positions": 6,
+                    "product_count": 5,
+                    "empty_count": 1
+                }
+            ]
+        },
+        "has_corrections": False,
+        "correction_count": 0
+    }
 
 
 async def get_ai_extraction_data(image_id: str) -> Optional[Dict[str, Any]]:

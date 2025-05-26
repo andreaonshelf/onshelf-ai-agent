@@ -27,8 +27,12 @@ class ExtractionOrchestrator:
         self.config = config
         self.structure_agent = StructureAnalysisAgent(config)
         
+        # Initialize real extraction engine
+        from ..extraction.engine import ModularExtractionEngine
+        self.extraction_engine = ModularExtractionEngine(config)
+        
         logger.info(
-            "Extraction Orchestrator initialized",
+            "Extraction Orchestrator initialized with real extraction engine",
             component="extraction_orchestrator"
         )
     
@@ -161,12 +165,20 @@ class ExtractionOrchestrator:
             focus_areas=len(context.focus_areas)
         )
         
-        # Execute extraction (simplified for now - would call actual extraction engine)
+        # Execute REAL extraction using the extraction engine
         start_time = datetime.utcnow()
         
-        # TODO: Call actual extraction engine with cumulative context
-        # For now, create mock result
-        products = await self._mock_extraction_with_context(image, context, agent_number)
+        # Prepare images dict for extraction engine
+        images = {"main": image}
+        
+        # Use shelf-by-shelf extraction for better accuracy
+        products = await self._execute_shelf_by_shelf_extraction(
+            image=image,
+            context=context,
+            model=model,
+            agent_number=agent_number,
+            agent_id=agent_id
+        )
         
         duration = (datetime.utcnow() - start_time).total_seconds()
         
@@ -175,6 +187,7 @@ class ExtractionOrchestrator:
             agent_number=agent_number,
             structure=context.structure,
             products=products,
+            total_products=len(products),
             overall_confidence=self._calculate_overall_confidence(products),
             accuracy_estimate=self._estimate_accuracy(products),
             extraction_duration_seconds=duration,
@@ -187,6 +200,8 @@ class ExtractionOrchestrator:
     def _build_cumulative_prompt(self, agent_number: int, context: CumulativeExtractionContext) -> str:
         """Build prompt that includes learning from all previous agents"""
         
+        # For shelf-by-shelf extraction, we'll modify this to focus on specific shelves
+        # This is a placeholder - the actual implementation will be in _execute_shelf_by_shelf
         base_prompt = f"""
         You are Agent {agent_number} in a cumulative extraction pipeline.
         
@@ -301,6 +316,141 @@ class ExtractionOrchestrator:
         else:
             # Use best model for final refinements
             return AIModelType.CLAUDE_3_SONNET
+    
+    async def _execute_shelf_by_shelf_extraction(self, 
+                                               image: bytes,
+                                               context: CumulativeExtractionContext,
+                                               model: AIModelType,
+                                               agent_number: int,
+                                               agent_id: str) -> List[ProductExtraction]:
+        """Execute extraction shelf by shelf for better accuracy"""
+        from ..extraction.prompts import PromptTemplates
+        
+        all_products = []
+        prompt_templates = PromptTemplates()
+        shelf_prompt_template = prompt_templates.get_template("shelf_by_shelf_extraction")
+        
+        logger.info(
+            f"Starting shelf-by-shelf extraction for {context.structure.shelf_count} shelves",
+            component="extraction_orchestrator",
+            agent_id=agent_id,
+            total_shelves=context.structure.shelf_count
+        )
+        
+        # Extract products shelf by shelf
+        for shelf_num in range(1, context.structure.shelf_count + 1):
+            logger.info(
+                f"Extracting shelf {shelf_num}/{context.structure.shelf_count}",
+                component="extraction_orchestrator",
+                agent_id=agent_id,
+                shelf_number=shelf_num
+            )
+            
+            # Build shelf-specific prompt
+            shelf_prompt = shelf_prompt_template.format(
+                shelf_number=shelf_num,
+                total_shelves=context.structure.shelf_count
+            )
+            
+            # Add cumulative context for subsequent agents
+            if agent_number > 1:
+                # Find products already extracted for this shelf
+                existing_products = [p for p in context.successful_extractions 
+                                   if p.get('shelf_level') == shelf_num]
+                if existing_products:
+                    shelf_prompt += f"\n\nPREVIOUSLY FOUND ON THIS SHELF (keep these):\n"
+                    for p in existing_products:
+                        shelf_prompt += f"- Position {p.get('position_on_shelf')}: {p.get('brand')} {p.get('name')}\n"
+            
+            try:
+                # Execute extraction for this shelf
+                shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
+                    primary_model=model,
+                    prompt=shelf_prompt,
+                    images={"main": image},
+                    output_schema="List[ProductExtraction]",
+                    agent_id=f"{agent_id}_shelf_{shelf_num}"
+                )
+                
+                # Convert and add products from this shelf
+                shelf_products = self._convert_extraction_result(shelf_result, model)
+                
+                # Ensure all products have the correct shelf number
+                for product in shelf_products:
+                    product.position.shelf_number = shelf_num
+                
+                all_products.extend(shelf_products)
+                
+                logger.info(
+                    f"Extracted {len(shelf_products)} products from shelf {shelf_num}",
+                    component="extraction_orchestrator",
+                    agent_id=agent_id,
+                    shelf_number=shelf_num,
+                    product_count=len(shelf_products)
+                )
+                
+            except Exception as e:
+                logger.error(
+                    f"Failed to extract shelf {shelf_num}: {e}",
+                    component="extraction_orchestrator",
+                    agent_id=agent_id,
+                    shelf_number=shelf_num,
+                    error=str(e)
+                )
+                # Continue with next shelf even if one fails
+                continue
+        
+        # Sort products by shelf then position
+        all_products.sort(key=lambda p: (p.position.shelf_number, p.position.position_on_shelf))
+        
+        logger.info(
+            f"Shelf-by-shelf extraction complete: {len(all_products)} total products",
+            component="extraction_orchestrator",
+            agent_id=agent_id,
+            total_products=len(all_products),
+            shelves_processed=context.structure.shelf_count
+        )
+        
+        return all_products
+    
+    def _convert_extraction_result(self, extraction_result: List[Any], model: AIModelType) -> List[ProductExtraction]:
+        """Convert extraction engine results to our ProductExtraction format"""
+        from ..models.extraction_models import ProductExtraction, ProductPosition, ConfidenceLevel
+        
+        converted_products = []
+        for product in extraction_result:
+            # The extraction engine returns products with quantity.total_facings
+            facing_count = 1  # Default
+            if hasattr(product, 'quantity') and product.quantity:
+                facing_count = product.quantity.total_facings
+            
+            # Get section from SectionCoordinates if available
+            section = None
+            if hasattr(product, 'section') and product.section:
+                section = product.section.vertical  # Use vertical section (Left/Center/Right)
+            
+            # Create ProductPosition from extraction result
+            position = ProductPosition(
+                shelf_number=product.shelf_level,
+                position_on_shelf=product.position_on_shelf,
+                facing_count=facing_count,
+                section=section,
+                confidence=product.extraction_confidence if hasattr(product, 'extraction_confidence') else 0.8
+            )
+            
+            # Create ProductExtraction with updated model
+            converted = ProductExtraction(
+                brand=product.brand,
+                name=product.name,
+                price=product.price,
+                position=position,
+                extraction_confidence=product.extraction_confidence if hasattr(product, 'extraction_confidence') else 0.8,
+                confidence_category=product.confidence_category if hasattr(product, 'confidence_category') else ConfidenceLevel.HIGH,
+                extracted_by_model=model.value
+            )
+            converted_products.append(converted)
+        
+        return converted_products
     
     async def _mock_extraction_with_context(self, 
                                           image: bytes,

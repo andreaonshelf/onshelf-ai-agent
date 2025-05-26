@@ -6,6 +6,8 @@ Generate visual representations using Canvas/Fabric.js and SVG
 import json
 from typing import Dict, List, Union
 from .models import VisualPlanogram, ProductBlock, EmptySpace, PromotionalElement
+from .unified_layout import UnifiedLayoutEngine, LayoutProduct, LayoutDimensions
+from ..extraction.models import ProductExtraction
 
 
 class PlanogramRenderer:
@@ -415,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {{
                 {product.name[:20]}
             </text>
             <text x="{x+3}" y="{y+35}" font-size="9" fill="white">
-                £{product.price:.2f} | {product.facings} facings
+                {"£{:.2f}".format(product.price) if product.price is not None else "No price"} | {product.facings} facings
             </text>
         </g>'''
     
@@ -432,4 +434,188 @@ document.addEventListener('DOMContentLoaded', () => {{
                   text-anchor="middle" font-style="italic">
                 {label}
             </text>
-        </g>''' 
+        </g>'''
+    
+    def generate_svg_from_extractions(self, products: List[ProductExtraction], 
+                                    width: int = 800, height: int = 600) -> str:
+        """Generate SVG representation matching React component layout"""
+        
+        # Convert products to layout format
+        layout_products = [
+            LayoutProduct(
+                brand=p.brand,
+                name=p.name,
+                price=p.price,
+                shelf_number=p.position.shelf_number,
+                position_on_shelf=p.position.position_on_shelf,
+                facing_count=p.position.facing_count,
+                stack_count=1,  # Not tracked in extraction model yet
+                section=p.position.section or "Center",
+                confidence=p.extraction_confidence
+            )
+            for p in products
+        ]
+        
+        # Calculate shelf count
+        shelf_count = max((p.position.shelf_number for p in products), default=3)
+        
+        # Initialize layout engine with dimensions
+        dims = LayoutDimensions(
+            shelf_width_cm=width / 3.2,  # Convert to cm
+            shelf_height_cm=60,  # Height per shelf
+            product_width_cm=8,
+            gap_width_cm=2,
+            margin_cm=5
+        )
+        layout_engine = UnifiedLayoutEngine(dims)
+        
+        # Start SVG
+        svg_parts = [
+            f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">',
+            '<rect width="100%" height="100%" fill="#f5f5f5"/>'
+        ]
+        
+        # Add header
+        svg_parts.extend([
+            '<rect x="0" y="0" width="100%" height="60" fill="white"/>',
+            '<text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Planogram View</text>',
+            f'<text x="20" y="50" font-size="14" fill="#6b7280">{len(products)} products across {shelf_count} shelves</text>'
+        ])
+        
+        # Group products by shelf
+        shelves = {}
+        for product in layout_products:
+            if product.shelf_number not in shelves:
+                shelves[product.shelf_number] = []
+            shelves[product.shelf_number].append(product)
+        
+        # Calculate shelf metrics
+        shelf_height = (height - 60) / shelf_count
+        shelf_metrics = {}
+        for shelf_num in range(1, shelf_count + 1):
+            shelf_metrics[shelf_num] = {
+                'y': 60 + (shelf_count - shelf_num) * shelf_height,
+                'height': shelf_height
+            }
+        
+        # Draw shelves from bottom to top
+        for shelf_level in range(1, shelf_count + 1):
+            shelf_y = shelf_metrics[shelf_level]['y']
+            shelf_height = shelf_metrics[shelf_level]['height']
+            
+            # Draw shelf background
+            svg_parts.append(
+                f'<rect x="0" y="{shelf_y}" width="{width}" height="{shelf_height}" '
+                f'fill="white" stroke="#e5e7eb" stroke-width="1"/>'
+            )
+            
+            # Draw shelf line
+            line_y = shelf_y + shelf_height - 5
+            svg_parts.append(
+                f'<line x1="20" y1="{line_y}" x2="{width-20}" y2="{line_y}" '
+                f'stroke="#374151" stroke-width="3"/>'
+            )
+            
+            # Shelf label
+            svg_parts.append(
+                f'<text x="10" y="{shelf_y + shelf_height/2}" font-size="12" '
+                f'fill="#6b7280" text-anchor="middle" transform="rotate(-90 10 {shelf_y + shelf_height/2})">'
+                f'Shelf {shelf_level}</text>'
+            )
+            
+            # Draw products on this shelf
+            if shelf_level in shelves:
+                shelf_products = sorted(shelves[shelf_level], key=lambda x: x.position_on_shelf)
+                
+                for product in shelf_products:
+                    # Calculate position using unified engine
+                    position = layout_engine.calculate_product_position(product, shelf_products)
+                    
+                    # Convert from cm to pixels and adjust for shelf position
+                    pixel_x = position['x'] * 3.2  # Convert cm to pixels
+                    pixel_y = shelf_y + 10  # Place product on shelf
+                    pixel_width = position['width'] * 3.2
+                    pixel_height = min(position['height'] * 3.2, shelf_height - 20)
+                    
+                    # Draw product with stacking if applicable
+                    if product.stack_count > 1:
+                        # Draw stacked products
+                        for stack_idx in range(product.stack_count):
+                            stack_y = pixel_y - (stack_idx * pixel_height * 0.9)
+                            opacity = 1.0 - (stack_idx * 0.1)
+                            
+                            svg_parts.append(
+                                f'<rect x="{pixel_x}" y="{stack_y}" '
+                                f'width="{pixel_width}" height="{pixel_height}" '
+                                f'fill="white" stroke="#3b82f6" stroke-width="2" '
+                                f'rx="4" opacity="{opacity}"/>'
+                            )
+                            
+                            if stack_idx == 0:  # Only show text on top product
+                                self._add_product_text_svg(svg_parts, product, pixel_x, stack_y, 
+                                                         pixel_width, pixel_height, layout_engine)
+                    else:
+                        # Draw single product
+                        svg_parts.append(
+                            f'<rect x="{pixel_x}" y="{pixel_y}" '
+                            f'width="{pixel_width}" height="{pixel_height}" '
+                            f'fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/>'
+                        )
+                        
+                        self._add_product_text_svg(svg_parts, product, pixel_x, pixel_y, 
+                                                 pixel_width, pixel_height, layout_engine)
+                    
+                    # Add facing indicators
+                    if product.facing_count > 1:
+                        for facing_idx in range(1, product.facing_count):
+                            indicator_x = pixel_x + (facing_idx * 15)
+                            indicator_y = pixel_y + pixel_height - 10
+                            svg_parts.append(
+                                f'<circle cx="{indicator_x}" cy="{indicator_y}" r="3" '
+                                f'fill="#10b981" opacity="0.7"/>'
+                            )
+        
+        # Add gap detection (simplified for now)
+        # TODO: Implement proper gap detection based on missing position numbers
+        
+        # Close SVG
+        svg_parts.append('</svg>')
+        
+        return '\n'.join(svg_parts)
+    
+    def _add_product_text_svg(self, svg_parts: List[str], product: LayoutProduct, 
+                            x: float, y: float, width: float, height: float,
+                            layout_engine: UnifiedLayoutEngine):
+        """Add product text labels to SVG"""
+        # Calculate text positions
+        text_x = x + 5
+        text_y = y + 20
+        
+        # Product name (truncate if needed)
+        name = product.name[:12] + '...' if len(product.name) > 15 else product.name
+        svg_parts.append(
+            f'<text x="{text_x}" y="{text_y}" font-size="11" font-weight="bold" '
+            f'fill="#1f2937">{name}</text>'
+        )
+        
+        # Brand
+        text_y += 14
+        brand = product.brand[:10] + '...' if len(product.brand) > 12 else product.brand
+        svg_parts.append(
+            f'<text x="{text_x}" y="{text_y}" font-size="9" fill="#6b7280">{brand}</text>'
+        )
+        
+        # Confidence indicator
+        confidence_color = layout_engine.get_confidence_color(product.confidence)
+        svg_parts.append(
+            f'<circle cx="{x + width - 10}" cy="{y + 10}" r="5" '
+            f'fill="{confidence_color}" opacity="0.8"/>'
+        )
+        
+        # Price
+        text_y += 14
+        if product.price:
+            svg_parts.append(
+                f'<text x="{text_x}" y="{text_y}" font-size="12" font-weight="bold" '
+                f'fill="#2563eb">£{product.price:.2f}</text>'
+            ) 

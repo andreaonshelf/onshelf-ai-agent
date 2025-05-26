@@ -162,15 +162,27 @@ class PlanogramAbstractionManager:
         product_blocks = []
         
         for product in products:
+            # Handle both old and new ProductExtraction formats
+            if hasattr(product, 'position') and hasattr(product.position, 'shelf_number'):
+                # New format with ProductPosition
+                shelf_number = product.position.shelf_number
+                position_on_shelf = product.position.position_on_shelf
+                facing_count = product.position.facing_count
+            else:
+                # Old format with section/position
+                shelf_number = int(product.section.horizontal) if hasattr(product, 'section') else product.shelf_level
+                position_on_shelf = product.position.l_position_on_section if hasattr(product.position, 'l_position_on_section') else product.position_on_shelf
+                facing_count = product.quantity.total_facings if hasattr(product, 'quantity') else 1
+            
             product_block = ProductBlock(
                 product_name=f"{product.brand} {product.name}",
                 brand=product.brand,
-                shelf_number=product.section.horizontal,
-                position_on_shelf=product.position.l_position_on_section,
-                facing_count=product.quantity.total_facings,
+                shelf_number=shelf_number,
+                position_on_shelf=position_on_shelf,
+                facing_count=facing_count,
                 price=product.price,
                 confidence_color=self._get_confidence_color(product.extraction_confidence),
-                block_width_cm=product.quantity.total_facings * self.standard_facing_width_cm,
+                block_width_cm=facing_count * self.standard_facing_width_cm,
                 confidence=product.extraction_confidence
             )
             product_blocks.append(product_block)

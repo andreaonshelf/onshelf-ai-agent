@@ -48,6 +48,337 @@ app.include_router(planogram_router)
 from src.api.queue_management import router as queue_router
 app.include_router(queue_router)
 
+# Include iteration tracking API for debugging
+from src.api.iteration_tracking import router as iteration_router, iteration_storage
+app.include_router(iteration_router)
+
+# Initialize mock iteration data on startup
+@app.on_event("startup")
+async def initialize_mock_data():
+    """Initialize mock iteration data for testing the dashboard"""
+    try:
+        from datetime import datetime
+        
+        # Create REAL extraction data structure that matches actual AI agent output
+        # This mirrors exactly what ProductExtraction model returns
+        real_extraction_products = [
+            # Shelf 1 products - exactly as AI agents extract them
+            {
+                "section": {"horizontal": "1", "vertical": "Left"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Coca-Cola", "name": "Coke Zero Sugar 330ml", "price": 1.29,
+                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                "shelf_level": 1, "position_on_shelf": 1,
+                "any_text": "Zero Sugar 330ml", "color": "black and red", "pack_size": None, "volume": "330ml",
+                "is_on_promo": False, "facings_total": 3,
+                "extraction_confidence": 0.94, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "1", "vertical": "Left"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Coca-Cola", "name": "Sprite Zero 330ml", "price": 1.29,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 1, "position_on_shelf": 2,
+                "any_text": "Sprite Zero 330ml", "color": "green and white", "pack_size": None, "volume": "330ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.89, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "1", "vertical": "Center"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "PepsiCo", "name": "Pepsi Max Cherry 330ml", "price": 1.19,
+                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                "shelf_level": 1, "position_on_shelf": 4,
+                "any_text": "Max Cherry 330ml", "color": "dark blue and red", "pack_size": None, "volume": "330ml",
+                "is_on_promo": True, "facings_total": 3,
+                "extraction_confidence": 0.92, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+            },
+            {
+                "section": {"horizontal": "1", "vertical": "Center"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "PepsiCo", "name": "7UP Free 330ml", "price": 1.19,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 1, "position_on_shelf": 5,
+                "any_text": "7UP Free", "color": "green and white", "pack_size": None, "volume": "330ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.86, "confidence_category": "high",
+                "validation_flags": ["product_name_unclear"], "extracted_by_model": "gpt-4o-2024-11-20"
+            },
+            # Gap at position 6 - no product detected
+            {
+                "section": {"horizontal": "1", "vertical": "Right"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Red Bull", "name": "Red Bull Energy Drink 250ml", "price": 1.89,
+                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                "shelf_level": 1, "position_on_shelf": 7,
+                "any_text": "Energy Drink 250ml", "color": "blue and silver", "pack_size": None, "volume": "250ml",
+                "is_on_promo": False, "facings_total": 4,
+                "extraction_confidence": 0.96, "confidence_category": "very_high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "1", "vertical": "Right"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Monster Beverage", "name": "Monster Energy Original 500ml", "price": 2.15,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 1, "position_on_shelf": 8,
+                "any_text": "Monster Energy 500ml", "color": "green and black", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.91, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
+            },
+            
+            # Shelf 2 products
+            {
+                "section": {"horizontal": "2", "vertical": "Left"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Evian", "name": "Natural Mineral Water 500ml", "price": 0.89,
+                "quantity": {"stack": 3, "columns": 2, "total_facings": 6},
+                "shelf_level": 2, "position_on_shelf": 1,
+                "any_text": "Natural Mineral Water 500ml", "color": "clear plastic", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 6,
+                "extraction_confidence": 0.97, "confidence_category": "very_high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "2", "vertical": "Left"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Coca-Cola", "name": "Smartwater 600ml", "price": 1.49,
+                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                "shelf_level": 2, "position_on_shelf": 2,
+                "any_text": "smartwater 600ml", "color": "clear with white label", "pack_size": None, "volume": "600ml",
+                "is_on_promo": False, "facings_total": 4,
+                "extraction_confidence": 0.88, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+            },
+            {
+                "section": {"horizontal": "2", "vertical": "Center"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Innocent", "name": "Orange Juice Smooth 330ml", "price": 2.29,
+                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                "shelf_level": 2, "position_on_shelf": 3,
+                "any_text": "Orange Juice Smooth 330ml", "color": "orange carton", "pack_size": None, "volume": "330ml",
+                "is_on_promo": True, "facings_total": 3,
+                "extraction_confidence": 0.93, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "2", "vertical": "Center"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Innocent", "name": "Apple Juice 330ml", "price": 2.29,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 2, "position_on_shelf": 4,
+                "any_text": "Apple Juice", "color": "green carton", "pack_size": None, "volume": "330ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.85, "confidence_category": "high",
+                "validation_flags": ["price_suspicious"], "extracted_by_model": "gpt-4o-2024-11-20"
+            },
+            {
+                "section": {"horizontal": "2", "vertical": "Right"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Lipton", "name": "Ice Tea Lemon 500ml", "price": 1.59,
+                "quantity": {"stack": 2, "columns": 3, "total_facings": 6},
+                "shelf_level": 2, "position_on_shelf": 6,
+                "any_text": "Ice Tea Lemon 500ml", "color": "yellow plastic bottle", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 6,
+                "extraction_confidence": 0.94, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
+            },
+            
+            # Shelf 3 products
+            {
+                "section": {"horizontal": "3", "vertical": "Left"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Starbucks", "name": "Frappuccino Vanilla 250ml", "price": 2.49,
+                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+                "shelf_level": 3, "position_on_shelf": 1,
+                "any_text": "Frappuccino Vanilla 250ml", "color": "beige bottle", "pack_size": None, "volume": "250ml",
+                "is_on_promo": False, "facings_total": 3,
+                "extraction_confidence": 0.96, "confidence_category": "very_high",
+                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "3", "vertical": "Left"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Starbucks", "name": "Frappuccino Mocha 250ml", "price": 2.49,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 3, "position_on_shelf": 2,
+                "any_text": "Frappuccino Mocha", "color": "brown bottle", "pack_size": None, "volume": "250ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.89, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+            },
+            {
+                "section": {"horizontal": "3", "vertical": "Center"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Powerade", "name": "ION4 Blue 500ml", "price": 1.79,
+                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                "shelf_level": 3, "position_on_shelf": 3,
+                "any_text": "ION4 Blue 500ml", "color": "blue plastic bottle", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 4,
+                "extraction_confidence": 0.82, "confidence_category": "high",
+                "validation_flags": ["occlusion_detected"], "extracted_by_model": "claude-3-5-sonnet-20241022"
+            },
+            {
+                "section": {"horizontal": "3", "vertical": "Center"},
+                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+                "brand": "Gatorade", "name": "Orange Sports Drink 500ml", "price": 1.79,
+                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+                "shelf_level": 3, "position_on_shelf": 4,
+                "any_text": "Gatorade Orange", "color": "orange plastic bottle", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 4,
+                "extraction_confidence": 0.78, "confidence_category": "medium",
+                "validation_flags": ["product_name_unclear", "position_uncertain"], "extracted_by_model": "gemini-2.0-flash-exp"
+            },
+            {
+                "section": {"horizontal": "3", "vertical": "Right"},
+                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+                "brand": "Rockstar", "name": "Energy Drink Original 500ml", "price": 1.99,
+                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+                "shelf_level": 3, "position_on_shelf": 5,
+                "any_text": "Rockstar Energy", "color": "black and gold can", "pack_size": None, "volume": "500ml",
+                "is_on_promo": False, "facings_total": 2,
+                "extraction_confidence": 0.87, "confidence_category": "high",
+                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+            }
+        ]
+
+        mock_data = {
+            'upload_id': 'demo_12345', 
+            'iterations': [
+                {
+                    "iteration": 1,
+                    "accuracy": 0.87,
+                    "timestamp": datetime.now().isoformat(),
+                    "extraction_data": {
+                        "total_products": len(real_extraction_products),
+                        "products": real_extraction_products,
+                        "model_used": "claude-3-5-sonnet-20241022",
+                        "confidence": 0.87
+                    },
+                    "planogram_svg": None,  # Will be generated by SVG renderer
+                    "structure": {"shelves": 3, "width": 2.5},
+                    "failure_areas": 3
+                },
+                {
+                    "iteration": 2,
+                    "accuracy": 0.92,
+                    "timestamp": datetime.now().isoformat(),
+                    "extraction_data": {
+                        "total_products": 3,
+                        "products": [
+                            {
+                                "brand": "Coca-Cola",
+                                "name": "Coke Zero 330ml",
+                                "price": 1.29,
+                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.95},
+                                "extraction_confidence": 0.95,
+                                "confidence_category": "very_high"
+                            },
+                            {
+                                "brand": "Pepsi",
+                                "name": "Pepsi Max 330ml",
+                                "price": 1.19,
+                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.88},
+                                "extraction_confidence": 0.88,
+                                "confidence_category": "high"
+                            },
+                            {
+                                "brand": "Red Bull",
+                                "name": "Energy Drink 250ml",
+                                "price": 1.89,
+                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.92},
+                                "extraction_confidence": 0.92,
+                                "confidence_category": "high"
+                            }
+                        ],
+                        "model_used": "claude-3-sonnet",
+                        "confidence": 0.92
+                    },
+                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 2 (Improved)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="2" rx="4"/><text x="60" y="130" font-size="12" fill="#1f2937">Coke Zero</text><text x="60" y="150" font-size="10" fill="#6b7280">£1.29 • 3 facings</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="190" y="130" font-size="12" fill="#1f2937">Pepsi Max</text><text x="190" y="150" font-size="10" fill="#6b7280">£1.19 • 2 facings</text><rect x="50" y="200" width="140" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="60" y="230" font-size="12" fill="#1f2937">Red Bull Energy</text><text x="60" y="250" font-size="10" fill="#6b7280">£1.89 • 4 facings</text></svg>',
+                    "structure": {"shelves": 3, "width": 2.5},
+                    "failure_areas": 1
+                },
+                {
+                    "iteration": 3,
+                    "accuracy": 0.97,
+                    "timestamp": datetime.now().isoformat(),
+                    "extraction_data": {
+                        "total_products": 4,
+                        "products": [
+                            {
+                                "brand": "Coca-Cola",
+                                "name": "Coke Zero 330ml",
+                                "price": 1.29,
+                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.98},
+                                "extraction_confidence": 0.98,
+                                "confidence_category": "very_high"
+                            },
+                            {
+                                "brand": "Pepsi",
+                                "name": "Pepsi Max 330ml",
+                                "price": 1.19,
+                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.96},
+                                "extraction_confidence": 0.96,
+                                "confidence_category": "very_high"
+                            },
+                            {
+                                "brand": "Red Bull",
+                                "name": "Energy Drink 250ml",
+                                "price": 1.89,
+                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.97},
+                                "extraction_confidence": 0.97,
+                                "confidence_category": "very_high"
+                            },
+                            {
+                                "brand": "Monster",
+                                "name": "Monster Energy 500ml",
+                                "price": 2.15,
+                                "position": {"shelf_number": 2, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.94},
+                                "extraction_confidence": 0.94,
+                                "confidence_category": "very_high"
+                            }
+                        ],
+                        "model_used": "claude-3-sonnet",
+                        "confidence": 0.96
+                    },
+                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 3 (High Accuracy)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="125" font-size="11" font-weight="bold" fill="#1f2937">Coke Zero 330ml</text><text x="60" y="140" font-size="9" fill="#6b7280">Coca-Cola</text><text x="60" y="155" font-size="10" fill="#2563eb">£1.29</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="190" y="125" font-size="11" font-weight="bold" fill="#1f2937">Pepsi Max 330ml</text><text x="190" y="140" font-size="9" fill="#6b7280">Pepsi</text><text x="190" y="155" font-size="10" fill="#2563eb">£1.19</text><circle cx="270" cy="110" r="4" fill="#10b981"/><rect x="50" y="200" width="140" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="225" font-size="11" font-weight="bold" fill="#1f2937">Energy Drink 250ml</text><text x="60" y="240" font-size="9" fill="#6b7280">Red Bull</text><text x="60" y="255" font-size="10" fill="#2563eb">£1.89</text><circle cx="180" cy="210" r="4" fill="#10b981"/><rect x="200" y="200" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="210" y="225" font-size="11" font-weight="bold" fill="#1f2937">Monster Energy</text><text x="210" y="240" font-size="9" fill="#6b7280">Monster</text><text x="210" y="255" font-size="10" fill="#2563eb">£2.15</text><circle cx="310" cy="210" r="4" fill="#10b981"/></svg>',
+                    "structure": {"shelves": 3, "width": 2.5},
+                    "failure_areas": 0
+                }
+            ]
+        }
+        
+        # Store mock data for demo queue item
+        iteration_storage[12345] = mock_data
+        print(f"✅ Initialized mock iteration data with {len(mock_data['iterations'])} iterations")
+        
+    except Exception as e:
+        print(f"❌ Error initializing mock data: {e}")
+        # Create minimal fallback
+        iteration_storage[12345] = {
+            'upload_id': 'demo_12345',
+            'iterations': [{
+                "iteration": 1,
+                "accuracy": 0.8,
+                "timestamp": "2024-01-01T12:00:00",
+                "extraction_data": {"total_products": 1, "products": [], "model_used": "claude-3-sonnet", "confidence": 0.8},
+                "planogram_svg": '<svg width="800" height="600"><text x="20" y="30">Simple Demo SVG</text></svg>',
+                "structure": {"shelves": 3, "width": 2.5},
+                "failure_areas": 1
+            }]
+        }
+
+# Add endpoint to manually initialize mock data
+@app.get("/api/init-mock-data")
+async def init_mock_data():
+    """Manually initialize mock data"""
+    await initialize_mock_data()
+    return {"message": "Mock data initialized", "items": list(iteration_storage.keys())}
+
 # Serve static files (for the UI)
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -1602,6 +1933,7 @@ async def root():
                             <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
                             <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
                             <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('iterations')">🔄 Iterations</button>
                             <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
                         </div>
                         
@@ -1632,26 +1964,40 @@ async def root():
                                         <h3>🔍 Agent Deep Dive</h3>
                                     </div>
                                     <div class="technical-analysis">
-                                        <div class="analysis-section">
-                                            <h4>Model Performance</h4>
-                                            <div class="analysis-data" id="modelPerformance">
-                                                Loading performance data...
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="analysis-section">
-                                            <h4>Confidence Scores</h4>
-                                            <div class="analysis-data" id="confidenceScores">
-                                                Loading confidence data...
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="analysis-section">
-                                            <h4>Error Analysis</h4>
-                                            <div class="analysis-data" id="errorAnalysis">
-                                                Loading error analysis...
-                                            </div>
-                                        </div>
+                                                                <div class="analysis-section">
+                            <h4>Model Performance</h4>
+                            <div class="analysis-data" id="modelPerformance">
+                                Loading performance data...
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-section">
+                            <h4>Confidence Scores</h4>
+                            <div class="analysis-data" id="confidenceScores">
+                                Loading confidence data...
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-section">
+                            <h4>Error Analysis</h4>
+                            <div class="analysis-data" id="errorAnalysis">
+                                Loading error analysis...
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-section" style="background: #eff6ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                            <h4>💡 Demo Available</h4>
+                            <div style="font-size: 14px; color: #1e40af;">
+                                <p>To see the planogram demonstration:</p>
+                                <ol style="margin: 10px 0; padding-left: 20px;">
+                                    <li>Click the <strong>"🔄 Iterations"</strong> tab above</li>
+                                    <li>Select <strong>"📊 Demo: Interactive Planogram"</strong> from the dropdown</li>
+                                    <li>View JSON data structure + static SVG representation</li>
+                                    <li>See 18 products with stacking, gaps, and confidence colors</li>
+                                </ol>
+                                <p><em>The Interactive React component is available in Simple Mode when you select an image.</em></p>
+                            </div>
+                        </div>
                                     </div>
                                 </div>
                                 
@@ -1739,6 +2085,55 @@ async def root():
                             </div>
                         </div>
                         
+                        <!-- Iterations Tab -->
+                        <div id="advanced-iterations" class="advanced-tab-content">
+                            <div class="iterations-container">
+                                <h3>🔄 Iteration Analysis</h3>
+                                
+                                <!-- Iteration Selector -->
+                                <div class="iteration-selector">
+                                    <label>Select Iteration:</label>
+                                    <select id="iterationSelect" onchange="loadIterationDetails()">
+                                        <option value="">Loading iterations...</option>
+                                    </select>
+                                    <span id="iterationStats" style="margin-left: 20px;"></span>
+                                </div>
+                                
+                                <!-- Iteration Content Grid -->
+                                <div class="iteration-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                                    <!-- Raw JSON Panel -->
+                                    <div class="iteration-panel">
+                                        <div class="panel-header">
+                                            <h4>📋 Raw Extraction Data (JSON)</h4>
+                                            <button onclick="copyJSON()" style="float: right;">📋 Copy</button>
+                                        </div>
+                                        <div class="json-viewer" id="iterationJSON" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; overflow: auto; max-height: 600px;">
+                                            <div class="loading">Select an iteration to view data...</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Planogram Panel -->
+                                    <div class="iteration-panel">
+                                        <div class="panel-header">
+                                            <h4>📊 Planogram Visualization</h4>
+                                            <span id="planogramAccuracy" style="float: right;"></span>
+                                        </div>
+                                        <div class="planogram-viewer" id="iterationPlanogram" style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow: auto; max-height: 600px;">
+                                            <div class="loading">Select an iteration to view planogram...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Shelf-by-Shelf Breakdown -->
+                                <div class="shelf-breakdown" style="margin-top: 20px;">
+                                    <h4>📦 Shelf-by-Shelf Product Breakdown</h4>
+                                    <div id="shelfBreakdown" style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                                        <div class="loading">Select an iteration to view shelf breakdown...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Orchestrator Tab -->
                         <div id="advanced-orchestrator" class="advanced-tab-content">
                             <div class="orchestrator-container">
@@ -1758,8 +2153,867 @@ async def root():
             </div>
         </div>
         
-        <!-- Interactive Planogram Component -->
-        <script src="/static/components/InteractivePlanogram.js"></script>
+        <!-- Interactive Planogram Component - Embedded to avoid loading issues -->
+        <script>
+/**
+ * Interactive Planogram Component - Phase 1: Visualization Only
+ * Displays products in correct positions with proper stacking and gap detection
+ */
+
+class InteractivePlanogram extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            planogramData: null,
+            loading: true,
+            error: null,
+            overlaySettings: {
+                showNames: true,
+                showPrices: true,
+                showFacings: true,
+                showConfidence: false,
+                showStacking: true
+            }
+        };
+    }
+
+    async componentDidMount() {
+        await this.loadPlanogramData();
+    }
+
+    async componentDidUpdate(prevProps) {
+        if (prevProps.imageId !== this.props.imageId) {
+            await this.loadPlanogramData();
+        }
+    }
+
+         async loadPlanogramData() {
+         if (!this.props.imageId) {
+             this.setState({ loading: false, error: "No image selected" });
+             return;
+         }
+
+         this.setState({ loading: true, error: null });
+
+         try {
+             const url = `/api/planogram/${this.props.imageId}/editable`;
+             console.log(`🔄 Loading planogram data for: ${this.props.imageId}`);
+             console.log(`🔗 Fetching URL: ${url}`);
+             
+             const response = await fetch(url);
+             console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+             
+             if (!response.ok) {
+                 const errorText = await response.text();
+                 console.log(`❌ Error response body: ${errorText}`);
+                 throw new Error(`Failed to load planogram data: ${response.statusText}`);
+             }
+
+             const data = await response.json();
+             console.log('✅ Planogram data loaded:', data);
+             this.setState({ 
+                 planogramData: data,
+                 loading: false 
+             });
+
+         } catch (error) {
+             console.error('❌ Error loading planogram data:', error);
+             this.setState({ 
+                 loading: false, 
+                 error: error.message 
+             });
+         }
+     }
+
+         toggleOverlay = (setting) => {
+         this.setState(prevState => ({
+             overlaySettings: {
+                 ...prevState.overlaySettings,
+                 [setting]: !prevState.overlaySettings[setting]
+             }
+         }));
+     }
+
+     testDirectFetch = async () => {
+         try {
+             const url = `/api/planogram/demo/editable`;
+             console.log(`🧪 Testing direct fetch to: ${url}`);
+             const response = await fetch(url);
+             const data = await response.json();
+             console.log('🧪 Direct fetch result:', data);
+             alert('Direct fetch successful! Check console for details.');
+         } catch (error) {
+             console.error('🧪 Direct fetch failed:', error);
+             alert(`Direct fetch failed: ${error.message}`);
+         }
+     }
+
+    renderLoadingState() {
+        return React.createElement('div', { className: 'planogram-loading' },
+            React.createElement('div', { className: 'loading-spinner' }),
+            React.createElement('p', null, 'Loading planogram...')
+        );
+    }
+
+         renderErrorState() {
+         return React.createElement('div', { className: 'planogram-error' },
+             React.createElement('h3', null, '❌ Failed to Load Planogram'),
+             React.createElement('p', null, this.state.error),
+             React.createElement('button', { 
+                 className: 'btn btn-primary',
+                 onClick: () => this.loadPlanogramData()
+             }, '🔄 Retry'),
+             React.createElement('button', { 
+                 className: 'btn btn-secondary',
+                 style: { marginLeft: '10px' },
+                 onClick: () => this.testDirectFetch()
+             }, '🧪 Test Direct Fetch'),
+             React.createElement('details', { style: { marginTop: '20px' } },
+                 React.createElement('summary', null, '🔍 Debug Info'),
+                 React.createElement('pre', { style: { fontSize: '12px', background: '#f5f5f5', padding: '10px' } },
+                     `Image ID: ${this.props.imageId}\nMode: ${this.props.mode}\nError: ${this.state.error}`
+                 )
+             )
+         );
+     }
+
+         renderModernOverlayControls() {
+         const { overlaySettings } = this.state;
+
+         return React.createElement('div', { 
+             className: 'modern-overlay-controls',
+             style: {
+                 background: 'rgba(255, 255, 255, 0.95)',
+                 backdropFilter: 'blur(10px)',
+                 borderRadius: '16px',
+                 padding: '24px',
+                 marginTop: '24px',
+                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                 border: '1px solid rgba(255, 255, 255, 0.2)'
+             }
+         },
+             React.createElement('h4', { 
+                 style: { 
+                     margin: '0 0 20px 0', 
+                     fontSize: '20px', 
+                     fontWeight: '700',
+                     color: '#2d3748',
+                     textAlign: 'center'
+                 } 
+             }, '🎛️ Display Controls'),
+             React.createElement('div', { 
+                 className: 'modern-overlay-toggles',
+                 style: {
+                     display: 'grid',
+                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                     gap: '16px'
+                 }
+             },
+                 React.createElement('label', {
+                     style: {
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px',
+                         padding: '12px 16px',
+                         background: overlaySettings.showNames ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' : '#f7fafc',
+                         color: overlaySettings.showNames ? 'white' : '#4a5568',
+                         borderRadius: '12px',
+                         cursor: 'pointer',
+                         transition: 'all 0.3s ease',
+                         fontWeight: '600',
+                         fontSize: '14px'
+                     }
+                 },
+                     React.createElement('input', {
+                         type: 'checkbox',
+                         checked: overlaySettings.showNames,
+                         onChange: () => this.toggleOverlay('showNames'),
+                         style: { display: 'none' }
+                     }),
+                     React.createElement('span', null, overlaySettings.showNames ? '✅' : '⬜'),
+                     ' Product Names'
+                 ),
+                 React.createElement('label', {
+                     style: {
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px',
+                         padding: '12px 16px',
+                         background: overlaySettings.showPrices ? 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' : '#f7fafc',
+                         color: overlaySettings.showPrices ? 'white' : '#4a5568',
+                         borderRadius: '12px',
+                         cursor: 'pointer',
+                         transition: 'all 0.3s ease',
+                         fontWeight: '600',
+                         fontSize: '14px'
+                     }
+                 },
+                     React.createElement('input', {
+                         type: 'checkbox',
+                         checked: overlaySettings.showPrices,
+                         onChange: () => this.toggleOverlay('showPrices'),
+                         style: { display: 'none' }
+                     }),
+                     React.createElement('span', null, overlaySettings.showPrices ? '✅' : '⬜'),
+                     ' Prices'
+                 ),
+                 React.createElement('label', {
+                     style: {
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px',
+                         padding: '12px 16px',
+                         background: overlaySettings.showFacings ? 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' : '#f7fafc',
+                         color: overlaySettings.showFacings ? '#2d3748' : '#4a5568',
+                         borderRadius: '12px',
+                         cursor: 'pointer',
+                         transition: 'all 0.3s ease',
+                         fontWeight: '600',
+                         fontSize: '14px'
+                     }
+                 },
+                     React.createElement('input', {
+                         type: 'checkbox',
+                         checked: overlaySettings.showFacings,
+                         onChange: () => this.toggleOverlay('showFacings'),
+                         style: { display: 'none' }
+                     }),
+                     React.createElement('span', null, overlaySettings.showFacings ? '✅' : '⬜'),
+                     ' Facing Counts'
+                 ),
+                 React.createElement('label', {
+                     style: {
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px',
+                         padding: '12px 16px',
+                         background: overlaySettings.showConfidence ? 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' : '#f7fafc',
+                         color: overlaySettings.showConfidence ? '#2d3748' : '#4a5568',
+                         borderRadius: '12px',
+                         cursor: 'pointer',
+                         transition: 'all 0.3s ease',
+                         fontWeight: '600',
+                         fontSize: '14px'
+                     }
+                 },
+                     React.createElement('input', {
+                         type: 'checkbox',
+                         checked: overlaySettings.showConfidence,
+                         onChange: () => this.toggleOverlay('showConfidence'),
+                         style: { display: 'none' }
+                     }),
+                     React.createElement('span', null, overlaySettings.showConfidence ? '✅' : '⬜'),
+                     ' Confidence Scores'
+                 ),
+                 React.createElement('label', {
+                     style: {
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px',
+                         padding: '12px 16px',
+                         background: overlaySettings.showStacking ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f7fafc',
+                         color: overlaySettings.showStacking ? 'white' : '#4a5568',
+                         borderRadius: '12px',
+                         cursor: 'pointer',
+                         transition: 'all 0.3s ease',
+                         fontWeight: '600',
+                         fontSize: '14px'
+                     }
+                 },
+                     React.createElement('input', {
+                         type: 'checkbox',
+                         checked: overlaySettings.showStacking,
+                         onChange: () => this.toggleOverlay('showStacking'),
+                         style: { display: 'none' }
+                     }),
+                     React.createElement('span', null, overlaySettings.showStacking ? '✅' : '⬜'),
+                     ' Stacking Indicators'
+                 )
+             )
+         );
+     }
+
+         renderPlanogram() {
+         const { planogramData } = this.state;
+         
+         if (!planogramData || !planogramData.planogram) {
+             return React.createElement('div', { className: 'planogram-error' },
+                 React.createElement('p', null, 'Invalid planogram data structure')
+             );
+         }
+         
+         const { planogram } = planogramData;
+         const { shelves, structure } = planogram;
+         
+         if (!shelves || !Array.isArray(shelves)) {
+             return React.createElement('div', { className: 'planogram-error' },
+                 React.createElement('p', null, 'No shelf data available')
+             );
+         }
+
+         // Sort shelves from top to bottom (highest shelf number first)
+         const sortedShelves = shelves.sort((a, b) => b.shelf_number - a.shelf_number);
+         
+         // Calculate metadata from shelves
+         const totalProducts = shelves.reduce((sum, shelf) => sum + (shelf.product_count || 0), 0);
+         const hasStacking = shelves.some(shelf => 
+             shelf.sections && Object.values(shelf.sections).some(section =>
+                 section && section.some(slot => 
+                     slot.type === 'product' && slot.data && slot.data.quantity && slot.data.quantity.stack > 1
+                 )
+             )
+         );
+         const avgConfidence = 0.9; // Default for demo
+         
+         console.log('📊 Planogram stats:', { totalProducts, shelfCount: shelves.length, hasStacking });
+         console.log('🔍 Raw shelves data:', shelves);
+         console.log('🔍 First shelf sections:', shelves[0]?.sections);
+         console.log('🔍 First product example:', shelves[0]?.sections?.Left?.[0]);
+
+                          return React.createElement('div', { 
+             className: 'modern-planogram-container',
+             style: {
+                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                 minHeight: '100vh',
+                 padding: '20px',
+                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+             }
+         },
+             // Modern Header
+             React.createElement('div', { 
+                 className: 'modern-planogram-header',
+                 style: {
+                     background: 'rgba(255, 255, 255, 0.95)',
+                     backdropFilter: 'blur(10px)',
+                     borderRadius: '16px',
+                     padding: '24px',
+                     marginBottom: '24px',
+                     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                     border: '1px solid rgba(255, 255, 255, 0.2)'
+                 }
+             },
+                 React.createElement('h2', { 
+                     style: { 
+                         margin: '0 0 16px 0', 
+                         fontSize: '28px', 
+                         fontWeight: '700',
+                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                         WebkitBackgroundClip: 'text',
+                         WebkitTextFillColor: 'transparent',
+                         backgroundClip: 'text'
+                     } 
+                 }, '🏪 Interactive Planogram'),
+                 React.createElement('div', { 
+                     style: { 
+                         display: 'grid', 
+                         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                         gap: '16px',
+                         marginTop: '16px'
+                     } 
+                 },
+                     React.createElement('div', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                             color: 'white',
+                             padding: '16px',
+                             borderRadius: '12px',
+                             textAlign: 'center',
+                             boxShadow: '0 4px 16px rgba(79, 172, 254, 0.3)'
+                         } 
+                     },
+                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, totalProducts),
+                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.9 } }, 'Products')
+                     ),
+                     React.createElement('div', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                             color: 'white',
+                             padding: '16px',
+                             borderRadius: '12px',
+                             textAlign: 'center',
+                             boxShadow: '0 4px 16px rgba(250, 112, 154, 0.3)'
+                         } 
+                     },
+                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, shelves.length),
+                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.9 } }, 'Shelves')
+                     ),
+                     React.createElement('div', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                             color: '#2d3748',
+                             padding: '16px',
+                             borderRadius: '12px',
+                             textAlign: 'center',
+                             boxShadow: '0 4px 16px rgba(168, 237, 234, 0.3)'
+                         } 
+                     },
+                         React.createElement('div', { style: { fontSize: '24px', fontWeight: '700' } }, `${Math.round(avgConfidence * 100)}%`),
+                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.8 } }, 'Confidence')
+                     ),
+                     hasStacking && React.createElement('div', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+                             color: '#2d3748',
+                             padding: '16px',
+                             borderRadius: '12px',
+                             textAlign: 'center',
+                             boxShadow: '0 4px 16px rgba(252, 182, 159, 0.3)'
+                         } 
+                     },
+                         React.createElement('div', { style: { fontSize: '18px', fontWeight: '700' } }, '📚'),
+                         React.createElement('div', { style: { fontSize: '14px', opacity: 0.8 } }, 'Stacking')
+                     )
+                 )
+             ),
+             // Modern Shelf Container
+             React.createElement('div', { 
+                 className: 'modern-shelves-container',
+                 style: {
+                     display: 'flex',
+                     flexDirection: 'column',
+                     gap: '24px'
+                 }
+             },
+                 sortedShelves.map(shelf => 
+                     React.createElement(ModernShelfComponent, {
+                         key: shelf.shelf_number,
+                         shelfData: shelf,
+                         overlaySettings: this.state.overlaySettings
+                     })
+                 )
+             ),
+             // Modern Overlay Controls
+             this.renderModernOverlayControls()
+         );
+    }
+
+    render() {
+        const { loading, error, planogramData } = this.state;
+
+        if (loading) {
+            return this.renderLoadingState();
+        }
+
+        if (error) {
+            return this.renderErrorState();
+        }
+
+        if (!planogramData) {
+            return React.createElement('div', { className: 'planogram-empty' },
+                React.createElement('p', null, 'No planogram data available')
+            );
+        }
+
+        return this.renderPlanogram();
+    }
+}
+
+// Modern Shelf Component
+class ModernShelfComponent extends React.Component {
+         renderModernSection(sectionName, sectionSlots) {
+         if (!sectionSlots || sectionSlots.length === 0) {
+             return React.createElement('div', { 
+                 className: `modern-section-empty`,
+                 style: {
+                     background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
+                     borderRadius: '12px',
+                     padding: '20px',
+                     textAlign: 'center',
+                     border: '2px dashed #cbd5e0'
+                 }
+             },
+                 React.createElement('div', { style: { color: '#a0aec0', fontSize: '14px' } }, `${sectionName} Section`),
+                 React.createElement('div', { style: { color: '#a0aec0', fontSize: '12px' } }, 'No products')
+             );
+         }
+
+         return React.createElement('div', { 
+             className: `modern-shelf-section section-${sectionName.toLowerCase()}`,
+             style: {
+                 background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
+                 borderRadius: '12px',
+                 padding: '16px',
+                 border: '1px solid #e2e8f0'
+             }
+         },
+             React.createElement('div', { 
+                 className: 'modern-section-label',
+                 style: {
+                     fontSize: '14px',
+                     fontWeight: '600',
+                     color: '#4a5568',
+                     marginBottom: '12px',
+                     textAlign: 'center'
+                 }
+             }, `${sectionName} Section`),
+             React.createElement('div', { 
+                 className: 'modern-section-slots',
+                 style: {
+                     display: 'flex',
+                     flexDirection: 'column',
+                     gap: '8px'
+                 }
+             },
+                 sectionSlots.map((slot, index) =>
+                     React.createElement(ModernSlotComponent, {
+                         key: `${sectionName}-${slot.position}-${index}`,
+                         slot: slot,
+                         overlaySettings: this.props.overlaySettings
+                     })
+                 )
+             )
+         );
+     }
+
+         render() {
+         const { shelfData } = this.props;
+         const { shelf_number, sections, product_count, empty_count } = shelfData;
+
+         return React.createElement('div', { 
+             className: 'modern-shelf-component',
+             style: {
+                 background: 'rgba(255, 255, 255, 0.95)',
+                 backdropFilter: 'blur(10px)',
+                 borderRadius: '16px',
+                 padding: '24px',
+                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                 border: '1px solid rgba(255, 255, 255, 0.2)'
+             }
+         },
+             // Modern Shelf Header
+             React.createElement('div', { 
+                 className: 'modern-shelf-header',
+                 style: {
+                     display: 'flex',
+                     justifyContent: 'space-between',
+                     alignItems: 'center',
+                     marginBottom: '20px',
+                     paddingBottom: '16px',
+                     borderBottom: '2px solid #e2e8f0'
+                 }
+             },
+                 React.createElement('h3', { 
+                     style: { 
+                         margin: 0, 
+                         fontSize: '24px', 
+                         fontWeight: '700',
+                         color: '#2d3748'
+                     } 
+                 }, `🏪 Shelf ${shelf_number}`),
+                 React.createElement('div', { 
+                     style: { 
+                         display: 'flex', 
+                         gap: '12px',
+                         alignItems: 'center'
+                     } 
+                 },
+                     React.createElement('span', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                             color: 'white',
+                             padding: '6px 12px',
+                             borderRadius: '20px',
+                             fontSize: '12px',
+                             fontWeight: '600'
+                         } 
+                     }, `${product_count} products`),
+                     empty_count > 0 && React.createElement('span', { 
+                         style: { 
+                             background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                             color: 'white',
+                             padding: '6px 12px',
+                             borderRadius: '20px',
+                             fontSize: '12px',
+                             fontWeight: '600'
+                         } 
+                     }, `${empty_count} gaps`)
+                 )
+             ),
+             // Modern Shelf Content
+             React.createElement('div', { 
+                 className: 'modern-shelf-content',
+                 style: {
+                     display: 'grid',
+                     gridTemplateColumns: '1fr 1fr 1fr',
+                     gap: '20px'
+                 }
+             },
+                 this.renderModernSection("Left", sections.Left),
+                 this.renderModernSection("Center", sections.Center),
+                 this.renderModernSection("Right", sections.Right)
+             )
+         );
+     }
+}
+
+// Modern Slot Component with Card Design
+class ModernSlotComponent extends React.Component {
+         renderProductSlot() {
+         const { slot, overlaySettings } = this.props;
+         const { data: product } = slot;
+
+         const isStacked = product.visual && !product.visual.uses_full_height;
+         const stackRows = product.visual ? product.visual.stack_rows : 1;
+         const confidenceColor = product.visual ? product.visual.confidence_color : '#e5e7eb';
+
+         return React.createElement('div', {
+             className: 'modern-product-card',
+             style: {
+                 background: 'white',
+                 borderRadius: '12px',
+                 padding: '16px',
+                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+                 border: `3px solid ${confidenceColor}`,
+                 transition: 'all 0.3s ease',
+                 cursor: 'pointer',
+                 position: 'relative',
+                 overflow: 'hidden'
+             },
+             onMouseEnter: (e) => {
+                 e.target.style.transform = 'translateY(-4px)';
+                 e.target.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.15)';
+             },
+             onMouseLeave: (e) => {
+                 e.target.style.transform = 'translateY(0)';
+                 e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.1)';
+             }
+         },
+             // Confidence indicator
+             React.createElement('div', {
+                 style: {
+                     position: 'absolute',
+                     top: '8px',
+                     right: '8px',
+                     width: '12px',
+                     height: '12px',
+                     borderRadius: '50%',
+                     background: confidenceColor,
+                     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                 }
+             }),
+             
+             // Product brand
+             React.createElement('div', {
+                 style: {
+                     fontSize: '12px',
+                     fontWeight: '600',
+                     color: '#718096',
+                     marginBottom: '4px',
+                     textTransform: 'uppercase',
+                     letterSpacing: '0.5px'
+                 }
+             }, product.brand),
+             
+             // Product name
+             React.createElement('div', {
+                 style: {
+                     fontSize: '14px',
+                     fontWeight: '700',
+                     color: '#2d3748',
+                     marginBottom: '8px',
+                     lineHeight: '1.3',
+                     minHeight: '36px'
+                 }
+             }, product.name),
+             
+             // Price and facings row
+             React.createElement('div', {
+                 style: {
+                     display: 'flex',
+                     justifyContent: 'space-between',
+                     alignItems: 'center',
+                     marginBottom: '8px'
+                 }
+             },
+                 // Price
+                 product.price && React.createElement('div', {
+                     style: {
+                         fontSize: '16px',
+                         fontWeight: '700',
+                         color: '#2b6cb0',
+                         background: 'linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%)',
+                         padding: '4px 8px',
+                         borderRadius: '6px'
+                     }
+                 }, `£${product.price.toFixed(2)}`),
+                 
+                 // Facings
+                 product.quantity && React.createElement('div', {
+                     style: {
+                         fontSize: '12px',
+                         fontWeight: '600',
+                         color: '#4a5568',
+                         background: '#f7fafc',
+                         padding: '4px 8px',
+                         borderRadius: '6px'
+                     }
+                 }, `${product.quantity.total_facings || 1} facings`)
+             ),
+             
+             // Stacking indicator
+             isStacked && React.createElement('div', {
+                 style: {
+                     fontSize: '11px',
+                     fontWeight: '600',
+                     color: '#d69e2e',
+                     background: 'linear-gradient(135deg, #fefcbf 0%, #faf089 100%)',
+                     padding: '4px 8px',
+                     borderRadius: '6px',
+                     textAlign: 'center',
+                     marginTop: '4px'
+                 }
+             }, `📚 Stacked ${stackRows} high`),
+             
+             // Confidence score (if enabled)
+             overlaySettings.showConfidence && product.metadata && React.createElement('div', {
+                 style: {
+                     fontSize: '10px',
+                     fontWeight: '600',
+                     color: '#4a5568',
+                     textAlign: 'center',
+                     marginTop: '8px',
+                     padding: '4px',
+                     background: '#f7fafc',
+                     borderRadius: '4px'
+                 }
+             }, `${Math.round((product.metadata.extraction_confidence || 0.9) * 100)}% confidence`)
+         );
+     }
+
+         renderEmptySlot() {
+         return React.createElement('div', {
+             className: 'modern-empty-slot',
+             style: {
+                 background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
+                 borderRadius: '12px',
+                 padding: '16px',
+                 border: '2px dashed #cbd5e0',
+                 textAlign: 'center',
+                 minHeight: '120px',
+                 display: 'flex',
+                 flexDirection: 'column',
+                 justifyContent: 'center',
+                 alignItems: 'center',
+                 transition: 'all 0.3s ease'
+             }
+         },
+             React.createElement('div', {
+                 style: {
+                     fontSize: '24px',
+                     marginBottom: '8px'
+                 }
+             }, '📭'),
+             React.createElement('div', {
+                 style: {
+                     fontSize: '12px',
+                     fontWeight: '600',
+                     color: '#a0aec0'
+                 }
+             }, 'Empty Slot'),
+             React.createElement('div', {
+                 style: {
+                     fontSize: '10px',
+                     color: '#cbd5e0',
+                     marginTop: '4px'
+                 }
+             }, 'Gap detected')
+         );
+     }
+
+         render() {
+         const { slot } = this.props;
+
+         return React.createElement('div', { 
+             className: `modern-slot-container position-${slot.position}`,
+             style: {
+                 marginBottom: '8px'
+             }
+         },
+             slot.type === 'product' ? this.renderProductSlot() : this.renderEmptySlot()
+         );
+     }
+}
+
+// Product Content Component
+class ProductContent extends React.Component {
+    render() {
+        const { product, overlaySettings, stackIndex, isStacked } = this.props;
+
+                 return React.createElement('div', { className: 'product-content' },
+             overlaySettings.showNames && React.createElement('div', { className: 'product-name' },
+                 `${product.brand} ${product.name}`
+             ),
+             overlaySettings.showPrices && product.price && React.createElement('div', { className: 'product-price' },
+                 `£${product.price.toFixed(2)}`
+             ),
+             overlaySettings.showFacings && product.quantity && React.createElement('div', { className: 'product-facings' },
+                 `${product.quantity.total_facings || 1} facings`
+             ),
+             overlaySettings.showConfidence && product.metadata && React.createElement('div', { className: 'product-confidence' },
+                 `${Math.round((product.metadata.extraction_confidence || 0.9) * 100)}%`
+             ),
+             overlaySettings.showStacking && isStacked && product.visual && React.createElement('div', { className: 'stacking-indicator' },
+                 `Stack ${stackIndex + 1}/${product.visual.stack_rows || 1}`
+             )
+         );
+    }
+}
+
+// Export for use in main dashboard
+window.InteractivePlanogram = InteractivePlanogram;
+console.log('✅ InteractivePlanogram component loaded directly');
+        </script>
+        
+        <!-- Initialize React Components -->
+        <script>
+            // Debug React loading
+            console.log('=== REACT LOADING DEBUG ===');
+            console.log('React available:', typeof React !== 'undefined');
+            console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
+            
+            // Wait for everything to load
+            window.addEventListener('DOMContentLoaded', function() {
+                console.log('=== DOM LOADED ===');
+                console.log('React available:', typeof React !== 'undefined');
+                console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
+                console.log('InteractivePlanogram available:', typeof window.InteractivePlanogram !== 'undefined');
+                
+                // Try to load the component file manually if it's not available
+                if (typeof window.InteractivePlanogram === 'undefined') {
+                    console.error('❌ InteractivePlanogram component not loaded!');
+                    console.log('Attempting to reload component...');
+                    
+                    const script = document.createElement('script');
+                    script.src = '/static/components/InteractivePlanogram.js?v=' + Date.now();
+                    script.onload = function() {
+                        console.log('✅ Component script reloaded');
+                        console.log('InteractivePlanogram now available:', typeof window.InteractivePlanogram !== 'undefined');
+                        
+                        // If still not available, there's a syntax error in the file
+                        if (typeof window.InteractivePlanogram === 'undefined') {
+                            console.error('❌ Component still not available after reload - syntax error in file');
+                        }
+                    };
+                    script.onerror = function(e) {
+                        console.error('❌ Failed to reload component script:', e);
+                        console.log('Trying to fetch the file directly to check content...');
+                        
+                        fetch('/static/components/InteractivePlanogram.js')
+                            .then(response => response.text())
+                            .then(text => {
+                                console.log('File content preview:', text.substring(0, 200));
+                                if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                                    console.error('❌ File is returning HTML instead of JavaScript!');
+                                }
+                            })
+                            .catch(err => console.error('❌ Failed to fetch file:', err));
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    console.log('✅ InteractivePlanogram component is available');
+                }
+            });
+        </script>
         
         <script>
             // Global state
@@ -1836,10 +3090,18 @@ async def root():
                         sidebar.classList.add('collapsed');
                         toggle.innerHTML = '▶';
                     }
-                } else if (mode === 'simple') {
-                    document.getElementById('simple-mode').classList.add('active');
-                    updateBreadcrumb(`Extraction #${selectedItemId} - Simple Analysis`);
-                    loadSimpleModeData();
+                                 } else if (mode === 'simple') {
+                     document.getElementById('simple-mode').classList.add('active');
+                     
+                     // Always default to demo for now since real extraction data isn't available
+                     if (!selectedItemId || selectedItemId === 5 || selectedItemId === 1) {
+                         selectedItemId = 'demo';
+                         updateBreadcrumb('Demo - Interactive Planogram');
+                     } else {
+                         updateBreadcrumb(`Extraction #${selectedItemId} - Simple Analysis`);
+                     }
+                     
+                     loadSimpleModeData();
                     
                     // Expand sidebar for analysis modes (image selection needed)
                     if (sidebarCollapsed) {
@@ -2175,51 +3437,79 @@ async def root():
             
             // Load data for different modes
             async function loadSimpleModeData() {
-                if (!selectedItemId) return;
-                
                 try {
-                    // Load original image
+                    // Load original image (or show demo message)
                     const imageElement = document.getElementById('originalImage');
                     const loadingElement = document.getElementById('imageLoading');
                     
-                    imageElement.onload = function() {
-                        loadingElement.style.display = 'none';
-                        imageElement.style.display = 'block';
-                    };
+                    if (selectedItemId && selectedItemId !== 'demo') {
+                        imageElement.onload = function() {
+                            loadingElement.style.display = 'none';
+                            imageElement.style.display = 'block';
+                        };
+                        
+                        imageElement.onerror = function() {
+                            loadingElement.innerHTML = 'Failed to load image';
+                        };
+                        
+                        imageElement.src = `/api/queue/image/${selectedItemId}`;
+                    } else {
+                        // Show demo message for image
+                        loadingElement.innerHTML = '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>📷 Demo Mode</h3><p>Select a real image from the sidebar to see the original photo, or view the interactive planogram demo on the right.</p></div>';
+                        imageElement.style.display = 'none';
+                    }
                     
-                    imageElement.onerror = function() {
-                        loadingElement.innerHTML = 'Failed to load image';
-                    };
-                    
-                    imageElement.src = `/api/queue/image/${selectedItemId}`;
-                    
-                    // Load interactive planogram
+                    // Load interactive planogram - ALWAYS show demo if no real item
                     const planogramViewer = document.getElementById('planogramViewer');
+                    const imageId = selectedItemId || 'demo';
+                    
+                    console.log('Loading planogram for:', imageId);
+                    
                     try {
                         // Clear existing content
-                        planogramViewer.innerHTML = '';
+                        planogramViewer.innerHTML = '<div class="loading">Loading interactive planogram...</div>';
                         
-                        // Render interactive planogram component
-                        if (window.InteractivePlanogram) {
-                            ReactDOM.render(
-                                React.createElement(window.InteractivePlanogram, {
-                                    imageId: selectedItemId,
-                                    mode: 'simple'
-                                }),
-                                planogramViewer
-                            );
-                        } else {
-                            // Fallback to static SVG if React component not loaded
-                            const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=product_view`);
-                            if (planogramResponse.ok) {
-                                const svgContent = await planogramResponse.text();
-                                planogramViewer.innerHTML = svgContent;
+                        // Check if React and components are available
+                        if (typeof React === 'undefined') {
+                            console.error('React not loaded!');
+                            planogramViewer.innerHTML = '<div class="loading">React library not loaded. Please refresh the page.</div>';
+                            return;
+                        }
+                        
+                        if (typeof ReactDOM === 'undefined') {
+                            console.error('ReactDOM not loaded!');
+                            planogramViewer.innerHTML = '<div class="loading">ReactDOM library not loaded. Please refresh the page.</div>';
+                            return;
+                        }
+                        
+                        // Function to try rendering the React component
+                        function tryRenderReactComponent() {
+                            if (window.InteractivePlanogram) {
+                                console.log('✅ React component found, rendering...');
+                                try {
+                                    ReactDOM.render(
+                                        React.createElement(window.InteractivePlanogram, {
+                                            imageId: imageId,
+                                            mode: 'simple'
+                                        }),
+                                        planogramViewer
+                                    );
+                                    console.log('✅ React component rendered successfully');
+                                } catch (error) {
+                                    console.error('❌ Error rendering React component:', error);
+                                    showFallbackPlanogram(planogramViewer);
+                                }
                             } else {
-                                planogramViewer.innerHTML = '<div class="loading">Planogram not available</div>';
+                                console.log('⏳ Component not ready, waiting...');
+                                setTimeout(tryRenderReactComponent, 200);
                             }
                         }
+                        
+                        // Start trying to render
+                        tryRenderReactComponent();
                     } catch (error) {
-                        planogramViewer.innerHTML = '<div class="loading">Failed to load planogram</div>';
+                        console.error('Error rendering planogram:', error);
+                        planogramViewer.innerHTML = '<div class="loading">Failed to load planogram: ' + error.message + '</div>';
                     }
                     
                 } catch (error) {
@@ -2247,12 +3537,16 @@ async def root():
             }
             
             async function loadAdvancedModeData() {
-                if (!selectedItemId) return;
-                
                 try {
                     // Load original image in advanced mode
                     const advancedImage = document.getElementById('advancedOriginalImage');
-                    advancedImage.src = `/api/queue/image/${selectedItemId}`;
+                    if (selectedItemId) {
+                        advancedImage.src = `/api/queue/image/${selectedItemId}`;
+                    } else {
+                        // Show demo message when no item selected
+                        advancedImage.style.display = 'none';
+                        advancedImage.parentElement.innerHTML = '<div class="loading">Select an image from the sidebar or view the Demo in the Iterations tab</div>';
+                    }
                     
                     // Load interactive planogram in advanced mode
                     const advancedPlanogram = document.getElementById('advancedPlanogramViewer');
@@ -2260,23 +3554,30 @@ async def root():
                         // Clear existing content
                         advancedPlanogram.innerHTML = '';
                         
+                        // Always show demo if no item selected, otherwise show selected item
+                        const imageId = selectedItemId || "demo";
+                        
                         // Render interactive planogram component
                         if (window.InteractivePlanogram) {
                             ReactDOM.render(
                                 React.createElement(window.InteractivePlanogram, {
-                                    imageId: selectedItemId,
+                                    imageId: imageId,
                                     mode: 'advanced'
                                 }),
                                 advancedPlanogram
                             );
                         } else {
                             // Fallback to static SVG if React component not loaded
-                            const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
-                            if (planogramResponse.ok) {
-                                const svgContent = await planogramResponse.text();
-                                advancedPlanogram.innerHTML = svgContent;
+                            if (selectedItemId) {
+                                const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
+                                if (planogramResponse.ok) {
+                                    const svgContent = await planogramResponse.text();
+                                    advancedPlanogram.innerHTML = svgContent;
+                                } else {
+                                    advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                                }
                             } else {
-                                advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                                advancedPlanogram.innerHTML = '<div class="loading">React component not loaded. Please refresh the page to see demo.</div>';
                             }
                         }
                     } catch (error) {
@@ -2410,19 +3711,22 @@ async def root():
                 return texts[status] || 'Unknown';
             }
             
-            // Queue item selection
-            function selectQueueItem(itemId) {
-                selectedItemId = itemId;
-                
-                // Update visual selection
-                document.querySelectorAll('.queue-item').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                document.querySelector(`[data-item-id="${itemId}"]`).classList.add('selected');
-                
-                // Update breadcrumb
-                updateBreadcrumb(`Extraction #${itemId} Selected`);
-            }
+                         // Queue item selection
+             function selectQueueItem(itemId) {
+                 selectedItemId = itemId;
+                 
+                 // Update visual selection
+                 document.querySelectorAll('.queue-item').forEach(item => {
+                     item.classList.remove('selected');
+                 });
+                 document.querySelector(`[data-item-id="${itemId}"]`).classList.add('selected');
+                 
+                 // Update breadcrumb
+                 updateBreadcrumb(`Extraction #${itemId} Selected`);
+                 
+                 // Note: Don't auto-switch to simple mode since real data isn't available
+                 console.log(`📋 Selected queue item #${itemId} (real extraction data not available yet)`);
+             }
             
             // System selection update
             function updateSystemSelection(itemId) {
@@ -2469,10 +3773,12 @@ async def root():
                 }
             }
             
-            async function viewResults(itemId) {
-                selectedItemId = itemId;
-                switchMode('simple');
-            }
+                         async function viewResults(itemId) {
+                 // For now, always show demo since real extraction data isn't available
+                 selectedItemId = 'demo';
+                 switchMode('simple');
+                 console.log(`📊 Viewing results for item #${itemId} (showing demo data instead)`);
+             }
             
             async function reprocess(itemId) {
                 if (confirm('Are you sure you want to reprocess this extraction?')) {
@@ -2628,6 +3934,9 @@ async def root():
                 } else if (tabName === 'overview') {
                     loadErrorSummary();
                     stopLogRefresh();
+                } else if (tabName === 'iterations') {
+                    loadIterations();
+                    stopLogRefresh();
                 } else {
                     stopLogRefresh();
                 }
@@ -2753,6 +4062,459 @@ async def root():
                 }
             }
             
+            // Iteration Functions
+            async function loadIterations() {
+                // Always show demo option first
+                const select = document.getElementById('iterationSelect');
+                select.innerHTML = '<option value="">Select iteration...</option><option value="demo">📊 Demo: Interactive Planogram (18 Products)</option>';
+                
+                if (!selectedItemId) {
+                    document.getElementById('iterationStats').textContent = 'Demo available - select "Demo" above to view interactive planogram';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/iterations/${selectedItemId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Add real iterations after demo option
+                        data.iterations.forEach(iter => {
+                            const option = document.createElement('option');
+                            option.value = iter.iteration;
+                            option.textContent = `Iteration ${iter.iteration} - ${(iter.accuracy * 100).toFixed(1)}% accuracy (${iter.total_products} products)`;
+                            select.appendChild(option);
+                        });
+                        
+                        document.getElementById('iterationStats').textContent = `Total iterations: ${data.total_iterations} (+ Demo available)`;
+                    } else if (response.status === 404) {
+                        document.getElementById('iterationStats').textContent = 'No real iteration data available - Demo option available above';
+                    }
+                } catch (error) {
+                    console.error('Failed to load iterations:', error);
+                    document.getElementById('iterationStats').textContent = 'Error loading iterations - Demo option still available above';
+                }
+            }
+            
+            async function loadIterationDetails() {
+                const iterationNum = document.getElementById('iterationSelect').value;
+                if (!iterationNum) return;
+                
+                // Handle demo mode
+                if (iterationNum === 'demo') {
+                    // Load mock data for demo
+                    loadDemoIterationData();
+                    return;
+                }
+                
+                if (!selectedItemId) return;
+                
+                // Load products data
+                try {
+                    const response = await fetch(`/api/iterations/${selectedItemId}/products/${iterationNum}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Display raw JSON with syntax highlighting
+                        const jsonViewer = document.getElementById('iterationJSON');
+                        jsonViewer.innerHTML = `<pre>${JSON.stringify(data.raw_products, null, 2)}</pre>`;
+                        
+                        // Display shelf breakdown
+                        let shelfHTML = '';
+                        const shelves = Object.keys(data.products_by_shelf).sort((a, b) => parseInt(a) - parseInt(b));
+                        
+                        shelves.forEach(shelf => {
+                            const products = data.products_by_shelf[shelf];
+                            shelfHTML += `<div style="margin-bottom: 20px;">`;
+                            shelfHTML += `<h5 style="color: #2563eb;">Shelf ${shelf} (${products.length} products)</h5>`;
+                            shelfHTML += '<table style="width: 100%; border-collapse: collapse;">';
+                            shelfHTML += '<tr style="background: #e5e7eb;"><th>Pos</th><th>Brand</th><th>Product</th><th>Facings</th><th>Price</th><th>Confidence</th></tr>';
+                            
+                            products.forEach(product => {
+                                const conf = (product.extraction_confidence * 100).toFixed(0);
+                                const confColor = conf >= 90 ? '#10b981' : conf >= 70 ? '#f59e0b' : '#ef4444';
+                                shelfHTML += `<tr style="border-bottom: 1px solid #e5e7eb;">`;
+                                shelfHTML += `<td style="padding: 5px;">${product.position.position_on_shelf}</td>`;
+                                shelfHTML += `<td style="padding: 5px;">${product.brand}</td>`;
+                                shelfHTML += `<td style="padding: 5px;">${product.name}</td>`;
+                                shelfHTML += `<td style="padding: 5px; text-align: center;">${product.position.facing_count}</td>`;
+                                shelfHTML += `<td style="padding: 5px;">${product.price ? '£' + product.price.toFixed(2) : '-'}</td>`;
+                                shelfHTML += `<td style="padding: 5px; color: ${confColor}; font-weight: bold;">${conf}%</td>`;
+                                shelfHTML += '</tr>';
+                            });
+                            
+                            shelfHTML += '</table></div>';
+                        });
+                        
+                        document.getElementById('shelfBreakdown').innerHTML = shelfHTML;
+                    }
+                } catch (error) {
+                    console.error('Failed to load iteration products:', error);
+                    document.getElementById('iterationJSON').innerHTML = '<div class="error">Failed to load product data</div>';
+                }
+                
+                // Load planogram
+                try {
+                    const response = await fetch(`/api/iterations/${selectedItemId}/planogram/${iterationNum}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        document.getElementById('iterationPlanogram').innerHTML = data.svg;
+                        document.getElementById('planogramAccuracy').textContent = `Accuracy: ${(data.accuracy * 100).toFixed(1)}%`;
+                    } else {
+                        document.getElementById('iterationPlanogram').innerHTML = '<div class="loading">No planogram available</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load planogram:', error);
+                    document.getElementById('iterationPlanogram').innerHTML = '<div class="error">Failed to load planogram</div>';
+                }
+            }
+            
+            function copyJSON() {
+                const jsonContent = document.getElementById('iterationJSON').textContent;
+                navigator.clipboard.writeText(jsonContent).then(() => {
+                    alert('JSON copied to clipboard!');
+                });
+            }
+            
+            async function loadDemoIterationData() {
+                // Display demo data with static SVG representation
+                try {
+                    document.getElementById('iterationJSON').innerHTML = `
+                        <div style="margin-bottom: 20px;">
+                            <h3>📊 Demo: Planogram Data Structure (18 Products)</h3>
+                            <p>This shows the JSON data structure that feeds the interactive React planogram.</p>
+                            <p><strong>Features:</strong> 18 products across 3 shelves, stacking data, gap detection, section organization, confidence scores</p>
+                        </div>
+                        <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow: auto; max-height: 400px; font-family: monospace; font-size: 12px;">{
+  "shelves": {
+    "1": {
+      "shelf_number": 1,
+      "sections": {
+        "Left": [
+          {
+            "type": "product",
+            "position": 1,
+            "data": {
+              "brand": "Coca-Cola",
+              "name": "Coke Zero 330ml",
+              "price": 1.29,
+              "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+              "visual": {"confidence_color": "#22c55e"},
+              "metadata": {"extraction_confidence": 0.98}
+            }
+          },
+          {
+            "type": "product", 
+            "position": 2,
+            "data": {
+              "brand": "Coca-Cola",
+              "name": "Sprite 330ml", 
+              "price": 1.29,
+              "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+              "visual": {"confidence_color": "#3b82f6"},
+              "metadata": {"extraction_confidence": 0.92}
+            }
+          }
+        ],
+        "Center": [
+          {
+            "type": "product",
+            "position": 4,
+            "data": {
+              "brand": "PepsiCo",
+              "name": "Pepsi Max 330ml",
+              "price": 1.19,
+              "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+              "visual": {"confidence_color": "#22c55e"},
+              "metadata": {"extraction_confidence": 0.95}
+            }
+          },
+          {
+            "type": "empty",
+            "position": 6,
+            "reason": "gap_detected"
+          }
+        ],
+        "Right": [
+          {
+            "type": "product",
+            "position": 7,
+            "data": {
+              "brand": "Red Bull",
+              "name": "Energy Drink 250ml",
+              "price": 1.89,
+              "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+              "visual": {"confidence_color": "#22c55e"},
+              "metadata": {"extraction_confidence": 0.96}
+            }
+          }
+        ]
+      }
+    }
+  }
+}</pre>
+                    `;
+                    
+                    // Show message directing to Simple Mode for actual planogram
+                    const planogramContainer = document.getElementById('iterationPlanogram');
+                    planogramContainer.innerHTML = `
+                        <div style="background: #eff6ff; padding: 30px; border-radius: 8px; border: 1px solid #3b82f6; text-align: center;">
+                            <h3 style="margin: 0 0 15px 0; color: #1e40af;">🎯 View Interactive Planogram</h3>
+                            <p style="margin: 0 0 20px 0; color: #1e40af; font-size: 16px;">
+                                To see the actual planogram visualization with all 18 products, stacking, gaps, and interactive controls:
+                            </p>
+                            <button onclick="switchMode('simple')" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; margin: 10px;">
+                                🚀 Go to Simple Mode
+                            </button>
+                            <p style="margin: 20px 0 0 0; color: #64748b; font-size: 14px;">
+                                The iterations tab shows data structure. The actual planogram visualization is in Simple Mode.
+                            </p>
+                        </div>
+                    `;
+                    
+                    document.getElementById('planogramAccuracy').textContent = 'Interactive Planogram Available in Simple Mode';
+                    
+                    // Add shelf breakdown table
+                    document.getElementById('shelfBreakdown').innerHTML = `
+                        <h4>📦 Shelf-by-Shelf Product Breakdown</h4>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h5 style="color: #2563eb;">Shelf 1 (Bottom) - 7 products</h5>
+                            <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <tr style="background: #e5e7eb; font-weight: bold;">
+                                    <th style="padding: 10px; text-align: left;">Pos</th>
+                                    <th style="padding: 10px; text-align: left;">Brand</th>
+                                    <th style="padding: 10px; text-align: left;">Product</th>
+                                    <th style="padding: 10px; text-align: center;">Facings</th>
+                                    <th style="padding: 10px; text-align: left;">Price</th>
+                                    <th style="padding: 10px; text-align: center;">Confidence</th>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">1</td>
+                                    <td style="padding: 8px;">Coca-Cola</td>
+                                    <td style="padding: 8px;">Coke Zero Sugar 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">3</td>
+                                    <td style="padding: 8px;">£1.29</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">98%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">2</td>
+                                    <td style="padding: 8px;">Coca-Cola</td>
+                                    <td style="padding: 8px;">Sprite Zero 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£1.29</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">92%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">3</td>
+                                    <td style="padding: 8px;">Coca-Cola</td>
+                                    <td style="padding: 8px;">Fanta Orange 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£1.29</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">89%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">4</td>
+                                    <td style="padding: 8px;">PepsiCo</td>
+                                    <td style="padding: 8px;">Pepsi Max Cherry 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">3</td>
+                                    <td style="padding: 8px;">£1.19</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">95%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">5</td>
+                                    <td style="padding: 8px;">PepsiCo</td>
+                                    <td style="padding: 8px;">7UP Free 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£1.19</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">86%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">7</td>
+                                    <td style="padding: 8px;">Red Bull</td>
+                                    <td style="padding: 8px;">Energy Drink 250ml</td>
+                                    <td style="padding: 8px; text-align: center;">4 <span style="color: #f59e0b; font-size: 10px;">(STACKED 2×2)</span></td>
+                                    <td style="padding: 8px;">£1.89</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">96%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">8</td>
+                                    <td style="padding: 8px;">Monster</td>
+                                    <td style="padding: 8px;">Energy Original 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£2.15</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">91%</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h5 style="color: #2563eb;">Shelf 2 (Middle) - 6 products</h5>
+                            <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <tr style="background: #e5e7eb; font-weight: bold;">
+                                    <th style="padding: 10px; text-align: left;">Pos</th>
+                                    <th style="padding: 10px; text-align: left;">Brand</th>
+                                    <th style="padding: 10px; text-align: left;">Product</th>
+                                    <th style="padding: 10px; text-align: center;">Facings</th>
+                                    <th style="padding: 10px; text-align: left;">Price</th>
+                                    <th style="padding: 10px; text-align: center;">Confidence</th>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">1</td>
+                                    <td style="padding: 8px;">Evian</td>
+                                    <td style="padding: 8px;">Natural Water 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">6 <span style="color: #f59e0b; font-size: 10px;">(STACKED 3×2)</span></td>
+                                    <td style="padding: 8px;">£0.89</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">97%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">2</td>
+                                    <td style="padding: 8px;">Coca-Cola</td>
+                                    <td style="padding: 8px;">Smartwater 600ml</td>
+                                    <td style="padding: 8px; text-align: center;">4 <span style="color: #f59e0b; font-size: 10px;">(STACKED 2×2)</span></td>
+                                    <td style="padding: 8px;">£1.49</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">88%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">3</td>
+                                    <td style="padding: 8px;">Innocent</td>
+                                    <td style="padding: 8px;">Orange Juice 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">3</td>
+                                    <td style="padding: 8px;">£2.29</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">94%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">4</td>
+                                    <td style="padding: 8px;">Innocent</td>
+                                    <td style="padding: 8px;">Apple Juice 330ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£2.29</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">90%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">5</td>
+                                    <td style="padding: 8px;">Innocent</td>
+                                    <td style="padding: 8px;">Berry Smoothie 250ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£2.79</td>
+                                    <td style="padding: 8px; color: #f59e0b; font-weight: bold; text-align: center;">76%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">6</td>
+                                    <td style="padding: 8px;">Lipton</td>
+                                    <td style="padding: 8px;">Ice Tea Lemon 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">6 <span style="color: #f59e0b; font-size: 10px;">(STACKED 2×3)</span></td>
+                                    <td style="padding: 8px;">£1.59</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">93%</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <h5 style="color: #2563eb;">Shelf 3 (Top) - 5 products</h5>
+                            <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <tr style="background: #e5e7eb; font-weight: bold;">
+                                    <th style="padding: 10px; text-align: left;">Pos</th>
+                                    <th style="padding: 10px; text-align: left;">Brand</th>
+                                    <th style="padding: 10px; text-align: left;">Product</th>
+                                    <th style="padding: 10px; text-align: center;">Facings</th>
+                                    <th style="padding: 10px; text-align: left;">Price</th>
+                                    <th style="padding: 10px; text-align: center;">Confidence</th>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">1</td>
+                                    <td style="padding: 8px;">Starbucks</td>
+                                    <td style="padding: 8px;">Frappuccino Vanilla 250ml</td>
+                                    <td style="padding: 8px; text-align: center;">3</td>
+                                    <td style="padding: 8px;">£2.49</td>
+                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">96%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">2</td>
+                                    <td style="padding: 8px;">Starbucks</td>
+                                    <td style="padding: 8px;">Frappuccino Mocha 250ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£2.49</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">89%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">3</td>
+                                    <td style="padding: 8px;">Powerade</td>
+                                    <td style="padding: 8px;">ION4 Blue 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">4 <span style="color: #f59e0b; font-size: 10px;">(STACKED 2×2)</span></td>
+                                    <td style="padding: 8px;">£1.79</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">85%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">4</td>
+                                    <td style="padding: 8px;">Gatorade</td>
+                                    <td style="padding: 8px;">Orange Sports Drink 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">4 <span style="color: #f59e0b; font-size: 10px;">(STACKED 2×2)</span></td>
+                                    <td style="padding: 8px;">£1.79</td>
+                                    <td style="padding: 8px; color: #f59e0b; font-weight: bold; text-align: center;">78%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e5e7eb;">
+                                    <td style="padding: 8px;">5</td>
+                                    <td style="padding: 8px;">Rockstar</td>
+                                    <td style="padding: 8px;">Energy Drink 500ml</td>
+                                    <td style="padding: 8px; text-align: center;">2</td>
+                                    <td style="padding: 8px;">£1.99</td>
+                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">87%</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                            <h5 style="color: #1e40af; margin: 0 0 10px 0;">📊 Summary Statistics</h5>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 14px;">
+                                <div><strong>Total Products:</strong> 18</div>
+                                <div><strong>Total Facings:</strong> 51</div>
+                                <div><strong>Stacked Products:</strong> 6</div>
+                                <div><strong>Avg Confidence:</strong> 90.1%</div>
+                                <div><strong>Price Range:</strong> £0.89 - £2.79</div>
+                                <div><strong>Gaps Detected:</strong> 3</div>
+                            </div>
+                        </div>
+                    `;
+                        
+                } catch (error) {
+                    console.error('Error loading demo data:', error);
+                    document.getElementById('iterationJSON').innerHTML = '<div class="error">Error loading demo data</div>';
+                }
+            }
+            
+            async function loadDemoIteration(iterationNum) {
+                try {
+                    // Load products data
+                    const productsResponse = await fetch(`/api/iterations/12345/products/${iterationNum}`);
+                    if (productsResponse.ok) {
+                        const productsData = await productsResponse.json();
+                        
+                        // Update JSON viewer with selected iteration
+                        document.getElementById('iterationJSON').innerHTML = `
+                            <div style="margin-bottom: 20px;">
+                                <h3>📊 Demo Iteration ${iterationNum} - Products Data</h3>
+                                <button onclick="loadDemoIterationData()" style="margin-bottom: 10px; padding: 5px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">← Back to Overview</button>
+                            </div>
+                            <pre style="background: #f8fafc; padding: 20px; border-radius: 8px; overflow: auto; max-height: 400px;">${JSON.stringify(productsData.raw_products, null, 2)}</pre>
+                        `;
+                    }
+                    
+                    // Load planogram
+                    const planogramResponse = await fetch(`/api/iterations/12345/planogram/${iterationNum}`);
+                    if (planogramResponse.ok) {
+                        const planogramData = await planogramResponse.json();
+                        document.getElementById('iterationPlanogram').innerHTML = planogramData.svg;
+                        document.getElementById('planogramAccuracy').textContent = `Demo Iteration ${iterationNum} - Accuracy: ${(planogramData.accuracy * 100).toFixed(1)}%`;
+                    } else {
+                        document.getElementById('iterationPlanogram').innerHTML = '<div class="loading">No planogram available for this iteration</div>';
+                    }
+                } catch (error) {
+                    console.error('Error loading demo iteration:', error);
+                    document.getElementById('iterationJSON').innerHTML = '<div class="error">Error loading iteration data</div>';
+                }
+            }
+            
             // Error Summary Functions
             async function loadErrorSummary() {
                 const errorSummary = document.getElementById('errorSummary');
@@ -2803,6 +4565,360 @@ async def root():
                 setTimeout(() => {
                     loadLogs();
                 }, 100);
+            }
+            
+            // Fallback planogram display (pure HTML/CSS)
+            function showFallbackPlanogram(container) {
+                console.log('Showing fallback HTML planogram...');
+                container.innerHTML = `
+                    <div class="interactive-planogram">
+                        <!-- Planogram Header -->
+                        <div class="planogram-header">
+                            <div class="planogram-stats">
+                                <span class="stat">📦 18 Products</span>
+                                <span class="stat">📚 3 Shelves</span>
+                                <span class="stat">🎯 90% Confidence</span>
+                                <span class="stat stacking-indicator">📚 Stacking Detected</span>
+                            </div>
+                        </div>
+
+                        <!-- Shelf Container -->
+                        <div class="shelves-container">
+                            <!-- Shelf 3 (Top) -->
+                            <div class="shelf-component">
+                                <div class="shelf-header">
+                                    <h3>Shelf 3</h3>
+                                    <div class="shelf-stats">
+                                        <span class="products-count">5 products</span>
+                                        <span class="gaps-count">1 gaps</span>
+                                    </div>
+                                </div>
+                                <div class="shelf-content">
+                                    <div class="shelf-section section-left">
+                                        <div class="section-label">Left</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-1">
+                                                <div class="product-slot full-height" style="background-color: #22c55e;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Starbucks Frappuccino Vanilla 250ml</div>
+                                                        <div class="product-price">£2.49</div>
+                                                        <div class="product-facings">3 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-2">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Starbucks Frappuccino Mocha 250ml</div>
+                                                        <div class="product-price">£2.49</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-center">
+                                        <div class="section-label">Center</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-3">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row stack-top" style="background-color: #3b82f6;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Powerade ION4 Blue</div>
+                                                            <div class="stacking-indicator">Stack 1/2</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row stack-bottom" style="background-color: #3b82f6;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Powerade ION4 Blue</div>
+                                                            <div class="stacking-indicator">Stack 2/2</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-4">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row stack-top" style="background-color: #f59e0b;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Gatorade Orange</div>
+                                                            <div class="stacking-indicator">Stack 1/2</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row stack-bottom" style="background-color: #f59e0b;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Gatorade Orange</div>
+                                                            <div class="stacking-indicator">Stack 2/2</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-right">
+                                        <div class="section-label">Right</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-5">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Rockstar Energy 500ml</div>
+                                                        <div class="product-price">£1.99</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-6">
+                                                <div class="empty-slot">
+                                                    <div class="empty-content">
+                                                        <span class="empty-icon">📭</span>
+                                                        <span class="empty-text">Empty</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Shelf 2 (Middle) -->
+                            <div class="shelf-component">
+                                <div class="shelf-header">
+                                    <h3>Shelf 2</h3>
+                                    <div class="shelf-stats">
+                                        <span class="products-count">6 products</span>
+                                        <span class="gaps-count">1 gaps</span>
+                                    </div>
+                                </div>
+                                <div class="shelf-content">
+                                    <div class="shelf-section section-left">
+                                        <div class="section-label">Left</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-1">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Evian Water</div>
+                                                            <div class="stacking-indicator">Stack 1/3</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Evian Water</div>
+                                                            <div class="stacking-indicator">Stack 2/3</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Evian Water</div>
+                                                            <div class="stacking-indicator">Stack 3/3</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-2">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row stack-top" style="background-color: #3b82f6;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Smartwater</div>
+                                                            <div class="stacking-indicator">Stack 1/2</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row stack-bottom" style="background-color: #3b82f6;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Smartwater</div>
+                                                            <div class="stacking-indicator">Stack 2/2</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-center">
+                                        <div class="section-label">Center</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-3">
+                                                <div class="product-slot full-height" style="background-color: #22c55e;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Innocent Orange Juice 330ml</div>
+                                                        <div class="product-price">£2.29</div>
+                                                        <div class="product-facings">3 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-4">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Innocent Apple Juice 330ml</div>
+                                                        <div class="product-price">£2.29</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-5">
+                                                <div class="product-slot full-height" style="background-color: #f59e0b;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Innocent Berry Smoothie</div>
+                                                        <div class="product-price">£2.79</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-right">
+                                        <div class="section-label">Right</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-6">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row stack-top" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Lipton Ice Tea</div>
+                                                            <div class="stacking-indicator">Stack 1/2</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row stack-bottom" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Lipton Ice Tea</div>
+                                                            <div class="stacking-indicator">Stack 2/2</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-7">
+                                                <div class="empty-slot">
+                                                    <div class="empty-content">
+                                                        <span class="empty-icon">📭</span>
+                                                        <span class="empty-text">Empty</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Shelf 1 (Bottom) -->
+                            <div class="shelf-component">
+                                <div class="shelf-header">
+                                    <h3>Shelf 1</h3>
+                                    <div class="shelf-stats">
+                                        <span class="products-count">7 products</span>
+                                        <span class="gaps-count">1 gaps</span>
+                                    </div>
+                                </div>
+                                <div class="shelf-content">
+                                    <div class="shelf-section section-left">
+                                        <div class="section-label">Left</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-1">
+                                                <div class="product-slot full-height" style="background-color: #22c55e;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Coca-Cola Coke Zero 330ml</div>
+                                                        <div class="product-price">£1.29</div>
+                                                        <div class="product-facings">3 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-2">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Coca-Cola Sprite 330ml</div>
+                                                        <div class="product-price">£1.29</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-3">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Coca-Cola Fanta Orange</div>
+                                                        <div class="product-price">£1.29</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-center">
+                                        <div class="section-label">Center</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-4">
+                                                <div class="product-slot full-height" style="background-color: #22c55e;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">PepsiCo Pepsi Max 330ml</div>
+                                                        <div class="product-price">£1.19</div>
+                                                        <div class="product-facings">3 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-5">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">PepsiCo 7UP Free</div>
+                                                        <div class="product-price">£1.19</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-6">
+                                                <div class="empty-slot">
+                                                    <div class="empty-content">
+                                                        <span class="empty-icon">📭</span>
+                                                        <span class="empty-text">Empty</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shelf-section section-right">
+                                        <div class="section-label">Right</div>
+                                        <div class="section-slots">
+                                            <div class="slot-container position-7">
+                                                <div class="product-slot stacked">
+                                                    <div class="stack-row stack-top" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Red Bull Energy</div>
+                                                            <div class="stacking-indicator">Stack 1/2</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="stack-row stack-bottom" style="background-color: #22c55e;">
+                                                        <div class="product-content">
+                                                            <div class="product-name">Red Bull Energy</div>
+                                                            <div class="stacking-indicator">Stack 2/2</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="slot-container position-8">
+                                                <div class="product-slot full-height" style="background-color: #3b82f6;">
+                                                    <div class="product-content">
+                                                        <div class="product-name">Monster Energy 500ml</div>
+                                                        <div class="product-price">£2.15</div>
+                                                        <div class="product-facings">2 facings</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Overlay Controls -->
+                        <div class="planogram-overlay-controls">
+                            <h4>Display Options</h4>
+                            <div class="overlay-toggles">
+                                <label><input type="checkbox" checked> Product Names</label>
+                                <label><input type="checkbox" checked> Prices</label>
+                                <label><input type="checkbox" checked> Facing Counts</label>
+                                <label><input type="checkbox"> Confidence Scores</label>
+                                <label><input type="checkbox" checked> Stacking Indicators</label>
+                            </div>
+                            <p style="margin-top: 10px; font-size: 12px; color: #64748b;">
+                                <strong>Note:</strong> This is a fallback HTML version. The React component provides full interactivity.
+                            </p>
+                        </div>
+                    </div>
+                `;
             }
             
             // Utility function
