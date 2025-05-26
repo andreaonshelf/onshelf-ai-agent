@@ -448,10 +448,10 @@ async def root():
             }
             
             .sidebar-toggle {
-                position: absolute;
-                right: -20px;
+                position: fixed;
+                left: 0px;
                 top: 20px;
-                width: 20px;
+                width: 30px;
                 height: 40px;
                 background: #3b82f6;
                 color: white;
@@ -462,6 +462,12 @@ async def root():
                 align-items: center;
                 justify-content: center;
                 font-size: 12px;
+                z-index: 1000;
+                transition: left 0.3s ease;
+            }
+            
+            .left-sidebar:not(.collapsed) .sidebar-toggle {
+                left: 380px;
             }
             
             .filters-section {
@@ -1767,12 +1773,12 @@ async def root():
                                          <!-- Simple Mode - 2 Panel Layout -->
                      <div id="simple-mode" class="simple-mode">
                          <div class="simple-content" style="height: 100%; overflow-y: auto; padding: 20px;">
-                             <!-- Top Panels: Image and Planogram Only -->
-                             <div class="top-panels" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; height: 400px;">
-                                 <div class="image-panel">
-                                     <div class="panel-header">
-                                         <h3>📷 Original Image</h3>
-                                     </div>
+                             <!-- Top Panels: Image (40%) and Planogram (60%) - 25% taller -->
+                             <div class="top-panels" style="display: grid; grid-template-columns: 2fr 3fr; gap: 20px; margin-bottom: 15px; height: 500px;">
+                                                                    <div class="image-panel">
+                                       <div class="panel-header" style="padding: 8px 20px; min-height: 20px;">
+                                           <h3 style="margin: 0; font-size: 14px; font-weight: 600;">📷 Original Image</h3>
+                                       </div>
                                      <div class="panel-content" style="height: 100%;">
                                          <div class="image-viewer" style="height: 100%;">
                                              <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
@@ -1787,10 +1793,10 @@ async def root():
                                      </div>
                                  </div>
                                  
-                                 <div class="planogram-panel">
-                                     <div class="panel-header">
-                                         <h3>📊 Generated Planogram</h3>
-                                     </div>
+                                                                    <div class="planogram-panel">
+                                       <div class="panel-header" style="padding: 8px 20px; min-height: 20px;">
+                                           <h3 style="margin: 0; font-size: 14px; font-weight: 600;">📊 Generated Planogram</h3>
+                                       </div>
                                      <div class="panel-content" style="height: 100%;">
                                          <div id="planogramViewer" style="height: 100%; overflow: auto;">
                                              <div class="loading">Loading planogram...</div>
@@ -1799,14 +1805,14 @@ async def root():
                                  </div>
                              </div>
                              
-                             <!-- Separate Dashboard and Controls Row -->
-                             <div class="dashboard-controls-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; height: 120px;">
-                                 <!-- Compact Stats Dashboard - Separate Container -->
+                             <!-- Dashboard and Controls Row - Half height, compact -->
+                             <div class="dashboard-controls-row" style="display: grid; grid-template-columns: 2fr 3fr; gap: 20px; margin-bottom: 20px; height: 40px;">
+                                 <!-- Compact Stats Dashboard -->
                                  <div id="compactStatsDashboard" class="compact-stats-dashboard" style="width: 100%; height: 100%;">
                                      <!-- Stats will be populated by JavaScript -->
                                  </div>
                                  
-                                 <!-- Display Controls - Separate Container -->
+                                 <!-- Display Controls - Compact and Close to Planogram -->
                                  <div id="planogramControls" class="planogram-controls" style="width: 100%; height: 100%;">
                                      <!-- Controls will be populated by JavaScript -->
                                  </div>
@@ -2277,15 +2283,63 @@ async def root():
                 sidebarCollapsed = !sidebarCollapsed;
                 
                 if (sidebarCollapsed) {
-                    sidebar.style.transform = 'translateX(-380px)';
+                    // Hide sidebar completely
+                    sidebar.style.display = 'none';
+                    sidebar.classList.add('collapsed');
                     toggle.innerHTML = '▶';
-                    // Expand main content to fill the space
-                    mainContent.style.marginLeft = '20px';
-                } else {
-                    sidebar.style.transform = 'translateX(0)';
-                    toggle.innerHTML = '◀';
-                    // Reset main content margin
+                    toggle.style.left = '0px';
+                    
+                    // Expand main content to fill entire viewport
+                    mainContent.style.width = '100vw';
                     mainContent.style.marginLeft = '0';
+                    
+                    // Find and resize all the actual content containers
+                    const topPanels = document.querySelector('.top-panels');
+                    const dashboardControlsRow = document.querySelector('.dashboard-controls-row');
+                    const extractedProductsTable = document.getElementById('extractedProductsTable');
+                    const ratingSystem = document.querySelector('.rating-system');
+                    
+                    if (topPanels) {
+                        topPanels.style.width = 'calc(100vw - 40px)';
+                    }
+                    if (dashboardControlsRow) {
+                        dashboardControlsRow.style.width = 'calc(100vw - 40px)';
+                    }
+                    if (extractedProductsTable) {
+                        extractedProductsTable.style.width = 'calc(100vw - 40px)';
+                    }
+                    if (ratingSystem) {
+                        ratingSystem.style.width = 'calc(100vw - 40px)';
+                    }
+                } else {
+                    // Show sidebar
+                    sidebar.style.display = 'flex';
+                    sidebar.classList.remove('collapsed');
+                    toggle.innerHTML = '◀';
+                    toggle.style.left = '380px';
+                    
+                    // Reset main content to normal
+                    mainContent.style.width = '';
+                    mainContent.style.marginLeft = '';
+                    
+                    // Reset all content containers
+                    const topPanels = document.querySelector('.top-panels');
+                    const dashboardControlsRow = document.querySelector('.dashboard-controls-row');
+                    const extractedProductsTable = document.getElementById('extractedProductsTable');
+                    const ratingSystem = document.querySelector('.rating-system');
+                    
+                    if (topPanels) {
+                        topPanels.style.width = '';
+                    }
+                    if (dashboardControlsRow) {
+                        dashboardControlsRow.style.width = '';
+                    }
+                    if (extractedProductsTable) {
+                        extractedProductsTable.style.width = '';
+                    }
+                    if (ratingSystem) {
+                        ratingSystem.style.width = '';
+                    }
                 }
             }
             
@@ -2764,41 +2818,37 @@ async def root():
              async function loadPlanogramControls(imageId) {
                  const controlsContainer = document.getElementById('planogramControls');
                  
-                 // Create compact working controls that actually update the React component
+                 // Create ultra-compact controls for half-height container
                  const controlsHTML = `
-                     <div style="background: white; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: 100%;">
-                         <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 14px; font-weight: 700; text-align: center;">🎛️ Display Controls</h4>
-                         
-                         <!-- Zoom Controls -->
-                         <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-                             <div style="font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 6px; text-align: center;">
-                                 🔍 Zoom: <span id="zoomPercentage">100%</span>
+                     <div style="background: white; border-radius: 6px; padding: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); height: 100%; display: flex; align-items: center;">
+                         <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                             <!-- Zoom Controls - Compact -->
+                             <div style="display: flex; align-items: center; gap: 3px;">
+                                 <span style="font-size: 8px; font-weight: 600; color: #4a5568;">🔍 <span id="zoomPercentage">100%</span></span>
+                                 <button onclick="updatePlanogramZoom(0.5, false, true)" style="padding: 2px 4px; background: #10b981; color: white; border: none; border-radius: 2px; cursor: pointer; font-weight: 600; font-size: 7px;">50%</button>
+                                 <button onclick="updatePlanogramZoom(1, true)" style="padding: 2px 4px; background: #6b7280; color: white; border: none; border-radius: 2px; cursor: pointer; font-weight: 600; font-size: 7px;">100%</button>
+                                 <button onclick="updatePlanogramZoom(1.5, false, true)" style="padding: 2px 4px; background: #f59e0b; color: white; border: none; border-radius: 2px; cursor: pointer; font-weight: 600; font-size: 7px;">150%</button>
                              </div>
-                             <div style="display: flex; gap: 6px; justify-content: center;">
-                                 <button onclick="updatePlanogramZoom(0.8)" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">Out</button>
-                                 <button onclick="updatePlanogramZoom(1, true)" style="padding: 4px 8px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">Reset</button>
-                                 <button onclick="updatePlanogramZoom(1.25)" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px;">In</button>
+                             
+                             <!-- Display Toggles - Ultra Compact -->
+                             <div style="display: flex; gap: 2px; align-items: center;">
+                                 <label style="display: flex; align-items: center; gap: 2px; padding: 2px 4px; background: #4facfe; color: white; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 7px; line-height: 1;">
+                                     <input type="checkbox" id="toggleBrands" checked onchange="updatePlanogramDisplay('showBrands', this.checked)" style="display: none;">
+                                     <span>✓</span>B
+                                 </label>
+                                 <label style="display: flex; align-items: center; gap: 2px; padding: 2px 4px; background: #fa709a; color: white; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 7px; line-height: 1;">
+                                     <input type="checkbox" id="toggleProducts" checked onchange="updatePlanogramDisplay('showProducts', this.checked)" style="display: none;">
+                                     <span>✓</span>P
+                                 </label>
+                                 <label style="display: flex; align-items: center; gap: 2px; padding: 2px 4px; background: #a8edea; color: #2d3748; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 7px; line-height: 1;">
+                                     <input type="checkbox" id="togglePrices" checked onchange="updatePlanogramDisplay('showPrices', this.checked)" style="display: none;">
+                                     <span>✓</span>£
+                                 </label>
+                                 <label style="display: flex; align-items: center; gap: 2px; padding: 2px 4px; background: #f7fafc; color: #4a5568; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 7px; line-height: 1;">
+                                     <input type="checkbox" id="toggleConfidence" onchange="updatePlanogramDisplay('showConfidence', this.checked)" style="display: none;">
+                                     <span>○</span>%
+                                 </label>
                              </div>
-                         </div>
-                         
-                         <!-- Display Toggles -->
-                         <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
-                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #4facfe; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
-                                 <input type="checkbox" id="toggleBrands" checked onchange="updatePlanogramDisplay('showBrands', this.checked)" style="display: none;">
-                                 <span>✓</span> Brands
-                             </label>
-                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #fa709a; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
-                                 <input type="checkbox" id="toggleProducts" checked onchange="updatePlanogramDisplay('showProducts', this.checked)" style="display: none;">
-                                 <span>✓</span> Products
-                             </label>
-                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #a8edea; color: #2d3748; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
-                                 <input type="checkbox" id="togglePrices" checked onchange="updatePlanogramDisplay('showPrices', this.checked)" style="display: none;">
-                                 <span>✓</span> Prices
-                             </label>
-                             <label style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: #f7fafc; color: #4a5568; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s ease; font-size: 10px;">
-                                 <input type="checkbox" id="toggleConfidence" onchange="updatePlanogramDisplay('showConfidence', this.checked)" style="display: none;">
-                                 <span>○</span> Confidence
-                             </label>
                          </div>
                      </div>
                  `;
@@ -2845,30 +2895,30 @@ async def root():
                      const avgConfidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 0.9;
                      const shelfCount = data.planogram.shelves.length;
                      
-                     // Generate compact stats dashboard HTML (25% height)
+                     // Generate ultra-compact stats dashboard HTML (half height)
                      const dashboardHTML = `
-                         <div style="background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: 100%;">
-                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px;">
-                                 <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(79, 172, 254, 0.3);">
-                                     <div style="font-size: 14px; font-weight: 700;">${totalProducts}</div>
-                                     <div style="font-size: 9px; opacity: 0.9;">Products</div>
+                         <div style="background: white; border-radius: 6px; padding: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); height: 100%; display: flex; align-items: center;">
+                             <div style="display: flex; gap: 4px; width: 100%; justify-content: space-between;">
+                                 <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 3px 6px; border-radius: 3px; text-align: center; flex: 1;">
+                                     <div style="font-size: 11px; font-weight: 700; line-height: 1;">${totalProducts}</div>
+                                     <div style="font-size: 7px; opacity: 0.9; line-height: 1;">Products</div>
                                  </div>
-                                 <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(250, 112, 154, 0.3);">
-                                     <div style="font-size: 14px; font-weight: 700;">${shelfCount}</div>
-                                     <div style="font-size: 9px; opacity: 0.9;">Shelves</div>
+                                 <div style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 3px 6px; border-radius: 3px; text-align: center; flex: 1;">
+                                     <div style="font-size: 11px; font-weight: 700; line-height: 1;">${shelfCount}</div>
+                                     <div style="font-size: 7px; opacity: 0.9; line-height: 1;">Shelves</div>
                                  </div>
-                                 <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2d3748; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(168, 237, 234, 0.3);">
-                                     <div style="font-size: 14px; font-weight: 700;">${Math.round(avgConfidence * 100)}%</div>
-                                     <div style="font-size: 9px; opacity: 0.8;">Confidence</div>
+                                 <div style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #2d3748; padding: 3px 6px; border-radius: 3px; text-align: center; flex: 1;">
+                                     <div style="font-size: 11px; font-weight: 700; line-height: 1;">${Math.round(avgConfidence * 100)}%</div>
+                                     <div style="font-size: 7px; opacity: 0.8; line-height: 1;">Confidence</div>
                                  </div>
-                                 <div style="background: linear-gradient(135deg, #c084fc 0%, #a855f7 100%); color: white; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(192, 132, 252, 0.3);">
-                                     <div style="font-size: 14px; font-weight: 700;">${totalFacings}</div>
-                                     <div style="font-size: 9px; opacity: 0.9;">Facings</div>
+                                 <div style="background: linear-gradient(135deg, #c084fc 0%, #a855f7 100%); color: white; padding: 3px 6px; border-radius: 3px; text-align: center; flex: 1;">
+                                     <div style="font-size: 11px; font-weight: 700; line-height: 1;">${totalFacings}</div>
+                                     <div style="font-size: 7px; opacity: 0.9; line-height: 1;">Facings</div>
                                  </div>
                                  ${hasStacking ? `
-                                     <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #2d3748; padding: 6px; border-radius: 4px; text-align: center; box-shadow: 0 1px 4px rgba(252, 182, 159, 0.3);">
-                                         <div style="font-size: 12px; font-weight: 700;">📚</div>
-                                         <div style="font-size: 9px; opacity: 0.8;">Stacking</div>
+                                     <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #2d3748; padding: 3px 6px; border-radius: 3px; text-align: center; flex: 1;">
+                                         <div style="font-size: 9px; font-weight: 700; line-height: 1;">📚</div>
+                                         <div style="font-size: 6px; opacity: 0.8; line-height: 1;">Stack</div>
                                      </div>
                                  ` : ''}
                              </div>
@@ -4464,6 +4514,75 @@ async def root():
                 return colors[setting] || '#f7fafc';
             }
             
+            // Zoom functionality for planogram
+            let currentZoom = 1.0;
+            
+            function updatePlanogramZoom(factor, reset = false, absolute = false) {
+                if (reset) {
+                    currentZoom = 1.0;
+                } else if (absolute) {
+                    // Set absolute zoom level
+                    currentZoom = factor;
+                } else {
+                    // Multiply current zoom by factor
+                    currentZoom *= factor;
+                }
+                // Limit zoom range
+                currentZoom = Math.max(0.3, Math.min(3.0, currentZoom));
+                
+                // Apply zoom to all planogram grids AND adjust containers properly
+                const planogramGrids = document.querySelectorAll('.planogram-grid');
+                const planogramViewer = document.getElementById('planogramViewer');
+                const shelfContainers = document.querySelectorAll('.planogram-grid').forEach(grid => {
+                    const shelfContainer = grid.closest('div[style*="background: white"]');
+                    if (shelfContainer) {
+                        // Scale the entire shelf container, not just the grid
+                        shelfContainer.style.transform = `scale(${currentZoom})`;
+                        shelfContainer.style.transformOrigin = 'top left';
+                        
+                        // Adjust container dimensions to prevent clipping
+                        if (currentZoom > 1.0) {
+                            // When zooming in, increase the container size proportionally
+                            shelfContainer.style.marginBottom = `${(currentZoom - 1) * 100}px`;
+                            shelfContainer.style.marginRight = `${(currentZoom - 1) * 200}px`;
+                        } else {
+                            // Reset margins when zooming out or at normal zoom
+                            shelfContainer.style.marginBottom = '0px';
+                            shelfContainer.style.marginRight = '0px';
+                        }
+                    }
+                });
+                
+                // Adjust the main container to accommodate the scaled content
+                if (planogramViewer) {
+                    // Always enable scrolling for zoom
+                    planogramViewer.style.overflow = 'auto';
+                    planogramViewer.style.height = '100%';
+                    
+                    // Adjust the container's internal spacing based on zoom
+                    const planogramDiv = planogramViewer.querySelector('div[style*="background: #f8fafc"]');
+                    if (planogramDiv) {
+                        if (currentZoom > 1.0) {
+                            // Add extra padding when zoomed in to prevent clipping
+                            planogramDiv.style.paddingBottom = `${currentZoom * 50}px`;
+                            planogramDiv.style.paddingRight = `${currentZoom * 50}px`;
+                        } else {
+                            // Reset padding for normal/zoom out
+                            planogramDiv.style.paddingBottom = '16px';
+                            planogramDiv.style.paddingRight = '16px';
+                        }
+                    }
+                }
+                
+                // Update zoom percentage display
+                const zoomDisplay = document.getElementById('zoomPercentage');
+                if (zoomDisplay) {
+                    zoomDisplay.textContent = `${Math.round(currentZoom * 100)}%`;
+                }
+                
+                console.log(`🔍 Planogram zoom updated: ${Math.round(currentZoom * 100)}% - Containers scaled and adjusted for proper visibility`);
+            }
+            
             // Dynamic Grid Planogram - GLOBAL width consistency + proper stacking
             function createSimpleGridPlanogram(container, planogramData) {
                 console.log('🎯 Creating GLOBAL CONSISTENT GRID planogram with proper stacking');
@@ -4555,14 +4674,12 @@ async def root():
 
             
             function getConfidenceColor(confidence) {
-                // Use EXACT confidence values from JSON to determine colors
-                // Map to the exact colors used in the JSON data
-                if (confidence >= 0.96) return '#22c55e'; // Very high confidence - bright green (96%+)
-                if (confidence >= 0.92) return '#10b981'; // High confidence - green (92-95%)
-                if (confidence >= 0.88) return '#3b82f6'; // Good confidence - blue (88-91%)
-                if (confidence >= 0.82) return '#6366f1'; // Medium confidence - indigo (82-87%)
-                if (confidence >= 0.76) return '#f59e0b'; // Lower confidence - orange (76-81%)
-                return '#ef4444'; // Low confidence - red (75% and below)
+                // EXACT MATCH with backend color mapping in src/api/planogram_editor.py
+                // This must match the get_confidence_color function in the backend
+                if (confidence >= 0.95) return '#22c55e'; // Green - very high (95%+)
+                if (confidence >= 0.85) return '#3b82f6'; // Blue - high (85-94%)
+                if (confidence >= 0.70) return '#f59e0b'; // Orange - medium (70-84%)
+                return '#ef4444'; // Red - low (below 70%)
             }
             
             function getTotalProducts(shelves) {
@@ -4647,20 +4764,24 @@ async def root():
 
                 console.log(`📐 Shelf ${shelf.shelf_number}: Using actual stack height ${actualShelfStackHeight} (not global ${globalMaxStackHeight})`);
 
-                // Create the visual grid container with CORRECT dimensions
+                // Create the visual grid container with FIXED compact dimensions - no horizontal scroll
                 const gridContainer = document.createElement('div');
+                gridContainer.className = 'planogram-grid';
                 gridContainer.style.cssText = `
                     display: grid;
-                    grid-template-columns: repeat(${globalMaxPosition}, minmax(80px, 1fr));
-                    grid-template-rows: repeat(${actualShelfStackHeight}, 1fr);
-                    gap: 2px;
+                    grid-template-columns: repeat(${globalMaxPosition}, 45px);
+                    grid-template-rows: repeat(${actualShelfStackHeight}, 32px);
+                    gap: 1px;
                     background: #f7fafc;
                     border-radius: 4px;
-                    padding: 8px;
-                    min-height: ${actualShelfStackHeight * 50}px;
-                    min-width: max-content;
+                    padding: 6px;
+                    width: 100%;
+                    max-width: 100%;
                     box-sizing: border-box;
-                    overflow: visible;
+                    overflow: hidden;
+                    transform-origin: top left;
+                    transition: transform 0.3s ease;
+                    justify-content: start;
                 `;
 
                 // DEBUG: Check what's actually in the grid before rendering
@@ -4799,12 +4920,14 @@ async def root():
                 const cell = document.createElement('div');
                 
                 if (cellData.type === 'empty') {
-                    // TRULY EMPTY cell - completely transparent/invisible as requested
+                    // TRULY EMPTY cell - completely transparent/invisible with fixed dimensions
                     cell.style.cssText = `
                         background: transparent;
                         border: none;
-                        height: 48px;
-                        width: 100%;
+                        height: 32px;
+                        width: 45px;
+                        min-width: 45px;
+                        max-width: 45px;
                         box-sizing: border-box;
                     `;
                     return cell;
@@ -4818,26 +4941,31 @@ async def root():
                 const confidenceColor = product.visual?.confidence_color || getConfidenceColor(confidence);
                 
                 console.log(`🎨 Cell: ${cellId}, JSON pos: ${jsonPosition}, Grid pos: ${gridPosition}, Facing: ${facingIndex}/${totalFacings}, Stack: ${productStackLevel}/${totalStack}, Confidence: ${confidence}`);
+                console.log(`🎨 Color source: ${product.visual?.confidence_color ? 'JSON visual.confidence_color' : 'calculated from confidence'} = ${confidenceColor}`);
+                console.log(`🎨 Product visual data:`, product.visual);
                 
-                // Style product cell - ensure equal width for all cells
+                // Style product cell - FIXED compact size to prevent expansion
                 cell.style.cssText = `
                     background: linear-gradient(135deg, ${confidenceColor} 0%, ${adjustColor(confidenceColor, -20)} 100%);
                     color: white;
-                    border-radius: 4px;
-                    height: 48px;
-                    width: 100%;
+                    border-radius: 2px;
+                    height: 32px;
+                    width: 45px;
+                    min-width: 45px;
+                    max-width: 45px;
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    font-size: 9px;
+                    font-size: 6px;
                     font-weight: 500;
-                    border: 2px solid ${confidenceColor};
+                    border: 1px solid ${confidenceColor};
                     position: relative;
                     cursor: pointer;
                     transition: all 0.2s ease;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
                     box-sizing: border-box;
+                    overflow: hidden;
                 `;
 
                 // Add hover effect
@@ -4860,27 +4988,29 @@ async def root():
                 brandDiv.setAttribute('data-brand', 'true');
                 brandDiv.style.cssText = `
                     font-weight: 700;
-                    font-size: 8px;
+                    font-size: 6px;
                     text-align: center;
-                    margin-bottom: 1px;
+                    margin-bottom: 0px;
                     text-overflow: ellipsis;
                     overflow: hidden;
                     white-space: nowrap;
-                    max-width: 100%;
+                    width: 100%;
+                    line-height: 1;
                 `;
                 brandDiv.textContent = product.brand || 'Unknown';
 
                 const nameDiv = document.createElement('div');
                 nameDiv.setAttribute('data-name', 'true');
                 nameDiv.style.cssText = `
-                    font-size: 7px;
+                    font-size: 5px;
                     text-align: center;
                     opacity: 0.9;
                     text-overflow: ellipsis;
                     overflow: hidden;
                     white-space: nowrap;
-                    max-width: 100%;
-                    margin-bottom: 1px;
+                    width: 100%;
+                    line-height: 1;
+                    margin-bottom: 0px;
                 `;
                 nameDiv.textContent = product.name || 'Product';
 
@@ -4888,12 +5018,14 @@ async def root():
                     const priceDiv = document.createElement('div');
                     priceDiv.setAttribute('data-price', 'true');
                     priceDiv.style.cssText = `
-                        font-size: 7px;
+                        font-size: 5px;
                         font-weight: 700;
                         text-align: center;
                         background: rgba(255,255,255,0.2);
-                        padding: 1px 3px;
-                        border-radius: 2px;
+                        padding: 0px 2px;
+                        border-radius: 1px;
+                        line-height: 1;
+                        margin-top: 1px;
                     `;
                     priceDiv.textContent = `£${product.price.toFixed(2)}`;
                     cell.appendChild(priceDiv);
@@ -4902,15 +5034,16 @@ async def root():
                 const confidenceDiv = document.createElement('div');
                 confidenceDiv.setAttribute('data-confidence', 'true');
                 confidenceDiv.style.cssText = `
-                    font-size: 6px;
+                    font-size: 4px;
                     font-weight: 700;
                     text-align: center;
                     background: rgba(0,0,0,0.7);
                     color: white;
-                    padding: 1px 2px;
-                    border-radius: 2px;
+                    padding: 0px 1px;
+                    border-radius: 1px;
                     margin-top: 1px;
                     display: none;
+                    line-height: 1;
                 `;
                 confidenceDiv.textContent = `${Math.round(confidence * 100)}%`;
                 cell.appendChild(confidenceDiv);
@@ -4923,13 +5056,13 @@ async def root():
                     const indicator = document.createElement('div');
                     indicator.style.cssText = `
                         position: absolute;
-                        top: 2px;
-                        right: 2px;
+                        top: 1px;
+                        right: 1px;
                         background: rgba(0,0,0,0.7);
                         color: white;
-                        font-size: 6px;
-                        padding: 1px 3px;
-                        border-radius: 2px;
+                        font-size: 4px;
+                        padding: 0px 1px;
+                        border-radius: 1px;
                         font-weight: 700;
                         line-height: 1;
                     `;
