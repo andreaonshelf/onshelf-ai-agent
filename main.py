@@ -52,6 +52,10 @@ app.include_router(planogram_router)
 from src.api.queue_management import router as queue_router
 app.include_router(queue_router)
 
+# Include analytics API
+from src.api.analytics import router as analytics_router
+app.include_router(analytics_router)
+
 # Include prompt management API
 from src.api.prompt_management import router as prompt_router
 app.include_router(prompt_router)
@@ -1936,6 +1940,464 @@ async def root():
                 color: #9ca3af;
             }
             
+            /* Enhanced Extraction Settings CSS */
+            .smart-recommendations {
+                background: #e3f2fd;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                border: 1px solid #bbdefb;
+            }
+            
+            .recommendation-context ul {
+                margin: 5px 0;
+                padding-left: 20px;
+                font-size: 13px;
+            }
+            
+            .recommendation-choices {
+                background: white;
+                padding: 12px;
+                border-radius: 6px;
+                margin: 10px 0;
+                border: 1px solid #e3f2fd;
+            }
+            
+            .auto-choice {
+                padding: 6px 0;
+                border-bottom: 1px solid #f5f5f5;
+                font-size: 13px;
+            }
+            
+            .auto-choice:last-child {
+                border-bottom: none;
+            }
+            
+            .auto-choice .reason {
+                color: #666;
+                font-size: 12px;
+                font-style: italic;
+            }
+            
+            /* Prompt Preview Panel */
+            .prompt-preview-panel {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 12px;
+                margin-top: 10px;
+                font-size: 13px;
+            }
+            
+            .preview-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .prompt-name {
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .performance-badge {
+                background: #10b981;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            
+            .performance-badge.new {
+                background: #94a3b8;
+            }
+            
+            .performance-badge.low {
+                background: #ef4444;
+            }
+            
+            .performance-badge.medium {
+                background: #f59e0b;
+            }
+            
+            .preview-stats {
+                display: flex;
+                gap: 12px;
+                font-size: 11px;
+                color: #64748b;
+                margin-bottom: 8px;
+                flex-wrap: wrap;
+            }
+            
+            .prompt-snippet {
+                background: white;
+                padding: 8px;
+                border-radius: 4px;
+                font-family: 'Monaco', 'Menlo', monospace;
+                font-size: 11px;
+                max-height: 80px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                color: #374151;
+                border: 1px solid #e5e7eb;
+            }
+            
+            .preview-actions {
+                display: flex;
+                gap: 6px;
+                margin-top: 8px;
+            }
+            
+            .preview-actions button {
+                padding: 4px 8px;
+                font-size: 11px;
+                border: 1px solid #d1d5db;
+                background: white;
+                border-radius: 3px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .preview-actions button:hover {
+                background: #f3f4f6;
+                border-color: #9ca3af;
+            }
+            
+            /* Model and Prompt Selectors */
+            .model-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .model-row span {
+                font-size: 13px;
+                font-weight: 500;
+                color: #374151;
+                min-width: 80px;
+            }
+            
+            .model-row select {
+                flex: 1;
+                margin-left: 10px;
+                padding: 4px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            
+            .prompt-selector-group {
+                margin-bottom: 15px;
+                padding-bottom: 15px;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            
+            .prompt-selector-group:last-child {
+                border-bottom: none;
+            }
+            
+            .prompt-type-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .prompt-type-header span {
+                font-weight: 500;
+                color: #374151;
+                font-size: 13px;
+            }
+            
+            .new-prompt-btn {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 4px 10px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .new-prompt-btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+            }
+            
+            /* Config Actions */
+            .config-actions {
+                margin-top: 20px;
+                padding-top: 15px;
+                border-top: 1px solid #e5e7eb;
+            }
+            
+            .config-actions button {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 8px;
+                border: none;
+                border-radius: 6px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .btn-primary {
+                background: #3b82f6;
+                color: white;
+            }
+            
+            .btn-primary:hover {
+                background: #2563eb;
+                transform: translateY(-1px);
+            }
+            
+            .btn-secondary {
+                background: #f3f4f6;
+                color: #374151;
+                border: 1px solid #d1d5db;
+            }
+            
+            .btn-secondary:hover {
+                background: #e5e7eb;
+            }
+            
+            /* Version Management */
+            .version-management {
+                background: #fef3c7;
+                border: 1px solid #fbbf24;
+                padding: 15px;
+                border-radius: 6px;
+                margin-bottom: 20px;
+            }
+            
+            .current-version {
+                font-weight: 600;
+                color: #92400e;
+                margin-bottom: 10px;
+            }
+            
+            .version-badge {
+                background: #3b82f6;
+                color: white;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 11px;
+                margin-left: 8px;
+            }
+            
+            .version-options {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .version-options label {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 13px;
+                cursor: pointer;
+            }
+            
+            /* Meta-Learning Dashboard Styles */
+            .summary-cards {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            
+            .metric-card {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                text-align: center;
+                border: 1px solid #e5e7eb;
+            }
+            
+            .metric-value {
+                font-size: 2em;
+                font-weight: bold;
+                color: #1976d2;
+                margin: 10px 0;
+            }
+            
+            .metric-label {
+                color: #64748b;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            
+            .metric-trend {
+                color: #10b981;
+                font-size: 12px;
+                margin-top: 5px;
+            }
+            
+            .metric-trend.down {
+                color: #ef4444;
+            }
+            
+            .pattern-item {
+                background: white;
+                padding: 15px;
+                margin-bottom: 10px;
+                border-radius: 6px;
+                border-left: 4px solid #10b981;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            .pattern-item.failure {
+                border-left-color: #ef4444;
+            }
+            
+            .pattern-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 600;
+                margin-bottom: 5px;
+            }
+            
+            .pattern-name {
+                color: #1e293b;
+                font-size: 14px;
+            }
+            
+            .pattern-impact {
+                color: #10b981;
+                font-weight: 700;
+                font-size: 14px;
+            }
+            
+            .pattern-impact.negative {
+                color: #ef4444;
+            }
+            
+            .pattern-impact::before {
+                content: "↑ ";
+            }
+            
+            .pattern-impact.negative::before {
+                content: "↓ ";
+            }
+            
+            .pattern-details {
+                font-size: 12px;
+                color: #64748b;
+                margin-bottom: 5px;
+            }
+            
+            .pattern-description {
+                font-size: 13px;
+                color: #374151;
+                line-height: 1.4;
+            }
+            
+            /* Intelligence Interface Enhancements */
+            .intelligence-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            
+            .intelligence-panel {
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            
+            .intelligence-panel .panel-header {
+                background: #f8fafc;
+                padding: 15px 20px;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            
+            .intelligence-panel .panel-header h3 {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .metrics-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                padding: 20px;
+            }
+            
+            .insights-list {
+                padding: 20px;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            
+            .insight-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                padding: 10px 0;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            
+            .insight-item:last-child {
+                border-bottom: none;
+            }
+            
+            .insight-icon {
+                font-size: 16px;
+                margin-top: 2px;
+            }
+            
+            .insight-text {
+                flex: 1;
+                font-size: 13px;
+                color: #374151;
+                line-height: 1.4;
+            }
+            
+            .insight-time {
+                font-size: 11px;
+                color: #9ca3af;
+                margin-top: 4px;
+            }
+            
+            .quick-actions {
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .quick-actions button {
+                padding: 10px 15px;
+                border: none;
+                border-radius: 6px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-size: 13px;
+            }
+            
+            .btn-warning {
+                background: #f59e0b;
+                color: white;
+            }
+            
+            .btn-warning:hover {
+                background: #d97706;
+            }
+            
             /* Responsive Design */
             @media (max-width: 1200px) {
                 .left-sidebar {
@@ -2871,7 +3333,6 @@ async def root():
                         <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
                         <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
                         <button class="mode-btn" onclick="switchMode('intelligence')">Prompt Intelligence</button>
-                        <button class="mode-btn" onclick="window.testJS()" style="background: #ef4444; color: white;">🧪 Test JS</button>
                     </div>
                 </div>
                 
@@ -2908,20 +3369,6 @@ async def root():
                             </div>
                         </div>
                         
-                        <!-- Enhanced Queue with Batch Operations -->
-                        <div class="batch-controls">
-                            <div class="batch-header">
-                                <div class="batch-selection">
-                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
-                                    <label for="selectAllCheckbox">Select All</label>
-                                    <span id="selectedCount">(0 selected)</span>
-                                </div>
-                                <div class="batch-actions">
-                                    <button class="primary" onclick="applyConfigToSelected()" id="applyConfigBtn" disabled>Apply Config</button>
-                                    <button onclick="resetSelectedItems()" id="resetBtn" disabled>Reset</button>
-                                </div>
-                            </div>
-                        </div>
                         
                         <div id="queueGrid" class="queue-grid">
                             <!-- Enhanced queue items will be loaded here -->
@@ -3958,6 +4405,13 @@ async def root():
                         console.error('❌ Failed to initialize enhanced extraction settings:', error);
                     }
                     
+                    // Initialize queue item selection monitoring for smart recommendations
+                    try {
+                        initializeQueueSelectionMonitoring();
+                    } catch (error) {
+                        console.error('❌ Failed to initialize queue selection monitoring:', error);
+                    }
+                    
                     // Initialize React components only if needed
                     // Don't load InteractivePlanogram on initial load - load it when switching to advanced mode
                     
@@ -4425,6 +4879,7 @@ async def root():
                                                 onmouseout="this.style.backgroundColor='${selectedItemId === item.id || isSelected ? '#f0f9ff' : 'transparent'}'">
                                                 <td style="padding: 12px 8px;">
                                                     <input type="checkbox" class="queue-item-checkbox" 
+                                                           value="${item.id}"
                                                            ${isSelected ? 'checked' : ''} 
                                                            onchange="toggleItemSelection(${item.id})"
                                                            onclick="event.stopPropagation()">
@@ -5847,7 +6302,428 @@ async def root():
                     
                 } catch (error) {
                     console.error('Error loading intelligence data:', error);
+                    showNotification('Failed to load intelligence data', 'error');
                 }
+            }
+            
+            // Load intelligence overview with real Supabase data
+            async function loadIntelligenceOverview() {
+                try {
+                    // Show loading state
+                    const elements = ['totalExtractions', 'avgAccuracy', 'bestPrompt', 'totalCostSaved'];
+                    elements.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = 'Loading...';
+                    });
+                    
+                    // Fetch intelligence data from backend
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Update key metrics
+                    const totalExtractionsEl = document.getElementById('totalExtractions');
+                    if (totalExtractionsEl) totalExtractionsEl.textContent = data.total_extractions || 0;
+                    
+                    const avgAccuracyEl = document.getElementById('avgAccuracy');
+                    if (avgAccuracyEl) avgAccuracyEl.textContent = `${Math.round((data.avg_accuracy || 0) * 100)}%`;
+                    
+                    const bestPromptEl = document.getElementById('bestPrompt');
+                    if (bestPromptEl) bestPromptEl.textContent = data.best_performer?.name || 'None yet';
+                    
+                    const costSavedEl = document.getElementById('totalCostSaved');
+                    if (costSavedEl) costSavedEl.textContent = `$${(data.cost_saved || 0).toFixed(2)}`;
+                    
+                    // Update system performance
+                    displaySystemPerformance(data.system_performance || []);
+                    
+                    // Update recent insights
+                    displayRecentInsights(data.recent_insights || []);
+                    
+                    console.log('✅ Intelligence overview loaded successfully');
+                    
+                } catch (error) {
+                    console.error('Failed to load intelligence overview:', error);
+                    
+                    // Show error state
+                    const elements = ['totalExtractions', 'avgAccuracy', 'bestPrompt', 'totalCostSaved'];
+                    elements.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = 'Error';
+                    });
+                }
+            }
+            
+            // Display system performance data
+            function displaySystemPerformance(systemData) {
+                const container = document.getElementById('systemPerformance');
+                if (!container) return;
+                
+                if (!systemData || systemData.length === 0) {
+                    container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 20px;">No system performance data available yet.</p>';
+                    return;
+                }
+                
+                const performanceHtml = systemData.map(system => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 8px; border: 1px solid #e5e7eb;">
+                        <div>
+                            <div style="font-weight: 600; color: #1f2937;">${system.name}</div>
+                            <div style="font-size: 12px; color: #64748b;">Avg Cost: $${system.avg_cost.toFixed(3)}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 600; color: ${system.accuracy > 0.9 ? '#10b981' : system.accuracy > 0.8 ? '#f59e0b' : '#ef4444'};">
+                                ${Math.round(system.accuracy * 100)}%
+                            </div>
+                            <div style="font-size: 11px; color: #64748b;">Accuracy</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = performanceHtml;
+            }
+            
+            // Display recent insights
+            function displayRecentInsights(insights) {
+                const container = document.getElementById('recentInsights');
+                if (!container) return;
+                
+                if (!insights || insights.length === 0) {
+                    container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 20px;">No recent insights available.</p>';
+                    return;
+                }
+                
+                const insightsHtml = insights.map(insight => `
+                    <div class="insight-item">
+                        <div class="insight-icon">${insight.icon}</div>
+                        <div>
+                            <div class="insight-text">${insight.text}</div>
+                            <div class="insight-time">${insight.time}</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = insightsHtml;
+            }
+            
+            // Load performance analysis tab
+            async function loadPerformanceAnalysis() {
+                try {
+                    console.log('📈 Loading performance analysis...');
+                    
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // This would typically render charts, but for MVP we'll show basic metrics
+                    const performanceContainer = document.querySelector('#intelligence-performance .performance-container');
+                    if (performanceContainer) {
+                        performanceContainer.innerHTML = `
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                                <div class="metric-card">
+                                    <div class="metric-value">${data.total_prompts || 0}</div>
+                                    <div class="metric-label">Total Prompts</div>
+                                    <div class="metric-trend">+${Math.round((data.total_prompts || 0) * 0.1)} this month</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value">${Math.round((data.avg_success_rate || 0) * 100)}%</div>
+                                    <div class="metric-label">Average Success Rate</div>
+                                    <div class="metric-trend ${data.avg_success_rate > 0.85 ? '' : 'down'}">
+                                        ${data.avg_success_rate > 0.85 ? '↗' : '↘'} vs last month
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value">$${(data.cost_saved || 0).toFixed(2)}</div>
+                                    <div class="metric-label">Cost Optimized</div>
+                                    <div class="metric-trend">Through better prompts</div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 30px;">
+                                <h4 style="margin-bottom: 15px;">📊 System Performance Breakdown</h4>
+                                ${data.system_performance ? data.system_performance.map(system => `
+                                    <div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                            <h5 style="margin: 0; color: #1f2937;">${system.name}</h5>
+                                            <span style="font-weight: 600; color: ${system.accuracy > 0.9 ? '#10b981' : system.accuracy > 0.8 ? '#f59e0b' : '#ef4444'};">
+                                                ${Math.round(system.accuracy * 100)}% accuracy
+                                            </span>
+                                        </div>
+                                        <div style="background: #f1f5f9; height: 8px; border-radius: 4px; overflow: hidden;">
+                                            <div style="width: ${system.accuracy * 100}%; height: 100%; background: ${system.accuracy > 0.9 ? '#10b981' : system.accuracy > 0.8 ? '#f59e0b' : '#ef4444'}; transition: width 0.3s ease;"></div>
+                                        </div>
+                                        <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+                                            Average cost: $${system.avg_cost.toFixed(3)} per extraction
+                                        </div>
+                                    </div>
+                                `).join('') : '<p>No system performance data available.</p>'}
+                            </div>
+                        `;
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to load performance analysis:', error);
+                }
+            }
+            
+            // Load pattern analysis tab
+            async function loadPatternAnalysis() {
+                try {
+                    console.log('🔍 Loading pattern analysis...');
+                    
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Display success patterns
+                    const successContainer = document.getElementById('successPatterns');
+                    if (successContainer && data.success_patterns) {
+                        displayPatterns(successContainer, data.success_patterns, 'success');
+                    }
+                    
+                    // Display failure patterns
+                    const failureContainer = document.getElementById('failurePatterns');
+                    if (failureContainer && data.failure_patterns) {
+                        displayPatterns(failureContainer, data.failure_patterns, 'failure');
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to load pattern analysis:', error);
+                }
+            }
+            
+            // Display patterns (success or failure)
+            function displayPatterns(container, patterns, type) {
+                if (!patterns || patterns.length === 0) {
+                    container.innerHTML = `<p style="color: #64748b; text-align: center; padding: 20px;">No ${type} patterns identified yet.</p>`;
+                    return;
+                }
+                
+                const patternsHtml = patterns.map(pattern => `
+                    <div class="pattern-item ${type === 'failure' ? 'failure' : ''}">
+                        <div class="pattern-header">
+                            <span class="pattern-name">${pattern.pattern}</span>
+                            <span class="pattern-impact ${pattern.impact < 0 ? 'negative' : ''}">${Math.abs(pattern.impact)}%</span>
+                        </div>
+                        <div class="pattern-details">
+                            Found in ${pattern.prompt_count} prompts | Examples: ${pattern.example_prompts.join(', ')}
+                        </div>
+                        <div class="pattern-description">${pattern.description}</div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = patternsHtml;
+            }
+            
+            // Load recommendations tab
+            async function loadRecommendations() {
+                try {
+                    console.log('💡 Loading recommendations...');
+                    
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    const recommendationsContainer = document.querySelector('#intelligence-recommendations .recommendations-container');
+                    if (recommendationsContainer && data.recommendations) {
+                        const recommendationsHtml = data.recommendations.map(rec => `
+                            <div style="padding: 15px; background: white; border-radius: 8px; border-left: 4px solid ${rec.priority === 'high' ? '#ef4444' : rec.priority === 'medium' ? '#f59e0b' : '#10b981'}; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                    <h4 style="margin: 0; color: #1f2937; font-size: 14px;">${rec.title}</h4>
+                                    <span style="background: ${rec.priority === 'high' ? '#ef4444' : rec.priority === 'medium' ? '#f59e0b' : '#10b981'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                                        ${rec.priority.toUpperCase()}
+                                    </span>
+                                </div>
+                                <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.4;">${rec.description}</p>
+                                <div style="margin-top: 8px; font-size: 11px; color: #9ca3af;">
+                                    Category: ${rec.category.replace('_', ' ')}
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        recommendationsContainer.innerHTML = recommendationsHtml || '<p style="color: #64748b; text-align: center; padding: 20px;">No recommendations available yet.</p>';
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to load recommendations:', error);
+                }
+            }
+            
+            // Load evolution analysis tab
+            async function loadEvolutionAnalysis() {
+                try {
+                    console.log('🧬 Loading evolution analysis...');
+                    
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    const evolutionContainer = document.querySelector('#intelligence-evolution .evolution-container');
+                    if (evolutionContainer) {
+                        evolutionContainer.innerHTML = `
+                            <div style="text-align: center; padding: 40px; color: #64748b;">
+                                <div style="font-size: 48px; margin-bottom: 20px;">🧬</div>
+                                <h3 style="margin: 0 0 10px 0; color: #1f2937;">Prompt Evolution Tracking</h3>
+                                <p style="margin: 0; max-width: 400px; margin: 0 auto;">
+                                    This feature will show how prompts evolve over time, tracking their lineage and performance improvements.
+                                </p>
+                                <div style="margin-top: 20px;">
+                                    <span style="background: #eff6ff; color: #1e40af; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                        Coming in next update
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to load evolution analysis:', error);
+                }
+            }
+            
+            // Generate fresh recommendations
+            async function generateRecommendations() {
+                try {
+                    showNotification('Generating fresh recommendations...', 'info');
+                    
+                    const response = await fetch('/api/analytics/regenerate-insights', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        await loadIntelligenceData();
+                        showNotification('Recommendations updated!', 'success');
+                    } else {
+                        throw new Error('Failed to generate recommendations');
+                    }
+                } catch (error) {
+                    console.error('Failed to generate recommendations:', error);
+                    showNotification('Failed to generate recommendations', 'error');
+                }
+            }
+            
+            // Export intelligence report
+            async function exportIntelligence() {
+                try {
+                    showNotification('Generating report...', 'info');
+                    
+                    const response = await fetch('/api/analytics/prompt-intelligence');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Create downloadable report
+                    const report = {
+                        generated_at: new Date().toISOString(),
+                        summary: {
+                            total_prompts: data.total_prompts || 0,
+                            total_extractions: data.total_extractions || 0,
+                            avg_accuracy: data.avg_accuracy || 0,
+                            cost_saved: data.cost_saved || 0
+                        },
+                        success_patterns: data.success_patterns || [],
+                        failure_patterns: data.failure_patterns || [],
+                        recommendations: data.recommendations || [],
+                        system_performance: data.system_performance || []
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `onshelf-prompt-intelligence-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showNotification('Report downloaded!', 'success');
+                    
+                } catch (error) {
+                    console.error('Failed to export intelligence:', error);
+                    showNotification('Failed to generate report', 'error');
+                }
+            }
+            
+            // Optimize prompts based on intelligence
+            async function optimizePrompts() {
+                showNotification('Prompt optimization coming soon!', 'info');
+            }
+            
+            // Initialize queue selection monitoring for smart recommendations
+            function initializeQueueSelectionMonitoring() {
+                console.log('🔍 Initializing queue selection monitoring...');
+                
+                // Use a more robust approach for monitoring queue checkbox changes
+                let lastCheckboxCount = 0;
+                
+                function checkSelectionChanges() {
+                    const currentCheckboxes = document.querySelectorAll('.queue-item-checkbox:checked');
+                    const currentCount = currentCheckboxes.length;
+                    
+                    if (currentCount !== lastCheckboxCount) {
+                        lastCheckboxCount = currentCount;
+                        
+                        // Update selection count display if it exists
+                        const selectedCountEl = document.getElementById('selectedCount');
+                        if (selectedCountEl) {
+                            selectedCountEl.textContent = `(${currentCount} selected)`;
+                        }
+                        
+                        // Load smart recommendations if items are selected
+                        if (currentCount > 0) {
+                            loadSmartRecommendations();
+                        } else {
+                            // Hide recommendations if no items selected
+                            const smartRec = document.getElementById('smartRecommendations');
+                            if (smartRec) smartRec.style.display = 'none';
+                        }
+                    }
+                }
+                
+                // Set up periodic monitoring (since MutationObserver might not catch dynamically added checkboxes)
+                setInterval(checkSelectionChanges, 1000);
+                
+                // Also listen for direct clicks on the queue grid
+                const queueGrid = document.getElementById('queueGrid');
+                if (queueGrid) {
+                    queueGrid.addEventListener('change', function(event) {
+                        if (event.target.classList.contains('queue-item-checkbox')) {
+                            setTimeout(checkSelectionChanges, 100); // Small delay to ensure DOM is updated
+                        }
+                    });
+                    
+                    queueGrid.addEventListener('click', function(event) {
+                        if (event.target.classList.contains('queue-item-checkbox')) {
+                            setTimeout(checkSelectionChanges, 100);
+                        }
+                    });
+                }
+                
+                console.log('✅ Queue selection monitoring initialized');
+            }
+            
+            // Global function to toggle item selection (called from queue table)
+            function toggleItemSelection(itemId) {
+                // This function is called from the queue table checkboxes
+                // The monitoring will automatically detect the change
+                console.log(`Item ${itemId} selection toggled`);
             }
             
             function switchIntelligenceTab(tabName) {
@@ -10160,6 +11036,803 @@ ${getOptimizationTips(goal, extractionType)}`;
                     console.error('❌ Failed to initialize Enhanced Extraction Settings:', error);
                 }
             }
+            
+            // Enhanced Extraction Configuration State
+            let extractionConfig = {
+                system: 'custom_consensus',
+                models: {
+                    structure: 'claude',
+                    products: 'gpt4o',
+                    details: 'gemini'
+                },
+                prompts: {
+                    structure: 'auto',
+                    products: 'auto',
+                    details: 'auto'
+                },
+                autoSelectReasoning: {}
+            };
+            
+            // Performance data cache
+            let promptPerformanceCache = {};
+            
+            // Load smart recommendations based on context
+            async function loadSmartRecommendations() {
+                const selectedItems = getSelectedQueueItems();
+                if (selectedItems.length === 0) {
+                    document.getElementById('smartRecommendations').style.display = 'none';
+                    return;
+                }
+                
+                // Get context from first selected item
+                const context = {
+                    store: selectedItems[0].uploads?.collections?.stores?.retailer_name || 'Unknown Store',
+                    category: selectedItems[0].uploads?.category || 'Unknown Category',
+                    retailer: extractRetailerFromStore(selectedItems[0].uploads?.collections?.stores?.retailer_name || '')
+                };
+                
+                try {
+                    // Get AI recommendations
+                    const response = await fetch('/api/extraction/recommend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(context)
+                    });
+                    
+                    if (response.ok) {
+                        const recommendations = await response.json();
+                        
+                        // Update UI
+                        document.getElementById('recStore').textContent = context.store;
+                        document.getElementById('recCategory').textContent = context.category;
+                        document.getElementById('recHistory').textContent = recommendations.history_summary || 'No history available';
+                        
+                        // Show what auto-select would choose
+                        const choicesHtml = `
+                            <div class="auto-choice">System: ${recommendations.system || 'custom_consensus'} <span class="reason">(${recommendations.system_reason || 'Default choice'})</span></div>
+                            <div class="auto-choice">Structure: ${recommendations.models?.structure || 'claude'} + "${recommendations.prompts?.structure?.name || 'Default prompt'}"</div>
+                            <div class="auto-choice">Products: ${recommendations.models?.products || 'gpt4o'} + "${recommendations.prompts?.products?.name || 'Default prompt'}"</div>
+                            <div class="auto-choice">Details: ${recommendations.models?.details || 'gemini'} + "${recommendations.prompts?.details?.name || 'Default prompt'}"</div>
+                        `;
+                        document.getElementById('autoSelectChoices').innerHTML = choicesHtml;
+                        
+                        // Store reasoning for later use
+                        extractionConfig.autoSelectReasoning = recommendations;
+                        
+                        // Show recommendations section
+                        document.getElementById('smartRecommendations').style.display = 'block';
+                    } else {
+                        console.log('No recommendations available from API');
+                        document.getElementById('smartRecommendations').style.display = 'none';
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to load recommendations:', error);
+                    document.getElementById('smartRecommendations').style.display = 'none';
+                }
+            }
+            
+            // Enhanced prompt loading with performance data
+            async function updatePromptOptions(type) {
+                const modelSelect = document.getElementById(`model-${type}`);
+                const model = modelSelect ? modelSelect.value : 'claude';
+                
+                try {
+                    const response = await fetch(`/api/analytics/prompts-with-stats?prompt_type=${type}&model_type=${model}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const prompts = await response.json();
+                    
+                    const select = document.getElementById(`prompt-${type}`);
+                    if (!select) return;
+                    
+                    select.innerHTML = '<option value="auto">🤖 Auto-select best</option>';
+                    
+                    prompts.forEach(prompt => {
+                        const option = document.createElement('option');
+                        option.value = prompt.id;
+                        
+                        // Include performance data in the option text
+                        const successRate = prompt.performance_stats?.success_rate ? `${Math.round(prompt.performance_stats.success_rate)}%` : 'New';
+                        const uses = prompt.performance_stats?.usage_count || 0;
+                        option.textContent = `${prompt.name} v${prompt.version} | ${successRate} | ${uses} uses`;
+                        
+                        // Store full data for preview
+                        promptPerformanceCache[prompt.id] = prompt;
+                        
+                        select.appendChild(option);
+                    });
+                    
+                } catch (error) {
+                    console.error('Failed to load prompts:', error);
+                    // Fallback to basic options
+                    const select = document.getElementById(`prompt-${type}`);
+                    if (select) {
+                        select.innerHTML = `
+                            <option value="auto">🤖 Auto-select best</option>
+                            <option value="default_${type}">Default ${type} prompt | 85% | 150 uses</option>
+                        `;
+                    }
+                }
+            }
+            
+            // Show prompt preview with performance
+            function showPromptPreview(type) {
+                const select = document.getElementById(`prompt-${type}`);
+                const promptId = select.value;
+                
+                const preview = document.getElementById(`preview-${type}`);
+                if (!preview) return;
+                
+                if (promptId === 'auto') {
+                    preview.style.display = 'none';
+                    return;
+                }
+                
+                const promptData = promptPerformanceCache[promptId];
+                if (!promptData) {
+                    preview.style.display = 'none';
+                    return;
+                }
+                
+                preview.style.display = 'block';
+                
+                // Update preview content
+                const nameElement = preview.querySelector('.prompt-name');
+                const badgeElement = preview.querySelector('.performance-badge');
+                const statsElement = preview.querySelector('.preview-stats');
+                const snippetElement = preview.querySelector('.prompt-snippet');
+                
+                if (nameElement) nameElement.textContent = `${promptData.name} v${promptData.version}`;
+                if (badgeElement) {
+                    const successRate = promptData.performance_stats?.success_rate;
+                    badgeElement.textContent = successRate ? `${Math.round(successRate)}% success` : 'New - No data';
+                }
+                
+                // Update stats
+                if (statsElement) {
+                    const stats = promptData.performance_stats || {};
+                    statsElement.innerHTML = `
+                        <span>📊 ${stats.usage_count || 0} uses</span>
+                        <span>⏱️ Last: ${stats.last_used || 'Never'}</span>
+                        <span>💰 Avg cost: $${stats.avg_cost || 0}</span>
+                    `;
+                }
+                
+                // Show prompt snippet
+                if (snippetElement && promptData.content) {
+                    const snippet = promptData.content.substring(0, 150) + '...';
+                    snippetElement.textContent = snippet;
+                }
+            }
+            
+            // Get selected queue items
+            function getSelectedQueueItems() {
+                const checkboxes = document.querySelectorAll('.queue-item-checkbox:checked');
+                const selectedItems = [];
+                
+                checkboxes.forEach(checkbox => {
+                    const itemId = parseInt(checkbox.value);
+                    const item = queueData.find(q => q.id === itemId);
+                    if (item) {
+                        selectedItems.push(item);
+                    }
+                });
+                
+                return selectedItems;
+            }
+            
+            // Extract retailer from store name
+            function extractRetailerFromStore(storeName) {
+                if (!storeName) return 'Unknown';
+                
+                // Common retailer patterns
+                const patterns = {
+                    'tesco': /tesco/i,
+                    'sainsbury': /sainsbury/i,
+                    'asda': /asda/i,
+                    'morrisons': /morrisons/i,
+                    'aldi': /aldi/i,
+                    'lidl': /lidl/i,
+                    'coop': /co.?op/i
+                };
+                
+                for (const [retailer, pattern] of Object.entries(patterns)) {
+                    if (pattern.test(storeName)) {
+                        return retailer.charAt(0).toUpperCase() + retailer.slice(1);
+                    }
+                }
+                
+                return storeName.split(' ')[0] || 'Unknown';
+            }
+            
+            // Use auto-selection
+            async function useAutoSelection() {
+                if (!extractionConfig.autoSelectReasoning) {
+                    showNotification('No auto-selection data available', 'warning');
+                    return;
+                }
+                
+                const reasoning = extractionConfig.autoSelectReasoning;
+                
+                // Apply system selection
+                const systemRadio = document.querySelector(`input[name="system"][value="${reasoning.system}"]`);
+                if (systemRadio) {
+                    systemRadio.checked = true;
+                    selectSystem(reasoning.system);
+                }
+                
+                // Apply model and prompt selections
+                ['structure', 'products', 'details'].forEach(type => {
+                    const modelSelect = document.getElementById(`model-${type}`);
+                    const promptSelect = document.getElementById(`prompt-${type}`);
+                    
+                    if (modelSelect && reasoning.models?.[type]) {
+                        modelSelect.value = reasoning.models[type];
+                    }
+                    
+                    if (promptSelect && reasoning.prompts?.[type]?.prompt_id) {
+                        promptSelect.value = reasoning.prompts[type].prompt_id;
+                    }
+                });
+                
+                showNotification('Auto-selection applied!', 'success');
+            }
+            
+            // Show custom selection options
+            function showCustomSelection() {
+                document.getElementById('modelConfig').style.display = 'block';
+                document.getElementById('promptSelection').style.display = 'block';
+                
+                // Initialize prompt options for all types
+                ['structure', 'products', 'details'].forEach(type => {
+                    updatePromptOptions(type);
+                });
+            }
+            
+            // Create new prompt - opens prompt engineering modal
+            function createNewPrompt(type) {
+                openPromptEngineeringModal(type);
+            }
+            
+            // Customize existing prompt
+            function customizePrompt(type) {
+                const promptId = document.getElementById(`prompt-${type}`).value;
+                const promptData = promptPerformanceCache[promptId];
+                
+                openPromptEngineeringModal(type, promptData);
+            }
+            
+            // View full prompt details
+            function viewFullPrompt(type) {
+                const promptId = document.getElementById(`prompt-${type}`).value;
+                const promptData = promptPerformanceCache[promptId];
+                
+                showPromptDetailsModal(promptData);
+            }
+            
+            // View performance data
+            function viewPerformance(type) {
+                const promptId = document.getElementById(`prompt-${type}`).value;
+                const promptData = promptPerformanceCache[promptId];
+                
+                showPerformanceModal(promptData);
+            }
+            
+            // Apply enhanced configuration to selected items
+            async function applyEnhancedConfigToSelected() {
+                const selectedItems = getSelectedQueueItems();
+                
+                if (selectedItems.length === 0) {
+                    showNotification('Please select queue items first', 'warning');
+                    return;
+                }
+                
+                // Build configuration object
+                const config = {
+                    system: document.querySelector('input[name="system"]:checked').value,
+                    models: {},
+                    prompts: {},
+                    reasoning: {}
+                };
+                
+                // Collect model and prompt selections
+                ['structure', 'products', 'details'].forEach(type => {
+                    const modelSelect = document.getElementById(`model-${type}`);
+                    const promptSelect = document.getElementById(`prompt-${type}`);
+                    
+                    config.models[type] = modelSelect ? modelSelect.value : 'claude';
+                    config.prompts[type] = promptSelect ? promptSelect.value : 'auto';
+                    
+                    // Include reasoning if using auto-select
+                    if (config.prompts[type] === 'auto' && extractionConfig.autoSelectReasoning) {
+                        config.reasoning[type] = extractionConfig.autoSelectReasoning.prompts?.[type]?.reason || 'Auto-selected';
+                    }
+                });
+                
+                try {
+                    const response = await fetch('/api/queue/batch-configure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: selectedItems.map(item => item.id),
+                            extraction_config: config
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Configuration applied successfully', 'success');
+                        await loadQueue(); // Refresh queue data
+                    } else {
+                        throw new Error('Server responded with error');
+                    }
+                } catch (error) {
+                    console.error('Failed to apply configuration:', error);
+                    showNotification('Failed to apply configuration', 'error');
+                }
+            }
+            
+            // Save as default configuration
+            async function saveAsDefault() {
+                const config = {
+                    system: document.querySelector('input[name="system"]:checked').value,
+                    models: {},
+                    prompts: {}
+                };
+                
+                ['structure', 'products', 'details'].forEach(type => {
+                    const modelSelect = document.getElementById(`model-${type}`);
+                    const promptSelect = document.getElementById(`prompt-${type}`);
+                    
+                    config.models[type] = modelSelect ? modelSelect.value : 'claude';
+                    config.prompts[type] = promptSelect ? promptSelect.value : 'auto';
+                });
+                
+                try {
+                    const response = await fetch('/api/extraction/save-default-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Default configuration saved!', 'success');
+                    } else {
+                        throw new Error('Failed to save default configuration');
+                    }
+                } catch (error) {
+                    console.error('Failed to save default:', error);
+                    showNotification('Failed to save default configuration', 'error');
+                }
+            }
+            
+            // Enhanced Prompt Engineering Modal Functions
+            let currentPromptGeneration = null;
+            let editingPromptData = null;
+            
+            // Open enhanced prompt engineering modal with versioning
+            function openPromptEngineeringModal(type = null, existingPrompt = null) {
+                const modal = document.getElementById('promptEngineeringModal');
+                if (modal) {
+                    modal.remove(); // Remove existing modal
+                }
+                
+                editingPromptData = existingPrompt;
+                
+                // Create enhanced modal with versioning
+                const modalHtml = `
+                    <div id="promptEngineeringModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+                        <div class="modal-content" style="background: white; border-radius: 12px; max-width: 1400px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                            <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h2 style="margin: 0; color: #1f2937; font-size: 20px;">✨ AI-Assisted Prompt Engineering</h2>
+                                    <button onclick="closePromptEngineeringModal()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                                </div>
+                                
+                                ${existingPrompt ? `
+                                    <div id="versionInfo" class="version-management" style="margin-top: 15px;">
+                                        <div class="current-version">
+                                            Editing: <span id="currentPromptName">${existingPrompt.name || existingPrompt.template_id}</span>
+                                            <span class="version-badge">v${existingPrompt.version || existingPrompt.prompt_version}</span>
+                                        </div>
+                                        <div class="version-options">
+                                            <label>
+                                                <input type="radio" name="versionStrategy" value="new" checked>
+                                                Create New Version (v${incrementVersion(existingPrompt.version || existingPrompt.prompt_version)})
+                                            </label>
+                                            <label>
+                                                <input type="radio" name="versionStrategy" value="branch">
+                                                Create Branch (${existingPrompt.name || existingPrompt.template_id} - Custom)
+                                            </label>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            
+                            <div style="flex: 1; overflow: hidden; display: flex;">
+                                <!-- Left Panel: User Inputs -->
+                                <div style="width: 400px; padding: 20px; border-right: 1px solid #e5e7eb; overflow-y: auto;">
+                                    <h3 style="margin: 0 0 15px 0; color: #1f2937;">1. Prompt Configuration</h3>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Prompt Type:</label>
+                                        <select id="promptTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                            <option value="structure" ${type === 'structure' ? 'selected' : ''}>Structure Analysis</option>
+                                            <option value="products" ${type === 'products' ? 'selected' : ''}>Product Extraction</option>
+                                            <option value="details" ${type === 'details' ? 'selected' : ''}>Detail Enhancement</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Fields to Extract:</label>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 120px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 10px; border-radius: 4px;">
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="product_name" checked> Product Name</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="brand" checked> Brand</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="price" checked> Price</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="position" checked> Position</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="facings" checked> Facings</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="stack" checked> Stack</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="color"> Color</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="promo_text"> Promo Text</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="package_size"> Package Size</label>
+                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="confidence"> Confidence</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Base Prompt Context:</label>
+                                        <textarea id="basePromptContext" rows="4" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="Enter the base prompt template...">${existingPrompt?.prompt_content || existingPrompt?.content || 'Extract products from this retail shelf image.\\nFocus on accuracy and systematic extraction from left to right.\\nPay special attention to small products and edge cases.'}</textarea>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 20px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Special Instructions:</label>
+                                        <textarea id="specialInstructions" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="E.g., This prompt is optimized for Tesco shelves with high product density..."></textarea>
+                                    </div>
+                                    
+                                    <button onclick="generateOptimizedPrompt()" class="btn-primary" style="width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
+                                        🤖 Generate Optimized Prompt
+                                    </button>
+                                </div>
+                                
+                                <!-- Right Panel: AI Results -->
+                                <div style="flex: 1; display: flex; flex-direction: column;">
+                                    <div id="aiThinking" style="display: none; flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                                        <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+                                        <p style="color: #64748b; font-size: 16px;">AI is optimizing your prompt...</p>
+                                    </div>
+                                    
+                                    <div id="aiResults" style="display: none; flex: 1; flex-direction: column;">
+                                        <!-- Tabs for different views -->
+                                        <div style="display: flex; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
+                                            <button class="result-tab-btn active" onclick="showResultTab('combined')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: 600;">Combined View</button>
+                                            <button class="result-tab-btn" onclick="showResultTab('prompt')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Prompt Only</button>
+                                            <button class="result-tab-btn" onclick="showResultTab('schema')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Pydantic Schema</button>
+                                            <button class="result-tab-btn" onclick="showResultTab('reasoning')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">AI Reasoning</button>
+                                        </div>
+                                        
+                                        <!-- Combined View Tab -->
+                                        <div id="combinedTab" class="result-tab active" style="flex: 1; padding: 20px; overflow-y: auto;">
+                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">📋 Complete Instructor Configuration:</h4>
+                                            <pre id="finalConfigPreview" style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 11px; line-height: 1.4; overflow-x: auto; white-space: pre-wrap; border: 1px solid #e5e7eb;"></pre>
+                                            <div style="background: #eff6ff; padding: 12px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #3b82f6;">
+                                                <p style="margin: 0; font-size: 13px; color: #1e40af;">📋 This is exactly what will be stored and used by the Instructor library.</p>
+                                                <p style="margin: 5px 0 0 0; font-size: 13px; color: #1e40af;">🔧 The prompt template guides the AI model, while the Pydantic schema ensures structured output.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Prompt Only Tab -->
+                                        <div id="promptTab" class="result-tab" style="display: none; flex: 1; padding: 20px; flex-direction: column;">
+                                            <h4 style="margin: 0 0 10px 0; color: #1f2937;">✏️ Optimized Prompt (Editable):</h4>
+                                            <textarea id="editablePrompt" style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: 'Monaco', monospace; font-size: 12px; resize: none;"></textarea>
+                                            <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 12px; color: #64748b;">
+                                                <span>Estimated tokens: <span id="tokenCount">0</span></span>
+                                                <span>Complexity: <span id="complexityScore">Medium</span></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Pydantic Schema Tab -->
+                                        <div id="schemaTab" class="result-tab" style="display: none; flex: 1; padding: 20px; flex-direction: column;">
+                                            <h4 style="margin: 0 0 10px 0; color: #1f2937;">🏗️ Generated Pydantic Model:</h4>
+                                            <pre id="pydanticModelCode" style="flex: 1; background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 11px; overflow: auto; border: 1px solid #e5e7eb;"></pre>
+                                            <div style="margin-top: 10px;">
+                                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                                                    <input type="checkbox" id="includeValidation" checked> Include field validation
+                                                </label>
+                                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 5px;">
+                                                    <input type="checkbox" id="includeExamples" checked> Include field examples
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- AI Reasoning Tab -->
+                                        <div id="reasoningTab" class="result-tab" style="display: none; flex: 1; padding: 20px; overflow-y: auto;">
+                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">🧠 AI Optimization Reasoning:</h4>
+                                            <ul id="reasoningList" style="margin: 0 0 20px 0; padding-left: 20px; line-height: 1.6;"></ul>
+                                            <div>
+                                                <h5 style="margin: 0 0 10px 0; color: #1f2937;">🚀 Key Improvements:</h5>
+                                                <ul id="improvementsList" style="margin: 0; padding-left: 20px; line-height: 1.6;"></ul>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Actions -->
+                                        <div style="padding: 20px; border-top: 1px solid #e5e7eb; background: #f8fafc;">
+                                            <div style="display: flex; gap: 10px;">
+                                                <button onclick="saveOptimizedPrompt()" class="btn-primary" style="flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                                    💾 Save to Database
+                                                </button>
+                                                <button onclick="regeneratePrompt()" class="btn-secondary" style="padding: 10px 15px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+                                                    🔄 Regenerate
+                                                </button>
+                                                <button onclick="testPrompt()" class="btn-secondary" style="padding: 10px 15px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+                                                    🧪 Test
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                // Pre-fill fields if editing existing prompt
+                if (existingPrompt && existingPrompt.metadata) {
+                    try {
+                        const metadata = typeof existingPrompt.metadata === 'string' 
+                            ? JSON.parse(existingPrompt.metadata) 
+                            : existingPrompt.metadata;
+                        
+                        if (metadata.fields) {
+                            document.querySelectorAll('input[name="field"]').forEach(cb => {
+                                cb.checked = metadata.fields.includes(cb.value);
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Could not parse prompt metadata:', e);
+                    }
+                }
+            }
+            
+            // Close prompt engineering modal
+            function closePromptEngineeringModal() {
+                const modal = document.getElementById('promptEngineeringModal');
+                if (modal) {
+                    modal.remove();
+                }
+                editingPromptData = null;
+                currentPromptGeneration = null;
+            }
+            
+            // Generate optimized prompt using AI
+            async function generateOptimizedPrompt() {
+                const selectedFields = Array.from(document.querySelectorAll('input[name="field"]:checked'))
+                    .map(cb => cb.value);
+                const baseContext = document.getElementById('basePromptContext').value;
+                const specialInstructions = document.getElementById('specialInstructions').value;
+                const promptType = document.getElementById('promptTypeSelect').value;
+                
+                // Show loading
+                document.getElementById('aiThinking').style.display = 'flex';
+                document.getElementById('aiResults').style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/analytics/generate-optimized-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt_type: promptType,
+                            base_prompt: baseContext,
+                            fields_to_extract: selectedFields,
+                            special_instructions: specialInstructions,
+                            parent_prompt_id: editingPromptData?.prompt_id || null
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    currentPromptGeneration = result;
+                    
+                    // Display results
+                    displayEnhancedResults(result);
+                    
+                } catch (error) {
+                    console.error('Failed to generate prompt:', error);
+                    showNotification('Failed to generate optimized prompt', 'error');
+                    document.getElementById('aiThinking').style.display = 'none';
+                }
+            }
+            
+            // Display enhanced prompt results
+            function displayEnhancedResults(result) {
+                document.getElementById('aiThinking').style.display = 'none';
+                document.getElementById('aiResults').style.display = 'flex';
+                
+                // Combined view - show complete Instructor configuration
+                let instructorConfig = '# INSTRUCTOR CONFIGURATION\\n';
+                instructorConfig += '# This exact configuration will be used for extraction\\n\\n';
+                instructorConfig += '## Prompt Template:\\n';
+                instructorConfig += '\\"\\"\\"\\n';
+                instructorConfig += (result.optimized_prompt || 'No prompt generated') + '\\n';
+                instructorConfig += '\\"\\"\\"\\n\\n';
+                instructorConfig += '## Pydantic Model:\\n';
+                instructorConfig += (result.pydantic_model_code || 'No model generated') + '\\n\\n';
+                instructorConfig += '## Usage:\\n';
+                instructorConfig += 'from models import ' + (result.model_class_name || 'ExtractionResult') + '\\n\\n';
+                instructorConfig += 'response = client.chat.completions.create(\\n';
+                instructorConfig += '    model="' + (result.recommended_model || 'gpt-4o') + '",\\n';
+                instructorConfig += '    messages=[{"role": "user", "content": prompt}],\\n';
+                instructorConfig += '    response_model=' + (result.model_class_name || 'ExtractionResult') + '\\n';
+                instructorConfig += ')\\n\\n';
+                instructorConfig += '## Metadata:\\n';
+                instructorConfig += '- Fields: ' + (result.instructor_config?.fields?.join(', ') || 'N/A') + '\\n';
+                instructorConfig += '- Optimized for: ' + (result.optimization_focus || 'General use') + '\\n';
+                instructorConfig += '- Expected token usage: ~' + (result.estimated_tokens || 'Unknown');
+                
+                document.getElementById('finalConfigPreview').textContent = instructorConfig;
+                
+                // Editable prompt
+                document.getElementById('editablePrompt').value = result.optimized_prompt || '';
+                document.getElementById('tokenCount').textContent = Math.round(result.estimated_tokens || 0);
+                
+                // Pydantic model
+                document.getElementById('pydanticModelCode').textContent = result.pydantic_model_code || '';
+                
+                // AI reasoning
+                const reasoningList = document.getElementById('reasoningList');
+                reasoningList.innerHTML = (result.reasoning || ['AI optimization applied'])
+                    .map(r => `<li>${r}</li>`)
+                    .join('');
+                
+                // Key improvements
+                const improvementsList = document.getElementById('improvementsList');
+                improvementsList.innerHTML = (result.key_improvements || ['Enhanced clarity and structure'])
+                    .map(imp => `<li>${imp}</li>`)
+                    .join('');
+            }
+            
+            // Switch between result tabs
+            function showResultTab(tabName) {
+                // Update tab buttons
+                document.querySelectorAll('.result-tab-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.style.borderBottomColor = 'transparent';
+                    btn.style.color = '#6b7280';
+                });
+                
+                event.target.classList.add('active');
+                event.target.style.borderBottomColor = '#3b82f6';
+                event.target.style.color = '#3b82f6';
+                
+                // Show/hide tab content
+                document.querySelectorAll('.result-tab').forEach(tab => {
+                    tab.style.display = 'none';
+                });
+                
+                const targetTab = document.getElementById(tabName + 'Tab');
+                if (targetTab) {
+                    targetTab.style.display = 'flex';
+                }
+            }
+            
+            // Save optimized prompt to database
+            async function saveOptimizedPrompt() {
+                if (!currentPromptGeneration) {
+                    showNotification('No prompt to save', 'warning');
+                    return;
+                }
+                
+                const editedPrompt = document.getElementById('editablePrompt').value;
+                const promptType = document.getElementById('promptTypeSelect').value;
+                
+                let versionStrategy = 'new';
+                if (editingPromptData) {
+                    const checkedStrategy = document.querySelector('input[name="versionStrategy"]:checked');
+                    versionStrategy = checkedStrategy ? checkedStrategy.value : 'new';
+                }
+                
+                try {
+                    const saveData = {
+                        ...currentPromptGeneration,
+                        optimized_prompt: editedPrompt,
+                        prompt_type: promptType,
+                        model_type: 'universal',
+                        version_strategy: versionStrategy,
+                        parent_prompt_id: editingPromptData?.prompt_id || null
+                    };
+                    
+                    const response = await fetch('/api/analytics/save-generated-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(saveData)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        showNotification(`Prompt saved successfully! ID: ${result.prompt_id}`, 'success');
+                        closePromptEngineeringModal();
+                        
+                        // Refresh prompt selectors if they're visible
+                        if (document.getElementById('promptSelection').style.display !== 'none') {
+                            ['structure', 'products', 'details'].forEach(type => {
+                                updatePromptOptions(type);
+                            });
+                        }
+                    } else {
+                        throw new Error('Server error');
+                    }
+                } catch (error) {
+                    console.error('Failed to save prompt:', error);
+                    showNotification('Failed to save prompt', 'error');
+                }
+            }
+            
+            // Regenerate prompt
+            function regeneratePrompt() {
+                generateOptimizedPrompt();
+            }
+            
+            // Test prompt on sample
+            function testPrompt() {
+                showNotification('Test functionality coming soon!', 'info');
+            }
+            
+            // Increment version number
+            function incrementVersion(currentVersion) {
+                try {
+                    const version = parseFloat(currentVersion || '1.0');
+                    return (version + 0.1).toFixed(1);
+                } catch {
+                    return '1.1';
+                }
+            }
+            
+            // Modal helper functions for detailed prompt views
+            function showPromptDetailsModal(promptData) {
+                if (!promptData) return;
+                
+                const modalHtml = `
+                    <div class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+                        <div style="background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                            <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3 style="margin: 0; color: #1f2937;">📋 ${promptData.name || promptData.template_id} v${promptData.version || promptData.prompt_version}</h3>
+                                    <button onclick="this.closest('.modal-overlay').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕</button>
+                                </div>
+                                <div style="margin-top: 10px; display: flex; gap: 20px; font-size: 13px; color: #64748b;">
+                                    <span>📊 Success Rate: ${(promptData.performance_score * 100).toFixed(0)}%</span>
+                                    <span>🔢 Uses: ${promptData.usage_count || 0}</span>
+                                    <span>💰 Avg Cost: ${promptData.avg_token_cost || '$0.000'}</span>
+                                </div>
+                            </div>
+                            <div style="flex: 1; padding: 20px; overflow-y: auto;">
+                                <h4 style="margin: 0 0 10px 0; color: #1f2937;">Full Prompt Content:</h4>
+                                <pre style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; border: 1px solid #e5e7eb;">${promptData.prompt_content || promptData.content || 'No content available'}</pre>
+                            </div>
+                            <div style="padding: 20px; border-top: 1px solid #e5e7eb; background: #f8fafc;">
+                                <div style="display: flex; gap: 10px;">
+                                    <button onclick="customizePrompt('${promptData.prompt_type}')" class="btn-primary" style="flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">✏️ Customize</button>
+                                    <button onclick="viewPerformance('${promptData.prompt_type}')" class="btn-secondary" style="padding: 10px 15px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">📈 Performance</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+            
+            function showPerformanceModal(promptData) {
+                if (!promptData) return;
+                
+                showNotification('Performance analytics coming soon!', 'info');
+            }
         </script>
         
         </div>
@@ -10502,6 +12175,12 @@ ${getOptimizationTips(goal, extractionType)}`;
     </body>
     </html>
     """
+
+@app.get("/test", response_class=HTMLResponse)
+async def test_page():
+    """Simple test page"""
+    with open("test_page.html", "r") as f:
+        return f.read()
 
 @app.get("/health")
 async def health_check():

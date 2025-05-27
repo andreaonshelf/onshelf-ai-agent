@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+</head>
+<body>
+    <h1>OnShelf Test Page</h1>
+    <div id="test-results"></div>
+    
+    <script>
+        async function testAPIs() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h2>API Test Results:</h2>';
+            
+            // Test Queue API
+            try {
+                const queueResponse = await fetch('/api/queue/items');
+                const queueData = await queueResponse.json();
+                results.innerHTML += `<p>✅ Queue API: ${queueData.items.length} items loaded</p>`;
+            } catch (error) {
+                results.innerHTML += `<p>❌ Queue API Error: ${error.message}</p>`;
+            }
+            
+            // Test Analytics API
+            try {
+                const analyticsResponse = await fetch('/api/analytics/prompt-intelligence');
+                const analyticsData = await analyticsResponse.json();
+                results.innerHTML += `<p>✅ Analytics API: Connected</p>`;
+            } catch (error) {
+                results.innerHTML += `<p>❌ Analytics API Error: ${error.message}</p>`;
+            }
+            
+            // Test Prompts API
+            try {
+                const promptsResponse = await fetch('/api/analytics/prompts-with-stats?prompt_type=structure&model_type=claude');
+                const promptsData = await promptsResponse.json();
+                results.innerHTML += `<p>✅ Prompts API: ${promptsData.length} prompts</p>`;
+            } catch (error) {
+                results.innerHTML += `<p>❌ Prompts API Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Run tests on load
+        testAPIs();
+    </script>
+</body>
+</html>

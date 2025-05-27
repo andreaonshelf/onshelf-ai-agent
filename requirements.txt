@@ -43,4 +43,5 @@ python-json-logger>=2.0.0
 
 # Optional Performance
 redis>=5.0.0  # For caching
-numpy>=1.24.0  # For numerical operations 
+numpy>=1.24.0  # For numerical operations
+scikit-learn>=1.3.0  # For ML clustering and preprocessing 

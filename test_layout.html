@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Layout Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .test-info { background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .iframe-container { border: 2px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        iframe { width: 100%; height: 800px; border: none; }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h2>🧪 Layout Test</h2>
+        <p>Testing the queue interface layout to verify the sidebar and main content are positioned correctly.</p>
+        <p><strong>Expected:</strong> Sidebar on the left (280px), main content on the right, queue interface visible next to sidebar.</p>
+    </div>
+    
+    <div class="iframe-container">
+        <iframe src="http://localhost:8000" title="OnShelf Dashboard"></iframe>
+    </div>
+    
+    <script>
+        // Auto-refresh every 5 seconds to see changes
+        setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html> 

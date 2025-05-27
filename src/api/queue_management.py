@@ -71,11 +71,17 @@ async def get_queue_items(
                 query = query.eq("status", status)
         else:
             # Default: show all relevant statuses
-            query = query.in_("status", ["pending", "processing", "completed", "failed"])
+            # Build query with OR conditions for multiple statuses
+            query = query.or_(
+                "status.eq.pending,"
+                "status.eq.processing,"
+                "status.eq.completed,"
+                "status.eq.failed"
+            )
         
         # Apply system filter
         if system:
-            query = query.contains("selected_systems", [system])
+            query = query.contains("selected_systems", system)
         
         # Execute query with limit
         result = query.limit(limit).execute()
