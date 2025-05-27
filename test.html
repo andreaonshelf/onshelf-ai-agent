@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JavaScript Test</title>
+</head>
+<body>
+    <h1>JavaScript Test</h1>
+    <button onclick="testJS()">🧪 Test JS</button>
+    <button onclick="switchMode('simple')">Simple</button>
+    <button onclick="switchMode('advanced')">Advanced</button>
+    
+    <div id="queue-interface" style="display: none;">Queue Interface</div>
+    <div id="simple-mode" style="display: none;">Simple Mode</div>
+    <div id="advanced-mode" style="display: none;">Advanced Mode</div>
+    <div id="intelligence-interface" style="display: none;">Intelligence Interface</div>
+    
+    <script>
+        // Define critical functions immediately
+        window.testJS = function() {
+            alert('JavaScript is working!');
+            console.log('✅ JavaScript test successful');
+        };
+        
+        // Basic switchMode function
+        window.switchMode = function(mode) {
+            console.log('🔄 SwitchMode called:', mode);
+            
+            try {
+                // Hide all modes
+                const modes = ['queue-interface', 'simple-mode', 'advanced-mode', 'intelligence-interface'];
+                modes.forEach(modeId => {
+                    const element = document.getElementById(modeId);
+                    if (element) element.style.display = 'none';
+                });
+                
+                // Show selected mode
+                const targetMode = document.getElementById(mode + '-interface') || document.getElementById(mode + '-mode');
+                if (targetMode) {
+                    targetMode.style.display = 'block';
+                    console.log('✅ Switched to mode:', mode);
+                    alert('Switched to mode: ' + mode);
+                } else {
+                    console.error('❌ Mode not found:', mode);
+                    alert('Mode not found: ' + mode);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error in switchMode:', error);
+                alert('Error switching mode: ' + error.message);
+            }
+        };
+        
+        console.log('✅ Test JavaScript loaded successfully');
+    </script>
+</body>
+</html> 

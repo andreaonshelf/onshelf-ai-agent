@@ -1405,4 +1405,109 @@ async def get_extraction_logs(
         
     except Exception as e:
         logger.error(f"Failed to get logs for item {item_id}: {e}", component="queue_api")
-        raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}")
+
+
+@router.post("/batch-configure-enhanced")
+async def batch_configure_enhanced(request: Dict[str, Any]):
+    """Apply enhanced configuration to multiple queue items"""
+    
+    try:
+        item_ids = request.get("item_ids", [])
+        configuration = request.get("configuration", {})
+        reasoning = request.get("reasoning", "Manual configuration via enhanced UI")
+        
+        if not item_ids:
+            raise HTTPException(status_code=400, detail="item_ids is required")
+        
+        if not configuration:
+            raise HTTPException(status_code=400, detail="configuration is required")
+        
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Validate configuration structure
+        system_type = configuration.get("system")
+        models = configuration.get("models", {})
+        prompts = configuration.get("prompts", {})
+        
+        if not system_type:
+            raise HTTPException(status_code=400, detail="configuration.system is required")
+        
+        # Validate system type
+        from ..systems.base_system import ExtractionSystemFactory
+        if system_type not in ExtractionSystemFactory.AVAILABLE_SYSTEMS:
+            raise HTTPException(status_code=400, detail=f"Invalid system_type: {system_type}")
+        
+        updated_items = []
+        failed_items = []
+        
+        for item_id in item_ids:
+            try:
+                # Get current item
+                result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+                
+                if not result.data:
+                    failed_items.append({
+                        "item_id": item_id,
+                        "error": "Queue item not found"
+                    })
+                    continue
+                
+                item = result.data[0]
+                
+                # Prepare enhanced configuration data
+                enhanced_config = {
+                    "system_type": system_type,
+                    "model_assignments": models,
+                    "prompt_assignments": prompts,
+                    "configuration_reasoning": reasoning,
+                    "configured_at": datetime.utcnow().isoformat(),
+                    "configured_via": "enhanced_ui"
+                }
+                
+                # Update the item with enhanced configuration
+                update_result = supabase.table("ai_extraction_queue").update({
+                    "system_type": system_type,
+                    "enhanced_config": enhanced_config,
+                    "prompt_overrides": prompts,  # Keep backward compatibility
+                    "updated_at": datetime.utcnow().isoformat()
+                }).eq("id", item_id).execute()
+                
+                if update_result.data:
+                    updated_items.append({
+                        "item_id": item_id,
+                        "system_type": system_type,
+                        "models": models,
+                        "prompts": prompts
+                    })
+                    logger.info(f"Applied enhanced configuration to item {item_id}: {system_type}")
+                else:
+                    failed_items.append({
+                        "item_id": item_id,
+                        "error": "Failed to update item"
+                    })
+                
+            except Exception as e:
+                failed_items.append({
+                    "item_id": item_id,
+                    "error": str(e)
+                })
+                logger.error(f"Failed to configure item {item_id}: {e}")
+        
+        return {
+            "success": True,
+            "message": f"Enhanced configuration applied to {len(updated_items)} items",
+            "updated_items": updated_items,
+            "failed_items": failed_items,
+            "configuration": {
+                "system": system_type,
+                "models": models,
+                "prompts": prompts,
+                "reasoning": reasoning
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to apply enhanced configuration: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to apply enhanced configuration: {str(e)}") 
