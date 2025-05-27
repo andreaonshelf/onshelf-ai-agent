@@ -222,16 +222,30 @@ class AIExtractionQueueProcessor:
             if hasattr(result, 'best_extraction'):
                 best_extraction = result.best_extraction
                 if hasattr(best_extraction, 'products'):
-                    extraction_result["products"] = [p.dict() if hasattr(p, 'dict') else p for p in best_extraction.products]
+                    # Use model_dump() for Pydantic v2 compatibility
+                    extraction_result["products"] = [
+                        p.model_dump() if hasattr(p, 'model_dump') else (p.dict() if hasattr(p, 'dict') else p) 
+                        for p in best_extraction.products
+                    ]
                 if hasattr(best_extraction, 'shelf_structure'):
-                    extraction_result["shelf_structure"] = best_extraction.shelf_structure.dict() if hasattr(best_extraction.shelf_structure, 'dict') else best_extraction.shelf_structure
+                    # Use model_dump() for Pydantic v2 compatibility
+                    if hasattr(best_extraction.shelf_structure, 'model_dump'):
+                        extraction_result["shelf_structure"] = best_extraction.shelf_structure.model_dump()
+                    elif hasattr(best_extraction.shelf_structure, 'dict'):
+                        extraction_result["shelf_structure"] = best_extraction.shelf_structure.dict()
+                    else:
+                        extraction_result["shelf_structure"] = best_extraction.shelf_structure
                 extraction_result["accuracy_score"] = final_accuracy
                 
             # Extract planogram data
             if hasattr(result, 'best_planogram'):
                 best_planogram = result.best_planogram
                 if hasattr(best_planogram, 'shelves'):
-                    planogram_result["shelves"] = [s.dict() if hasattr(s, 'dict') else s for s in best_planogram.shelves]
+                    # Use model_dump() for Pydantic v2 compatibility
+                    planogram_result["shelves"] = [
+                        s.model_dump() if hasattr(s, 'model_dump') else (s.dict() if hasattr(s, 'dict') else s)
+                        for s in best_planogram.shelves
+                    ]
                 if hasattr(best_planogram, 'canvas_data'):
                     planogram_result["canvas_data"] = best_planogram.canvas_data
                 if hasattr(best_planogram, 'svg_data'):

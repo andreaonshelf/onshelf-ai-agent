@@ -816,3 +816,6 @@ class HybridConsensusSystem(BaseExtractionSystem):
     def get_control_level(self) -> str:
         """Get control level"""
         return "Selective" 
+
+# Export the HybridSystem class
+HybridSystem = HybridConsensusSystem 

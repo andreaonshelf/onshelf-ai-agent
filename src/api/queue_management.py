@@ -11,6 +11,7 @@ import os
 import io
 import json
 import glob
+import asyncio
 from supabase import create_client, Client
 
 from ..config import SystemConfig
@@ -754,6 +755,115 @@ async def get_queue_item_analysis(item_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to get analysis: {str(e)}")
 
 
+@router.post("/batch-configure")
+async def batch_configure_items(request_data: Dict[str, Any]):
+    """Apply configuration to multiple queue items"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        item_ids = request_data.get('item_ids', [])
+        system = request_data.get('system')
+        prompt_overrides = request_data.get('prompt_overrides', {})
+        
+        if not item_ids:
+            raise HTTPException(status_code=400, detail="item_ids is required")
+        
+        if not system:
+            raise HTTPException(status_code=400, detail="system is required")
+        
+        # Validate system
+        valid_systems = ['custom_consensus', 'langgraph', 'hybrid']
+        if system not in valid_systems:
+            raise HTTPException(status_code=400, detail=f"Invalid system. Must be one of: {valid_systems}")
+        
+        # Prepare extraction config
+        extraction_config = {
+            "system": system,
+            "system_override": True,
+            "prompt_overrides": prompt_overrides,
+            "applied_at": datetime.utcnow().isoformat()
+        }
+        
+        # Update all specified items using existing schema
+        updated_items = []
+        for item_id in item_ids:
+            try:
+                # Use existing columns that we know exist
+                result = supabase.table("ai_extraction_queue").update({
+                    "current_extraction_system": system,
+                    "status": "pending"  # Reset to pending so it can be reprocessed with new config
+                }).eq("id", item_id).execute()
+                
+                if result.data:
+                    updated_items.append(item_id)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to update item {item_id}: {e}")
+        
+        logger.info(f"Applied batch configuration to {len(updated_items)} items", 
+                   component="queue_api", 
+                   system=system, 
+                   item_count=len(updated_items))
+        
+        return {
+            "success": True,
+            "updated_items": updated_items,
+            "failed_items": [id for id in item_ids if id not in updated_items],
+            "configuration": extraction_config,
+            "message": f"Configuration applied to {len(updated_items)} items"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to batch configure items: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to batch configure: {str(e)}")
+
+
+@router.post("/batch-reset")
+async def batch_reset_items(request_data: Dict[str, Any]):
+    """Reset queue items to default configuration"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        item_ids = request_data.get('item_ids', [])
+        
+        if not item_ids:
+            raise HTTPException(status_code=400, detail="item_ids is required")
+        
+        # Reset configuration for all specified items using existing schema
+        reset_items = []
+        for item_id in item_ids:
+            try:
+                result = supabase.table("ai_extraction_queue").update({
+                    "current_extraction_system": "custom_consensus",  # Reset to default
+                    "status": "pending"  # Reset to pending
+                }).eq("id", item_id).execute()
+                
+                if result.data:
+                    reset_items.append(item_id)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to reset item {item_id}: {e}")
+        
+        logger.info(f"Reset configuration for {len(reset_items)} items", 
+                   component="queue_api", 
+                   item_count=len(reset_items))
+        
+        return {
+            "success": True,
+            "reset_items": reset_items,
+            "failed_items": [id for id in item_ids if id not in reset_items],
+            "message": f"Configuration reset for {len(reset_items)} items"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to batch reset items: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to batch reset: {str(e)}")
+
+
 @router.get("/flow/{item_id}")
 async def get_queue_item_flow(item_id: int):
     """Get processing flow data for a queue item"""
@@ -828,7 +938,7 @@ async def get_queue_item_flow(item_id: int):
 
 @router.post("/approve/{upload_id}")
 async def approve_upload_for_processing(upload_id: str):
-    """Manually create queue entry for approved upload"""
+    """Mark upload as completed to trigger automatic queue entry creation"""
     
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
@@ -841,38 +951,57 @@ async def approve_upload_for_processing(upload_id: str):
             raise HTTPException(status_code=404, detail="Upload not found")
         
         upload = upload_result.data[0]
+        current_status = upload.get("status")
         
-        # Check if already queued
-        existing = supabase.table("ai_extraction_queue").select("id").eq("upload_id", upload_id).execute()
+        # Check if already completed
+        if current_status == "completed":
+            # Check if already queued
+            existing = supabase.table("ai_extraction_queue").select("id").eq("upload_id", upload_id).execute()
+            
+            if existing.data:
+                return {
+                    "message": "Already approved and queued",
+                    "queue_id": existing.data[0]["id"],
+                    "status": "existing",
+                    "upload_status": current_status
+                }
+            else:
+                return {
+                    "message": "Already approved, queue entry may be pending",
+                    "status": "completed",
+                    "upload_status": current_status
+                }
         
-        if existing.data:
-            return {
-                "message": "Already queued",
-                "queue_id": existing.data[0]["id"],
-                "status": "existing"
-            }
+        # Mark upload as completed - this will trigger the database trigger
+        update_result = supabase.table("uploads").update({
+            "status": "completed",
+            "completed_at": datetime.utcnow().isoformat()
+        }).eq("id", upload_id).execute()
         
-        # Create queue entry
-        queue_data = {
-            "upload_id": upload_id,
-            "status": "pending",
-            "ready_media_id": upload_id,
-            "enhanced_image_path": upload.get("file_path", ""),
-            "current_extraction_system": "custom_consensus",
-            "processing_attempts": 0
-        }
-        
-        result = supabase.table("ai_extraction_queue").insert(queue_data).execute()
-        
-        if result.data:
-            logger.info(f"Created queue entry for approved upload: {upload_id}", component="queue_api")
-            return {
-                "message": "Queue entry created",
-                "queue_id": result.data[0]["id"],
-                "status": "created"
-            }
+        if update_result.data:
+            logger.info(f"Approved upload (marked as completed): {upload_id}", component="queue_api")
+            
+            # Wait a moment for trigger to fire
+            await asyncio.sleep(0.5)
+            
+            # Check if queue entry was created
+            queue_check = supabase.table("ai_extraction_queue").select("id").eq("upload_id", upload_id).execute()
+            
+            if queue_check.data:
+                return {
+                    "message": "Upload approved and queued for extraction",
+                    "queue_id": queue_check.data[0]["id"],
+                    "status": "created",
+                    "upload_status": "completed"
+                }
+            else:
+                return {
+                    "message": "Upload approved, queue entry creation pending",
+                    "status": "completed",
+                    "upload_status": "completed"
+                }
         else:
-            raise HTTPException(status_code=500, detail="Failed to create queue entry")
+            raise HTTPException(status_code=500, detail="Failed to approve upload")
             
     except HTTPException:
         raise
@@ -935,6 +1064,122 @@ async def get_error_summary():
     except Exception as e:
         logger.error(f"Failed to get error summary: {e}", component="queue_api")
         raise HTTPException(status_code=500, detail=f"Failed to get error summary: {str(e)}")
+
+
+
+
+
+@router.post("/batch/process")
+async def batch_process_items(request: Dict[str, Any]):
+    """Process multiple queue items with specified system and prompts"""
+    
+    try:
+        item_ids = request.get("item_ids", [])
+        system_type = request.get("system_type", "custom")
+        prompt_overrides = request.get("prompt_overrides", {})
+        
+        if not item_ids:
+            raise HTTPException(status_code=400, detail="item_ids is required")
+        
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Validate system type
+        from ..systems.base_system import ExtractionSystemFactory
+        if system_type not in ExtractionSystemFactory.AVAILABLE_SYSTEMS:
+            raise HTTPException(status_code=400, detail=f"Invalid system_type: {system_type}")
+        
+        results = []
+        
+        for item_id in item_ids:
+            try:
+                # Get queue item
+                result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+                
+                if not result.data:
+                    results.append({
+                        "item_id": item_id,
+                        "success": False,
+                        "error": "Queue item not found"
+                    })
+                    continue
+                
+                item = result.data[0]
+                
+                # Update item status to processing
+                supabase.table("ai_extraction_queue").update({
+                    "status": "processing",
+                    "system_type": system_type,
+                    "prompt_overrides": prompt_overrides,
+                    "started_at": datetime.utcnow().isoformat()
+                }).eq("id", item_id).execute()
+                
+                results.append({
+                    "item_id": item_id,
+                    "success": True,
+                    "message": f"Started processing with {system_type} system",
+                    "system_type": system_type
+                })
+                
+                logger.info(f"Started batch processing item {item_id} with {system_type}")
+                
+            except Exception as e:
+                results.append({
+                    "item_id": item_id,
+                    "success": False,
+                    "error": str(e)
+                })
+                logger.error(f"Failed to process item {item_id}: {e}")
+        
+        return {
+            "success": True,
+            "processed_count": len([r for r in results if r["success"]]),
+            "failed_count": len([r for r in results if not r["success"]]),
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to batch process items: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to batch process items: {str(e)}")
+
+
+@router.post("/batch/configure")
+async def batch_configure_items(request: Dict[str, Any]):
+    """Apply configuration to multiple queue items"""
+    
+    try:
+        item_ids = request.get("item_ids", [])
+        system_type = request.get("system_type")
+        prompt_overrides = request.get("prompt_overrides", {})
+        
+        if not item_ids:
+            raise HTTPException(status_code=400, detail="item_ids is required")
+        
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Update all selected items
+        update_data = {}
+        if system_type:
+            update_data["system_type"] = system_type
+        if prompt_overrides:
+            update_data["prompt_overrides"] = prompt_overrides
+        
+        if update_data:
+            for item_id in item_ids:
+                supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
+        
+        logger.info(f"Applied configuration to {len(item_ids)} items")
+        
+        return {
+            "success": True,
+            "message": f"Applied configuration to {len(item_ids)} items",
+            "updated_count": len(item_ids)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to configure items: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to configure items: {str(e)}")
 
 
 @router.get("/logs/errors")

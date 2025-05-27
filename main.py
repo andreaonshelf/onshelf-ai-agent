@@ -52,6 +52,18 @@ app.include_router(planogram_router)
 from src.api.queue_management import router as queue_router
 app.include_router(queue_router)
 
+# Include prompt management API
+from src.api.prompt_management import router as prompt_router
+app.include_router(prompt_router)
+
+# Include prompt management API
+from src.api.prompt_management import router as prompt_router
+app.include_router(prompt_router)
+
+# Include prompt management API
+from src.api.prompt_management import router as prompt_router
+app.include_router(prompt_router)
+
 # Include iteration tracking API for debugging
 from src.api.iteration_tracking import router as iteration_router, iteration_storage
 app.include_router(iteration_router)
@@ -438,12 +450,35 @@ async def root():
                 z-index: 100;
                 position: relative;
                 flex-shrink: 0;
+                max-height: 100vh;
+                overflow-y: auto;
+            }
+            
+            /* Right Sidebar - Prompt Management */
+            .right-sidebar {
+                width: 350px;
+                background: white;
+                border-left: 1px solid #e2e8f0;
+                display: flex;
+                flex-direction: column;
+                transition: all 0.3s ease;
+                z-index: 100;
+                position: relative;
+                flex-shrink: 0;
+                max-height: 100vh;
+                overflow-y: auto;
+            }
+            
+            .right-sidebar.collapsed {
+                transform: translateX(330px);
+                width: 20px;
             }
             
             .left-sidebar.collapsed {
                 transform: translateX(-380px);
                 width: 20px;
             }
+            
             
             .sidebar-header {
                 padding: 20px;
@@ -453,7 +488,7 @@ async def root():
             
             .sidebar-toggle {
                 position: fixed;
-                left: 0px;
+                right: -30px;
                 top: 20px;
                 width: 30px;
                 height: 40px;
@@ -467,12 +502,32 @@ async def root():
                 justify-content: center;
                 font-size: 12px;
                 z-index: 1000;
-                transition: left 0.3s ease;
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             }
             
-            .left-sidebar:not(.collapsed) .sidebar-toggle {
-                left: 380px;
+            .left-sidebar .sidebar-toggle {
+                left: -30px;
+                right: auto;
+                border-radius: 4px 0 0 4px;
             }
+            
+            .left-sidebar.collapsed .sidebar-toggle {
+                left: 0px;
+                border-radius: 0 4px 4px 0;
+            }
+            
+            .right-sidebar .sidebar-toggle {
+                right: -30px;
+                left: auto;
+                border-radius: 4px 0 0 4px;
+            }
+            
+            .right-sidebar.collapsed .sidebar-toggle {
+                right: 0px;
+                border-radius: 0 4px 4px 0;
+            }
+            
             
             .filters-section {
                 padding: 15px 20px;
@@ -539,6 +594,316 @@ async def root():
             .view-toggle button.active {
                 background: #3b82f6;
                 color: white;
+            }
+            
+            /* Prompt Management Styles */
+            .prompt-section {
+                padding: 15px 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .prompt-section h3 {
+                font-size: 14px;
+                font-weight: 600;
+                color: #1e293b;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .system-selection {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .radio-group {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            
+            .radio-option {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .radio-option:hover {
+                background: #f8fafc;
+                border-color: #3b82f6;
+            }
+            
+            .radio-option.selected {
+                background: #eff6ff;
+                border-color: #3b82f6;
+                color: #1d4ed8;
+            }
+            
+            .radio-option input[type="radio"] {
+                margin: 0;
+            }
+            
+            .radio-option label {
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                margin: 0;
+            }
+            
+            .prompt-dropdowns {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .dropdown-group {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .dropdown-group label {
+                font-size: 11px;
+                font-weight: 600;
+                color: #64748b;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .dropdown-group select {
+                padding: 6px 10px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 12px;
+                background: white;
+            }
+            
+            .prompt-preview {
+                max-height: 200px;
+                overflow-y: auto;
+            }
+            
+            .prompt-content {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                padding: 10px;
+                font-size: 11px;
+                font-family: 'Monaco', 'Menlo', monospace;
+                line-height: 1.4;
+                color: #374151;
+                white-space: pre-wrap;
+                max-height: 150px;
+                overflow-y: auto;
+            }
+            
+            .performance-metrics {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-top: 10px;
+            }
+            
+            .metric {
+                background: #f1f5f9;
+                padding: 6px 8px;
+                border-radius: 4px;
+                text-align: center;
+            }
+            
+            .metric-label {
+                font-size: 10px;
+                color: #64748b;
+                font-weight: 500;
+            }
+            
+            .metric-value {
+                font-size: 12px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .prompt-editor {
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            
+            .prompt-editor textarea {
+                width: 100%;
+                height: 120px;
+                padding: 10px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 11px;
+                font-family: 'Monaco', 'Menlo', monospace;
+                resize: vertical;
+                background: white;
+            }
+            
+            .editor-actions {
+                display: flex;
+                gap: 6px;
+                margin-top: 8px;
+            }
+            
+            .editor-actions button {
+                flex: 1;
+                padding: 6px 10px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 11px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .editor-actions button.primary {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+            }
+            
+            .editor-actions button:hover {
+                background: #f8fafc;
+            }
+            
+            .editor-actions button.primary:hover {
+                background: #2563eb;
+            }
+            
+            /* Batch Operations */
+            .batch-controls {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 12px;
+                margin-bottom: 15px;
+            }
+            
+            .batch-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+            
+            .batch-selection {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 12px;
+            }
+            
+            .batch-actions {
+                display: flex;
+                gap: 6px;
+            }
+            
+            .batch-actions button {
+                padding: 4px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 11px;
+                cursor: pointer;
+                background: white;
+            }
+            
+            .batch-actions button:hover {
+                background: #f8fafc;
+            }
+            
+            .batch-actions button.primary {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+            }
+            
+            /* Enhanced Queue Items */
+            .queue-item {
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 12px;
+                margin-bottom: 8px;
+                background: white;
+                transition: all 0.2s ease;
+            }
+            
+            .queue-item:hover {
+                border-color: #3b82f6;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+            }
+            
+            .queue-item.selected {
+                border-color: #3b82f6;
+                background: #eff6ff;
+            }
+            
+            .queue-item-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 8px;
+            }
+            
+            .queue-item-checkbox {
+                margin: 0;
+            }
+            
+            .queue-item-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: #1e293b;
+                flex: 1;
+            }
+            
+            .queue-item-config {
+                display: flex;
+                gap: 12px;
+                margin-bottom: 8px;
+                font-size: 11px;
+            }
+            
+            .config-indicator {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                color: #64748b;
+            }
+            
+            .config-indicator.override {
+                color: #dc2626;
+                font-weight: 500;
+            }
+            
+            .queue-item-actions {
+                display: flex;
+                gap: 6px;
+            }
+            
+            .queue-item-actions button {
+                padding: 4px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 10px;
+                cursor: pointer;
+                background: white;
+            }
+            
+            .queue-item-actions button:hover {
+                background: #f8fafc;
+            }
+            
+            .queue-item-actions button.primary {
+                background: #3b82f6;
+                color: white;
+                border-color: #3b82f6;
+            }
                 border-color: #3b82f6;
             }
             
@@ -981,17 +1346,17 @@ async def root():
                 background: #d97706;
             }
             
-                         /* Simple Mode - 2 Panel Layout */
-             .simple-mode {
-                 display: none;
-                 height: 100%;
-                 padding: 20px;
+            /* Simple Mode - 2 Panel Layout */
+            .simple-mode {
+                display: none;
+                height: 100%;
+                padding: 20px;
                  flex-direction: column;
-             }
-             
-             .simple-mode.active {
+            }
+            
+            .simple-mode.active {
                  display: flex;
-             }
+            }
             
             .image-panel,
             .planogram-panel {
@@ -1698,10 +2063,94 @@ async def root():
     </head>
     <body>
         <div class="app-container">
-            <!-- Left Sidebar - Image Selection -->
+            <!-- Left Sidebar - Prompt Management (Queue Mode) / Image Selection (Simple/Advanced Mode) -->
             <div class="left-sidebar" id="leftSidebar">
                 <button class="sidebar-toggle" onclick="toggleSidebar()">◀</button>
                 
+                <!-- Prompt Management Sidebar (Queue Mode) -->
+                <div id="promptManagementSidebar" class="prompt-management-sidebar">
+                    <div class="sidebar-header">
+                        <h3>🎛️ Prompt Management</h3>
+                        <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
+                            Configure extraction systems and prompts
+                        </p>
+                    </div>
+                    
+                    <!-- System Selection Section -->
+                    <div class="prompt-section">
+                        <h4>🔧 System Selection</h4>
+                        <div class="system-selection">
+                            <div id="systemSelection" class="radio-group">
+                                <!-- System options will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Prompt Selection Section -->
+                    <div class="prompt-section">
+                        <h4>📝 Prompt Selection</h4>
+                        <div class="prompt-dropdowns">
+                            <div class="dropdown-group">
+                                <label>Type</label>
+                                <select id="promptTypeSelect" onchange="onPromptSelectionChange()">
+                                    <option value="">Select Type</option>
+                                    <option value="structure">Structure</option>
+                                    <option value="position">Position</option>
+                                    <option value="quantity">Quantity</option>
+                                    <option value="detail">Detail</option>
+                                    <option value="validation">Validation</option>
+                                </select>
+                            </div>
+                            
+                            <div class="dropdown-group">
+                                <label>Model</label>
+                                <select id="promptModelSelect" onchange="onPromptSelectionChange()">
+                                    <option value="">Select Model</option>
+                                    <option value="universal">Universal</option>
+                                    <option value="gpt4o">GPT-4O</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="gemini">Gemini</option>
+                                </select>
+                            </div>
+                            
+                            <div class="dropdown-group">
+                                <label>Version</label>
+                                <select id="promptVersionSelect" onchange="onPromptSelectionChange()">
+                                    <option value="">Select Version</option>
+                                    <!-- Versions will be populated based on type/model selection -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Prompt Preview Section -->
+                    <div class="prompt-section">
+                        <h4>👁️ Prompt Preview</h4>
+                        <div class="prompt-preview">
+                            <div class="prompt-content" id="promptPreviewContent">
+                                <div class="placeholder">Loading prompts...</div>
+                            </div>
+                            <div class="performance-metrics" id="performanceMetrics">
+                                <!-- Performance metrics will be shown here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Prompt Editor Section -->
+                    <div class="prompt-section">
+                        <h4>✏️ Prompt Editor</h4>
+                        <div class="prompt-editor">
+                            <textarea id="promptEditorContent" placeholder="Edit prompt content here..." rows="8"></textarea>
+                            <div class="editor-actions">
+                                <button class="btn btn-secondary" onclick="saveNewPromptVersion()">Save New</button>
+                                <button class="btn btn-primary" onclick="activatePrompt()">Activate</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Image Selection Sidebar (Simple/Advanced Mode) -->
+                <div id="imageSelectionSidebar" class="image-selection-sidebar" style="display: none;">
                 <div class="sidebar-header">
                     <h3>📁 Image Library</h3>
                     <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
@@ -1786,6 +2235,7 @@ async def root():
                         <button>2</button>
                         <button>3</button>
                         <button onclick="nextPage()" id="nextBtn">›</button>
+                                            </div>
                     </div>
                 </div>
             </div>
@@ -1795,11 +2245,11 @@ async def root():
                 <!-- Header -->
                 <div class="header">
                     <h1>🤖 OnShelf AI Dashboard</h1>
-                                         <div class="mode-selector">
-                         <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
-                         <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
-                         <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
-                     </div>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
+                        <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
+                        <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
+                    </div>
                 </div>
                 
                 <!-- Breadcrumb -->
@@ -1835,46 +2285,61 @@ async def root():
                             </div>
                         </div>
                         
+                        <!-- Enhanced Queue with Batch Operations -->
+                        <div class="batch-controls">
+                            <div class="batch-header">
+                                <div class="batch-selection">
+                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                                    <label for="selectAllCheckbox">Select All</label>
+                                    <span id="selectedCount">(0 selected)</span>
+                                </div>
+                                <div class="batch-actions">
+                                    <button class="primary" onclick="applyConfigToSelected()" id="applyConfigBtn" disabled>Apply Config</button>
+                                    <button onclick="resetSelectedItems()" id="resetBtn" disabled>Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="queueGrid" class="queue-grid">
-                            <!-- Queue items will be loaded here -->
+                            <!-- Enhanced queue items will be loaded here -->
                         </div>
                     </div>
                     
-                                         <!-- Simple Mode - 2 Panel Layout -->
-                     <div id="simple-mode" class="simple-mode">
+                    <!-- Simple Mode - 2 Panel Layout -->
+                    <div id="simple-mode" class="simple-mode">
                          <div class="simple-content" style="height: 100%; overflow-y: auto; padding: 20px;">
                              <!-- Top Panels: Image (40%) and Planogram (60%) - 25% taller -->
                              <div class="top-panels" style="display: grid; grid-template-columns: 2fr 3fr; gap: 20px; margin-bottom: 15px; height: 500px;">
-                                                                    <div class="image-panel">
+                        <div class="image-panel">
                                        <div class="panel-header" style="padding: 8px 20px; min-height: 20px;">
                                            <h3 style="margin: 0; font-size: 14px; font-weight: 600;">📷 Original Image</h3>
-                                       </div>
+                            </div>
                                      <div class="panel-content" style="height: 100%;">
                                          <div class="image-viewer" style="height: 100%;">
-                                             <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
-                                             <div id="imageLoading" class="loading">Loading image...</div>
-                                             <div class="image-controls">
-                                                 <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
-                                                 <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
-                                                 <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
-                                                 <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
-                                             </div>
-                                         </div>
-                                     </div>
-                                 </div>
-                                 
-                                                                    <div class="planogram-panel">
+                                    <img id="originalImage" src="" alt="Original shelf image" style="display: none;">
+                                    <div id="imageLoading" class="loading">Loading image...</div>
+                                    <div class="image-controls">
+                                        <button class="control-btn" onclick="zoomImage(0.5)">50%</button>
+                                        <button class="control-btn" onclick="zoomImage(1.0)">100%</button>
+                                        <button class="control-btn" onclick="zoomImage(2.0)">200%</button>
+                                        <button class="control-btn" onclick="toggleOverlays()">Overlays</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="planogram-panel">
                                        <div class="panel-header" style="padding: 8px 20px; min-height: 20px;">
                                            <h3 style="margin: 0; font-size: 14px; font-weight: 600;">📊 Generated Planogram</h3>
-                                       </div>
+                            </div>
                                      <div class="panel-content" style="height: 100%;">
                                          <div id="planogramViewer" style="height: 100%; overflow: auto;">
-                                             <div class="loading">Loading planogram...</div>
+                                    <div class="loading">Loading planogram...</div>
                                          </div>
                                      </div>
                                  </div>
-                             </div>
-                             
+                                </div>
+                                
                              <!-- Dashboard and Controls Row - Half height, compact -->
                              <div class="dashboard-controls-row" style="display: grid; grid-template-columns: 2fr 3fr; gap: 20px; margin-bottom: 20px; height: 40px;">
                                  <!-- Compact Stats Dashboard -->
@@ -1894,56 +2359,56 @@ async def root():
                              </div>
                              
                              <!-- Rating System -->
-                             <div class="rating-system">
-                                 <h4>⭐ Extraction Quality</h4>
-                                 <div class="star-rating" data-rating="extraction">
-                                     <span class="star" data-value="1">★</span>
-                                     <span class="star" data-value="2">★</span>
-                                     <span class="star" data-value="3">★</span>
-                                     <span class="star" data-value="4">★</span>
-                                     <span class="star" data-value="5">★</span>
-                                 </div>
-                                 
-                                 <div class="feedback-area">
-                                     <label>What worked well:</label>
-                                     <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
-                                 </div>
-                                 
-                                 <h4 style="margin-top: 20px;">⭐ Planogram Quality</h4>
-                                 <div class="star-rating" data-rating="planogram">
-                                     <span class="star" data-value="1">★</span>
-                                     <span class="star" data-value="2">★</span>
-                                     <span class="star" data-value="3">★</span>
-                                     <span class="star" data-value="4">★</span>
-                                     <span class="star" data-value="5">★</span>
-                                 </div>
-                                 
-                                 <div class="feedback-area">
-                                     <label>Needs improvement:</label>
-                                     <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
-                                 </div>
-                                 
-                                 <div style="margin-top: 20px; display: flex; gap: 10px;">
-                                     <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
-                                     <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
+                                <div class="rating-system">
+                                    <h4>⭐ Extraction Quality</h4>
+                                    <div class="star-rating" data-rating="extraction">
+                                        <span class="star" data-value="1">★</span>
+                                        <span class="star" data-value="2">★</span>
+                                        <span class="star" data-value="3">★</span>
+                                        <span class="star" data-value="4">★</span>
+                                        <span class="star" data-value="5">★</span>
+                                    </div>
+                                    
+                                    <div class="feedback-area">
+                                        <label>What worked well:</label>
+                                        <textarea id="workedWell" placeholder="Describe what the AI did correctly..."></textarea>
+                                    </div>
+                                    
+                                    <h4 style="margin-top: 20px;">⭐ Planogram Quality</h4>
+                                    <div class="star-rating" data-rating="planogram">
+                                        <span class="star" data-value="1">★</span>
+                                        <span class="star" data-value="2">★</span>
+                                        <span class="star" data-value="3">★</span>
+                                        <span class="star" data-value="4">★</span>
+                                        <span class="star" data-value="5">★</span>
+                                    </div>
+                                    
+                                    <div class="feedback-area">
+                                        <label>Needs improvement:</label>
+                                        <textarea id="needsImprovement" placeholder="Describe what needs to be fixed..."></textarea>
+                                    </div>
+                                    
+                                    <div style="margin-top: 20px; display: flex; gap: 10px;">
+                                        <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
+                                        <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     
                     
                     <!-- Advanced Mode - Technical Deep Dive with Tabs -->
                     <div id="advanced-mode" class="advanced-mode">
-                                                 <!-- Advanced Mode Tabs -->
-                         <div class="advanced-tabs">
-                             <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
-                             <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
-                             <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
+                        <!-- Advanced Mode Tabs -->
+                        <div class="advanced-tabs">
+                            <button class="advanced-tab active" onclick="switchAdvancedTab('overview')">📊 Overview</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('logs')">📋 Logs</button>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('debugger')">🔍 Pipeline Debugger</button>
                              <button class="advanced-tab" onclick="switchAdvancedTab('iterations')">🔄 Iterations</button>
                              <button class="advanced-tab" onclick="switchAdvancedTab('comparison')">⚖️ System Comparison</button>
-                             <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
-                         </div>
+                            <button class="advanced-tab" onclick="switchAdvancedTab('orchestrator')">⚙️ Orchestrator</button>
+                        </div>
                         
                         <!-- Overview Tab - 4 Panel Grid -->
                         <div id="advanced-overview" class="advanced-tab-content active">
@@ -1972,26 +2437,26 @@ async def root():
                                         <h3>🔍 Agent Deep Dive</h3>
                                     </div>
                                     <div class="technical-analysis">
-                                                                <div class="analysis-section">
-                            <h4>Model Performance</h4>
-                            <div class="analysis-data" id="modelPerformance">
-                                Loading performance data...
-                            </div>
-                        </div>
-                        
-                        <div class="analysis-section">
-                            <h4>Confidence Scores</h4>
-                            <div class="analysis-data" id="confidenceScores">
-                                Loading confidence data...
-                            </div>
-                        </div>
-                        
-                        <div class="analysis-section">
-                            <h4>Error Analysis</h4>
-                            <div class="analysis-data" id="errorAnalysis">
-                                Loading error analysis...
-                            </div>
-                        </div>
+                                        <div class="analysis-section">
+                                            <h4>Model Performance</h4>
+                                            <div class="analysis-data" id="modelPerformance">
+                                                Loading performance data...
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="analysis-section">
+                                            <h4>Confidence Scores</h4>
+                                            <div class="analysis-data" id="confidenceScores">
+                                                Loading confidence data...
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="analysis-section">
+                                            <h4>Error Analysis</h4>
+                                            <div class="analysis-data" id="errorAnalysis">
+                                                Loading error analysis...
+                                            </div>
+                                        </div>
                         
                         <div class="analysis-section" style="background: #eff6ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
                             <h4>💡 Demo Available</h4>
@@ -2004,8 +2469,8 @@ async def root():
                                     <li>See 18 products with stacking, gaps, and confidence colors</li>
                                 </ol>
                                 <p><em>The Interactive React component is available in Simple Mode when you select an image.</em></p>
-                            </div>
-                        </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -2402,23 +2867,76 @@ async def root():
                                          </div>
                                      </div>
                                  </div>
-                             </div>
-                         </div>
-                         
-                         <!-- Orchestrator Tab -->
-                         <div id="advanced-orchestrator" class="advanced-tab-content">
-                             <div class="orchestrator-container">
-                                 <div class="orchestrator-flow" id="orchestratorFlow">
-                                     <!-- Flow steps will be loaded here -->
-                                 </div>
-                             </div>
-                         </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Orchestrator Tab -->
+                        <div id="advanced-orchestrator" class="advanced-tab-content">
+                            <div class="orchestrator-container">
+                                <div class="orchestrator-flow" id="orchestratorFlow">
+                                    <!-- Flow steps will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
                         
 
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+            
+            <!-- Right Sidebar - Additional Prompt Management -->
+            <div class="right-sidebar" id="rightSidebar">
+                <button class="sidebar-toggle" onclick="toggleRightSidebar()">◀</button>
+                <div class="sidebar-header">
+                    <h3>⚙️ Advanced Settings</h3>
+                    <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
+                        Additional configuration options
+                    </p>
+                </div>
+                
+                <!-- Batch Operations Section -->
+                <div class="prompt-section">
+                    <h4>🔄 Batch Operations</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button class="btn btn-primary" onclick="applyConfigToSelected()" style="padding: 8px 12px; font-size: 12px;">
+                            Apply to Selected
+                        </button>
+                        <button class="btn btn-secondary" onclick="resetSelectedItems()" style="padding: 8px 12px; font-size: 12px;">
+                            Reset Selected
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- System Status Section -->
+                <div class="prompt-section">
+                    <h4>📊 System Status</h4>
+                    <div style="font-size: 12px; color: #64748b;">
+                        <div style="margin-bottom: 8px;">
+                            <strong>Queue Items:</strong> <span id="totalQueueItems">-</span>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <strong>Selected:</strong> <span id="selectedQueueItems">0</span>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <strong>Active System:</strong> <span id="activeSystem">Custom Consensus</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions Section -->
+                <div class="prompt-section">
+                    <h4>⚡ Quick Actions</h4>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <button class="btn btn-warning" onclick="resetAllFailedItems()" style="padding: 6px 10px; font-size: 11px;">
+                            🔄 Reset All Failed
+                        </button>
+                        <button class="btn btn-success" onclick="loadQueue()" style="padding: 6px 10px; font-size: 11px;">
+                            🔄 Refresh Queue
+                        </button>
+                    </div>
+                </div>
+            </div>
         
         <!-- Process With Modal -->
         <div id="processWithModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;" onclick="closeProcessWithModal()">
@@ -2435,7 +2953,7 @@ async def root():
                                 <div style="font-weight: 600; color: #1f2937;">Custom Consensus System</div>
                                 <div style="font-size: 13px; color: #6b7280;">3 AI models vote in parallel (GPT-4o, Claude-3.5-Sonnet, Gemini-2.0-Flash)</div>
                                 <div style="font-size: 12px; color: #3b82f6; margin-top: 4px;">⚡ Best for accuracy • 🎯 Weighted consensus • 💰 Moderate cost</div>
-                            </div>
+        </div>
                         </label>
                         
                         <label class="system-option" style="display: flex; align-items: center; gap: 12px; padding: 15px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;" onclick="selectSystem('langgraph', this)">
@@ -2547,21 +3065,37 @@ async def root():
             // Global planogram component reference
             let currentPlanogramComponent = null;
             
-                         // Initialize application
-             document.addEventListener('DOMContentLoaded', function() {
-                 // Initialize sidebar state - start in queue mode with sidebar hidden
-                 const sidebar = document.getElementById('leftSidebar');
-                 const toggle = sidebar.querySelector('.sidebar-toggle');
+            // Initialize application
+            document.addEventListener('DOMContentLoaded', function() {
+                 // Initialize sidebar state - start in queue mode with sidebar visible
+                const sidebar = document.getElementById('leftSidebar');
+                const toggle = sidebar.querySelector('.sidebar-toggle');
                  
-                 // Start in queue mode with sidebar hidden
-                 sidebar.style.display = 'none';
+                 // Start in queue mode with sidebar visible for prompt management
+                 sidebar.style.display = 'flex';
                  sidebarCollapsed = false;
                  toggle.innerHTML = '◀';
                  
-                 loadQueue();
-                 loadImages();
-                 loadFilterData();
-             });
+                 // Show prompt management sidebar by default
+                 const promptSidebar = document.getElementById('promptManagementSidebar');
+                 const imageSidebar = document.getElementById('imageSelectionSidebar');
+                 if (promptSidebar) promptSidebar.style.display = 'block';
+                 if (imageSidebar) imageSidebar.style.display = 'none';
+                
+                loadQueue();
+                loadImages();
+                loadFilterData();
+                
+                // Initialize prompt management
+                initializePromptManagement();
+                window.promptManagementInitialized = true;
+                 
+                 // Auto-refresh queue every 30 seconds
+                 setInterval(() => {
+                     loadQueue();
+                     loadImages();
+                 }, 30000);
+            });
             
             // Sidebar management
             function toggleSidebar() {
@@ -2572,15 +3106,14 @@ async def root():
                 sidebarCollapsed = !sidebarCollapsed;
                 
                 if (sidebarCollapsed) {
-                    // Hide sidebar completely
-                    sidebar.style.display = 'none';
+                    // Collapse sidebar
                     sidebar.classList.add('collapsed');
                     toggle.innerHTML = '▶';
                     toggle.style.left = '0px';
+                    toggle.style.borderRadius = '0 4px 4px 0';
                     
-                    // Expand main content to fill entire viewport
-                    mainContent.style.width = '100vw';
-                    mainContent.style.marginLeft = '0';
+                    // Expand main content to fill space
+                    mainContent.style.marginLeft = '20px';
                     
                     // Find and resize all the actual content containers
                     const topPanels = document.querySelector('.top-panels');
@@ -2601,14 +3134,13 @@ async def root():
                         ratingSystem.style.width = 'calc(100vw - 40px)';
                     }
                 } else {
-                    // Show sidebar
-                    sidebar.style.display = 'flex';
+                    // Expand sidebar
                     sidebar.classList.remove('collapsed');
                     toggle.innerHTML = '◀';
-                    toggle.style.left = '380px';
+                    toggle.style.left = '-30px';
+                    toggle.style.borderRadius = '4px 0 0 4px';
                     
-                    // Reset main content to normal
-                    mainContent.style.width = '';
+                    // Reset main content
                     mainContent.style.marginLeft = '';
                     
                     // Reset all content containers
@@ -2632,8 +3164,8 @@ async def root():
                 }
             }
             
-                         // Mode switching
-             function switchMode(mode) {
+            // Mode switching
+            function switchMode(mode) {
                  // Clean up React components before switching modes
                  const planogramViewer = document.getElementById('planogramViewer');
                  const advancedPlanogram = document.getElementById('advancedPlanogramViewer');
@@ -2654,33 +3186,48 @@ async def root():
                      }
                  }
                  
-                 // Hide all modes
+                // Hide all modes
                  document.getElementById('queue-interface').classList.remove('active');
-                 document.getElementById('simple-mode').classList.remove('active');
-                 document.getElementById('advanced-mode').classList.remove('active');
-                 
-                 // Update mode buttons
-                 document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('simple-mode').classList.remove('active');
+                document.getElementById('advanced-mode').classList.remove('active');
+                
+                // Update mode buttons
+                document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
                  // Find the button that was clicked for this mode
                  const targetButton = document.querySelector(`[onclick="switchMode('${mode}')"]`);
                  if (targetButton) {
                      targetButton.classList.add('active');
                  }
                  
-                 // Show/hide sidebar based on mode
+                 // Show/hide sidebar content based on mode
+                 const promptSidebar = document.getElementById('promptManagementSidebar');
+                 const imageSidebar = document.getElementById('imageSelectionSidebar');
                  const sidebar = document.querySelector('.left-sidebar');
+                 
                  if (mode === 'queue') {
-                     sidebar.style.display = 'none';
+                     // Show prompt management sidebar for queue mode
+                     promptSidebar.style.display = 'block';
+                     imageSidebar.style.display = 'none';
+                     sidebar.style.display = 'flex';
+                     
+                     // Initialize prompt management if not already done
+                     if (!window.promptManagementInitialized) {
+                         initializePromptManagement();
+                         window.promptManagementInitialized = true;
+                     }
                  } else {
+                     // Show image selection sidebar for simple/advanced modes
+                     promptSidebar.style.display = 'none';
+                     imageSidebar.style.display = 'block';
                      sidebar.style.display = 'flex';
                  }
-                 
-                 // Show selected mode
-                 if (mode === 'queue') {
+                
+                // Show selected mode
+                if (mode === 'queue') {
                      document.getElementById('queue-interface').classList.add('active');
-                     updateBreadcrumb('Extraction Queue');
-                 } else if (mode === 'simple') {
-                     document.getElementById('simple-mode').classList.add('active');
+                    updateBreadcrumb('Extraction Queue');
+                } else if (mode === 'simple') {
+                    document.getElementById('simple-mode').classList.add('active');
                      
                      // Always default to demo for now since real extraction data isn't available
                      if (!selectedItemId || selectedItemId === 5 || selectedItemId === 1) {
@@ -2691,14 +3238,14 @@ async def root():
                      }
                      
                      loadSimpleModeData();
-                 } else if (mode === 'advanced') {
-                     document.getElementById('advanced-mode').classList.add('active');
-                     updateBreadcrumb(`Extraction #${selectedItemId} - Advanced Analysis`);
-                     loadAdvancedModeData();
-                 }
-                 
-                 currentMode = mode;
-             }
+                } else if (mode === 'advanced') {
+                    document.getElementById('advanced-mode').classList.add('active');
+                    updateBreadcrumb(`Extraction #${selectedItemId} - Advanced Analysis`);
+                    loadAdvancedModeData();
+                }
+                
+                currentMode = mode;
+            }
             
             function updateBreadcrumb(text) {
                 document.getElementById('breadcrumb').innerHTML = `<span>${text}</span>`;
@@ -2881,6 +3428,15 @@ async def root():
                 document.getElementById('processingCount').textContent = stats.processing;
                 document.getElementById('completedCount').textContent = stats.completed;
                 document.getElementById('failedCount').textContent = stats.failed;
+                
+                // Update right sidebar status
+                const totalQueueElement = document.getElementById('totalQueueItems');
+                const selectedQueueElement = document.getElementById('selectedQueueItems');
+                const activeSystemElement = document.getElementById('activeSystem');
+                
+                if (totalQueueElement) totalQueueElement.textContent = queueData.length;
+                if (selectedQueueElement) selectedQueueElement.textContent = promptManagementState.selectedQueueItems.length;
+                if (activeSystemElement) activeSystemElement.textContent = promptManagementState.selectedSystem.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
             }
             
             // Render queue error
@@ -2895,7 +3451,7 @@ async def root():
                 `;
             }
             
-            // Render queue items as table
+            // Render queue items as table with batch operations
             function renderQueue() {
                 const grid = document.getElementById('queueGrid');
                 
@@ -2909,24 +3465,40 @@ async def root():
                     return;
                 }
                 
-                // Transform to table format
+                // Add batch controls and enhanced table
                 grid.innerHTML = `
+                    <!-- Batch Controls -->
+                    <div class="batch-controls" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                        <div class="batch-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div class="batch-selection" style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" ${promptManagementState.allSelected ? 'checked' : ''}>
+                                <label for="selectAllCheckbox">Select All</label>
+                                <span id="selectedCount">(${promptManagementState.selectedQueueItems.length} selected)</span>
+                            </div>
+                            <div class="batch-actions" style="display: flex; gap: 6px;">
+                                <button class="primary" onclick="applyConfigToSelected()" id="applyConfigBtn" ${promptManagementState.selectedQueueItems.length === 0 ? 'disabled' : ''} style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer; background: ${promptManagementState.selectedQueueItems.length === 0 ? '#9ca3af' : '#3b82f6'}; color: white; border-color: ${promptManagementState.selectedQueueItems.length === 0 ? '#9ca3af' : '#3b82f6'};">Apply Config</button>
+                                <button onclick="resetSelectedItems()" id="resetBtn" ${promptManagementState.selectedQueueItems.length === 0 ? 'disabled' : ''} style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer; background: ${promptManagementState.selectedQueueItems.length === 0 ? '#f3f4f6' : 'white'}; opacity: ${promptManagementState.selectedQueueItems.length === 0 ? '0.5' : '1'};">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Enhanced Queue Table -->
                     <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
                         <h3 style="margin: 0 0 20px 0; color: #2d3748; font-size: 20px; font-weight: 700;">📋 Extraction Queue (${queueData.length} items)</h3>
                         <div style="overflow-x: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                                 <thead>
-                                                                            <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Status</th>
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Date</th>
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 120px;">Store</th>
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Category</th>
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Country</th>
-                                            <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Upload ID</th>
-                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Accuracy</th>
-                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Debug</th>
-                                            <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 120px;">Actions</th>
-                                        </tr>
+                                    <tr style="background: #f7fafc; border-bottom: 2px solid #e2e8f0;">
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 50px;">Select</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Status</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Date</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 120px;">Store</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Category</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Country</th>
+                                        <th style="padding: 12px 8px; text-align: left; font-weight: 600; color: #4a5568; min-width: 100px;">Config</th>
+                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Accuracy</th>
+                                        <th style="padding: 12px 8px; text-align: center; font-weight: 600; color: #4a5568; min-width: 120px;">Actions</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     ${queueData.map(item => {
@@ -2934,17 +3506,11 @@ async def root():
                                         const accuracy = item.final_accuracy ? Math.round(item.final_accuracy * 100) : null;
                                         const accuracyColor = accuracy >= 90 ? '#10b981' : accuracy >= 70 ? '#f59e0b' : '#ef4444';
                                         const uploadId = item.upload_id || '-';
+                                        const isSelected = promptManagementState.selectedQueueItems.includes(item.id);
                                         
                                         // Extract data from uploads and metadata
                                         const uploads = item.uploads || {};
                                         const metadata = uploads.metadata || {};
-                                        
-                                        // Debug logging
-                                        if (item.id === 5) {
-                                            console.log('Item 5 data:', item);
-                                            console.log('Uploads:', uploads);
-                                            console.log('Metadata:', metadata);
-                                        }
                                         
                                         const category = uploads.category || '-';
                                         const uploadDate = uploads.created_at || item.created_at;
@@ -2952,11 +3518,22 @@ async def root():
                                         const storeLocation = metadata.city || '-';
                                         const country = metadata.country || '-';
                                         
+                                        // Check for configuration overrides
+                                        const hasSystemOverride = item.current_extraction_system && item.current_extraction_system !== 'auto';
+                                        const hasPromptOverride = item.extraction_config && item.extraction_config.prompt_overrides;
+                                        
                                         return `
-                                            <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer; ${selectedItemId === item.id ? 'background-color: #f0f9ff;' : ''}" 
+                                            <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer; ${selectedItemId === item.id ? 'background-color: #f0f9ff;' : ''} ${isSelected ? 'background-color: #eff6ff;' : ''}" 
+                                                data-item-id="${item.id}"
                                                 onclick="selectQueueItem(${item.id})" 
                                                 onmouseover="this.style.backgroundColor='#f8fafc'" 
-                                                onmouseout="this.style.backgroundColor='${selectedItemId === item.id ? '#f0f9ff' : 'transparent'}'">
+                                                onmouseout="this.style.backgroundColor='${selectedItemId === item.id || isSelected ? '#f0f9ff' : 'transparent'}'">
+                                                <td style="padding: 12px 8px;">
+                                                    <input type="checkbox" class="queue-item-checkbox" 
+                                                           ${isSelected ? 'checked' : ''} 
+                                                           onchange="toggleItemSelection(${item.id})"
+                                                           onclick="event.stopPropagation()">
+                                                </td>
                                                 <td style="padding: 12px 8px;">
                                                     <div style="display: flex; align-items: center; gap: 8px;">
                                                         <div style="width: 8px; height: 8px; border-radius: 50%; background-color: ${statusColor};"></div>
@@ -2978,8 +3555,15 @@ async def root():
                                                 <td style="padding: 12px 8px; color: #4a5568;">
                                                     ${country}
                                                 </td>
-                                                <td style="padding: 12px 8px; color: #64748b; font-family: monospace; font-size: 12px;">
-                                                    ${uploadId.length > 30 ? uploadId.substring(0, 8) + '...' : uploadId}
+                                                <td style="padding: 12px 8px;">
+                                                    <div style="font-size: 11px;">
+                                                        <div class="config-indicator ${hasSystemOverride ? 'override' : ''}" style="color: ${hasSystemOverride ? '#dc2626' : '#64748b'}; font-weight: ${hasSystemOverride ? '500' : 'normal'};">
+                                                            System: ${hasSystemOverride ? item.current_extraction_system : 'Auto'}
+                                                        </div>
+                                                        <div class="config-indicator ${hasPromptOverride ? 'override' : ''}" style="color: ${hasPromptOverride ? '#dc2626' : '#64748b'}; font-weight: ${hasPromptOverride ? '500' : 'normal'};">
+                                                            Prompts: ${hasPromptOverride ? 'Custom' : 'Auto'}
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td style="padding: 12px 8px; text-align: center;">
                                                     ${accuracy !== null ? `
@@ -2987,23 +3571,20 @@ async def root():
                                                     ` : '<span style="color: #94a3b8;">-</span>'}
                                                 </td>
                                                 <td style="padding: 12px 8px; text-align: center;">
-                                                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; background: #8b5cf6; border-color: #8b5cf6; color: white; font-weight: 600;" onclick="event.stopPropagation(); openDebugInterface('${item.ready_media_id || item.id}')">🔍 Debug</button>
-                                                </td>
-                                                                                                <td style="padding: 12px 8px; text-align: center;">
                                                     <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
-                        ${item.status === 'pending' ? `
-                                                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id})">🚀 Process With</button>
+                                                        ${item.status === 'pending' ? `
+                                                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id})">🚀 Process</button>
                                                         ` : `
                                                             <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); viewResults(${item.id})">View</button>
                                                         `}
                                                         ${(item.status === 'failed' || item.status === 'processing') ? `
                                                             <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); resetItem(${item.id})">🔄 Reset</button>
                                                         ` : ''}
-            ${item.status === 'completed' ? `
-                                                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id}, true)">🔄 Reprocess With</button>
-            ` : ''}
-                                                        <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #ef4444; color: white;" onclick="event.stopPropagation(); removeItem(${item.id})">🗑️ Remove</button>
-                        </div>
+                                                        ${item.status === 'completed' ? `
+                                                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="event.stopPropagation(); showProcessWithModal(${item.id}, true)">🔄 Reprocess</button>
+                                                        ` : ''}
+                                                        <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #6b7280; color: white;" onclick="event.stopPropagation(); overrideQueueItem(${item.id})">⚙️ Override</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         `;
@@ -3071,6 +3652,12 @@ async def root():
                                 ${image.ready_media_id ? `Media: ${image.ready_media_id.substring(0, 8)}...` : 'No media ID'}<br>
                                 ${new Date(image.created_at).toLocaleDateString()}
                                 <div class="status-badge status-${image.status}">${image.status}</div>
+                                ${(image.status === 'completed' || image.status === 'failed') ? `
+                                    <button class="btn btn-sm btn-secondary" style="margin-top: 5px; padding: 2px 8px; font-size: 11px;" 
+                                            onclick="event.stopPropagation(); showProcessWithModal(${image.id}, true)">
+                                        🔄 Reprocess
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -3099,31 +3686,31 @@ async def root():
             }
             
             // Load data for different modes
-                         async function loadSimpleModeData() {
-                 try {
+            async function loadSimpleModeData() {
+                try {
                      // Load original image (or show demo message)
-                     const imageElement = document.getElementById('originalImage');
-                     const loadingElement = document.getElementById('imageLoading');
-                     
+                    const imageElement = document.getElementById('originalImage');
+                    const loadingElement = document.getElementById('imageLoading');
+                    
                      if (selectedItemId && selectedItemId !== 'demo') {
-                         imageElement.onload = function() {
-                             loadingElement.style.display = 'none';
-                             imageElement.style.display = 'block';
-                         };
-                         
-                         imageElement.onerror = function() {
-                             loadingElement.innerHTML = 'Failed to load image';
-                         };
-                         
-                         imageElement.src = `/api/queue/image/${selectedItemId}`;
+                    imageElement.onload = function() {
+                        loadingElement.style.display = 'none';
+                        imageElement.style.display = 'block';
+                    };
+                    
+                    imageElement.onerror = function() {
+                        loadingElement.innerHTML = 'Failed to load image';
+                    };
+                    
+                    imageElement.src = `/api/queue/image/${selectedItemId}`;
                      } else {
                          // Show demo message for image
                          loadingElement.innerHTML = '<div style="text-align: center; padding: 40px; color: #64748b;"><h3>📷 Demo Mode</h3><p>Select a real image from the sidebar to see the original photo, or view the interactive planogram demo on the right.</p></div>';
                          imageElement.style.display = 'none';
                      }
-                     
+                    
                      // Load interactive planogram - ALWAYS show demo if no real item
-                     const planogramViewer = document.getElementById('planogramViewer');
+                    const planogramViewer = document.getElementById('planogramViewer');
                      const imageId = selectedItemId || 'demo';
                      
                      console.log('Loading planogram for:', imageId);
@@ -3150,7 +3737,7 @@ async def root():
                              
                              console.log('✅ Simple HTML/CSS planogram rendered');
                              
-                         } catch (error) {
+                    } catch (error) {
                              console.error('❌ Error loading planogram:', error);
                              planogramViewer.innerHTML = `
                                  <div style="padding: 20px; text-align: center; color: #dc2626;">
@@ -3173,10 +3760,10 @@ async def root():
                      // Load extracted products table
                      await loadExtractedProductsTable(imageId);
                      
-                 } catch (error) {
-                     console.error('Error loading simple mode data:', error);
-                 }
-             }
+                } catch (error) {
+                    console.error('Error loading simple mode data:', error);
+                }
+            }
              
              async function loadPlanogramControls(imageId) {
                  const controlsContainer = document.getElementById('planogramControls');
@@ -3390,8 +3977,8 @@ async def root():
                  } catch (error) {
                      console.error('Error loading products table:', error);
                      tableContainer.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 20px;">Failed to load products table</div>';
-                 }
-             }
+                }
+            }
             
             async function loadComparisonModeData() {
                 if (!selectedItemId) return;
@@ -3417,7 +4004,7 @@ async def root():
                     // Load original image in advanced mode
                     const advancedImage = document.getElementById('advancedOriginalImage');
                     if (selectedItemId) {
-                        advancedImage.src = `/api/queue/image/${selectedItemId}`;
+                    advancedImage.src = `/api/queue/image/${selectedItemId}`;
                     } else {
                         // Show demo message when no item selected
                         advancedImage.style.display = 'none';
@@ -3445,12 +4032,12 @@ async def root():
                         } else {
                             // Fallback to static SVG if React component not loaded
                             if (selectedItemId) {
-                                const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
-                                if (planogramResponse.ok) {
-                                    const svgContent = await planogramResponse.text();
-                                    advancedPlanogram.innerHTML = svgContent;
-                                } else {
-                                    advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
+                        const planogramResponse = await fetch(`/api/planogram/${selectedItemId}/render?format=svg&abstraction_level=sku_view`);
+                        if (planogramResponse.ok) {
+                            const svgContent = await planogramResponse.text();
+                            advancedPlanogram.innerHTML = svgContent;
+                        } else {
+                            advancedPlanogram.innerHTML = '<div class="loading">Planogram not available</div>';
                                 }
                             } else {
                                 advancedPlanogram.innerHTML = '<div class="loading">React component not loaded. Please refresh the page to see demo.</div>';
@@ -3587,22 +4174,22 @@ async def root():
                 return texts[status] || 'Unknown';
             }
             
-                         // Queue item selection
-             function selectQueueItem(itemId) {
-                 selectedItemId = itemId;
-                 
-                 // Update visual selection
-                 document.querySelectorAll('.queue-item').forEach(item => {
-                     item.classList.remove('selected');
-                 });
-                 document.querySelector(`[data-item-id="${itemId}"]`).classList.add('selected');
-                 
-                 // Update breadcrumb
-                 updateBreadcrumb(`Extraction #${itemId} Selected`);
+            // Queue item selection
+            function selectQueueItem(itemId) {
+                selectedItemId = itemId;
+                
+                // Update visual selection
+                document.querySelectorAll('.queue-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                document.querySelector(`[data-item-id="${itemId}"]`).classList.add('selected');
+                
+                // Update breadcrumb
+                updateBreadcrumb(`Extraction #${itemId} Selected`);
                  
                  // Note: Don't auto-switch to simple mode since real data isn't available
                  console.log(`📋 Selected queue item #${itemId} (real extraction data not available yet)`);
-             }
+            }
             
             // System selection update
             function updateSystemSelection(itemId) {
@@ -3649,12 +4236,12 @@ async def root():
                 }
             }
             
-                         async function viewResults(itemId) {
+            async function viewResults(itemId) {
                  // For now, always show demo since real extraction data isn't available
                  selectedItemId = 'demo';
-                 switchMode('simple');
+                switchMode('simple');
                  console.log(`📊 Viewing results for item #${itemId} (showing demo data instead)`);
-             }
+            }
             
             async function reprocess(itemId) {
                 if (confirm('Are you sure you want to reprocess this extraction?')) {
@@ -4101,22 +4688,22 @@ async def root():
                 
                 currentAdvancedTab = tabName;
                 
-                                 // Load tab-specific data
-                 if (tabName === 'logs') {
-                     loadLogs();
-                     startLogRefresh();
-                 } else if (tabName === 'overview') {
-                     loadErrorSummary();
-                     stopLogRefresh();
+                // Load tab-specific data
+                if (tabName === 'logs') {
+                    loadLogs();
+                    startLogRefresh();
+                } else if (tabName === 'overview') {
+                    loadErrorSummary();
+                    stopLogRefresh();
                  } else if (tabName === 'iterations') {
                      loadIterations();
                      stopLogRefresh();
                  } else if (tabName === 'comparison') {
                      loadComparisonModeData();
-                     stopLogRefresh();
-                 } else {
-                     stopLogRefresh();
-                 }
+                    stopLogRefresh();
+                } else {
+                    stopLogRefresh();
+                }
             }
             
             // Log Viewer Functions
@@ -6511,7 +7098,7 @@ async def root():
             }
 
 
-
+            
             // Utility function
             function escapeHtml(text) {
                 const div = document.createElement('div');
@@ -6609,7 +7196,1127 @@ async def root():
                     }
                 };
             });
+            
+            // Prompt Management State
+            let promptManagementState = {
+                selectedSystem: 'custom_consensus',
+                selectedPromptType: 'structure',
+                selectedPromptModel: 'universal',
+                selectedPromptVersion: '',
+                selectedPrompt: null,
+                editedPromptContent: '',
+                selectedQueueItems: [],
+                allSelected: false
+            };
+            
+            // Utility function to escape HTML
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Batch Operations Functions
+            function toggleSelectAll() {
+                promptManagementState.allSelected = !promptManagementState.allSelected;
+                
+                if (promptManagementState.allSelected) {
+                    // Select all visible items
+                    promptManagementState.selectedQueueItems = queueData.map(item => item.id);
+                } else {
+                    promptManagementState.selectedQueueItems = [];
+                }
+                
+                // Re-render queue to update UI
+                renderQueue();
+                updateQueueStats();
+            }
+            
+            function toggleItemSelection(itemId) {
+                const index = promptManagementState.selectedQueueItems.indexOf(itemId);
+                if (index > -1) {
+                    promptManagementState.selectedQueueItems.splice(index, 1);
+                } else {
+                    promptManagementState.selectedQueueItems.push(itemId);
+                }
+                
+                // Update select all state
+                promptManagementState.allSelected = promptManagementState.selectedQueueItems.length === queueData.length;
+                
+                // Re-render queue to update UI
+                renderQueue();
+                updateQueueStats();
+            }
+            
+            async function applyConfigToSelected() {
+                if (promptManagementState.selectedQueueItems.length === 0) {
+                    alert('No items selected');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/queue/batch-configure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: promptManagementState.selectedQueueItems,
+                            system: promptManagementState.selectedSystem,
+                            prompt_overrides: promptManagementState.selectedPromptVersion ? {
+                                [promptManagementState.selectedPromptType]: promptManagementState.selectedPromptVersion
+                            } : {}
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert(`Configuration applied to ${result.updated_items?.length || promptManagementState.selectedQueueItems.length} items`);
+                        // Clear selection and reload queue
+                        promptManagementState.selectedQueueItems = [];
+                        promptManagementState.allSelected = false;
+                        loadQueue();
+                    } else {
+                        alert('Failed to apply configuration: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Failed to apply configuration:', error);
+                    alert('Failed to apply configuration: ' + error.message);
+                }
+            }
+            
+            async function resetSelectedItems() {
+                if (promptManagementState.selectedQueueItems.length === 0) {
+                    alert('No items selected');
+                    return;
+                }
+                
+                if (!confirm(`Reset configuration for ${promptManagementState.selectedQueueItems.length} selected items?`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/queue/batch-reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: promptManagementState.selectedQueueItems
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert(`Configuration reset for ${result.reset_items?.length || promptManagementState.selectedQueueItems.length} items`);
+                        // Clear selection and reload queue
+                        promptManagementState.selectedQueueItems = [];
+                        promptManagementState.allSelected = false;
+                        loadQueue();
+                    } else {
+                        alert('Failed to reset configuration: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Failed to reset configuration:', error);
+                    alert('Failed to reset configuration: ' + error.message);
+                }
+            }
+            
+            // Initialize Prompt Management
+            async function initializePromptManagement() {
+                console.log('🎛️ Initializing Prompt Management...');
+                
+                try {
+                    // Load available prompts for dropdowns
+                    console.log('📡 Fetching available prompts...');
+                    const availablePromptsResponse = await fetch('/api/prompts/available');
+                    if (!availablePromptsResponse.ok) {
+                        throw new Error(`Failed to load available prompts: ${availablePromptsResponse.status}`);
+                    }
+                    const availablePrompts = await availablePromptsResponse.json();
+                    console.log('✅ Available prompts loaded:', availablePrompts.length, 'prompts');
+                    console.log('📋 First prompt sample:', availablePrompts[0]);
+                    
+                    // Populate system selection first
+                    populateSystemSelection();
+                    
+                    // Populate prompt dropdowns with the fetched data
+                    populatePromptDropdowns(availablePrompts);
+                    
+                    // Load initial prompt preview if we have prompts
+                    if (availablePrompts && availablePrompts.length > 0) {
+                        // Set initial selections to first available prompt
+                        const firstPrompt = availablePrompts[0];
+                        promptManagementState.selectedPromptType = firstPrompt.type;
+                        promptManagementState.selectedPromptModel = firstPrompt.model;
+                        promptManagementState.selectedPromptVersion = firstPrompt.id;
+                        
+                        console.log('🎯 Loading initial prompt preview:', firstPrompt.id);
+                        await loadPromptPreview(firstPrompt.id);
+                        
+                        // Update dropdowns to show selections
+                        const typeSelect = document.getElementById('promptTypeSelect');
+                        const modelSelect = document.getElementById('promptModelSelect');
+                        const versionSelect = document.getElementById('promptVersionSelect');
+                        
+                        if (typeSelect) typeSelect.value = firstPrompt.type;
+                        if (modelSelect) modelSelect.value = firstPrompt.model;
+                        if (versionSelect) versionSelect.value = firstPrompt.id;
+                        
+                    } else {
+                        console.warn('⚠️ No available prompts found');
+                        // Show placeholder content
+                        const contentElement = document.getElementById('promptPreviewContent');
+                        if (contentElement) {
+                            contentElement.innerHTML = '<div style="color: #f59e0b; padding: 10px;">⚠️ No prompts available. Check API connection.</div>';
+                        }
+                    }
+                    
+                    console.log('✅ Prompt management initialization complete');
+                    
+                } catch (error) {
+                    console.error('❌ Failed to initialize prompt management:', error);
+                    // Show error in UI
+                    const contentElement = document.getElementById('promptPreviewContent');
+                    if (contentElement) {
+                        contentElement.innerHTML = `<div style="color: #ef4444; padding: 10px;">❌ Error loading prompts: ${error.message}<br><small>Check browser console for details</small></div>`;
+                    }
+                }
+            }
+            
+            // Populate System Selection
+            function populateSystemSelection() {
+                const systemContainer = document.getElementById('systemSelection');
+                if (!systemContainer) return;
+                
+                const systems = [
+                    { id: 'custom_consensus', name: 'Custom Consensus', description: 'Multi-model consensus with weighted voting' },
+                    { id: 'langgraph', name: 'LangGraph', description: 'Graph-based workflow orchestration' },
+                    { id: 'hybrid', name: 'Hybrid', description: 'Combined approach with memory' }
+                ];
+                
+                systemContainer.innerHTML = systems.map(system => `
+                    <div class="radio-option ${system.id === promptManagementState.selectedSystem ? 'selected' : ''}" 
+                         onclick="selectSystem('${system.id}')">
+                        <input type="radio" name="system" value="${system.id}" 
+                               ${system.id === promptManagementState.selectedSystem ? 'checked' : ''}>
+                        <label>${system.name}</label>
+                    </div>
+                `).join('');
+            }
+            
+            // Select System
+            function selectSystem(systemId) {
+                promptManagementState.selectedSystem = systemId;
+                populateSystemSelection();
+                console.log('Selected system:', systemId);
+                
+                // Update the display to show current selection
+                document.querySelectorAll('.radio-option').forEach(option => {
+                    option.classList.remove('selected');
+                    const radio = option.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = false;
+                });
+                
+                const selectedOption = document.querySelector(`input[value="${systemId}"]`);
+                if (selectedOption) {
+                    selectedOption.checked = true;
+                    selectedOption.closest('.radio-option').classList.add('selected');
+                }
+            }
+            
+            // Populate Prompt Dropdowns
+            function populatePromptDropdowns(availablePrompts) {
+                console.log('📋 populatePromptDropdowns called with:', availablePrompts);
+                
+                const typeSelect = document.getElementById('promptTypeSelect');
+                const modelSelect = document.getElementById('promptModelSelect');
+                const versionSelect = document.getElementById('promptVersionSelect');
+                
+                if (!typeSelect || !modelSelect || !versionSelect) {
+                    console.error('❌ Prompt dropdown elements not found!');
+                    console.log('typeSelect:', typeSelect);
+                    console.log('modelSelect:', modelSelect);
+                    console.log('versionSelect:', versionSelect);
+                    return;
+                }
+                
+                // Ensure we have an array
+                let promptsArray = Array.isArray(availablePrompts) ? availablePrompts : Object.values(availablePrompts || {});
+                
+                if (!promptsArray || promptsArray.length === 0) {
+                    console.warn('⚠️ No prompts available for dropdowns');
+                    typeSelect.innerHTML = '<option value="">No prompts available</option>';
+                    modelSelect.innerHTML = '<option value="">No prompts available</option>';
+                    versionSelect.innerHTML = '<option value="">No prompts available</option>';
+                    return;
+                }
+                
+                console.log(`📊 Processing ${promptsArray.length} prompts for dropdowns`);
+                
+                // Extract unique types
+                const types = [...new Set(promptsArray.map(p => p.type).filter(Boolean))];
+                console.log('📝 Available types:', types);
+                
+                // Extract unique models
+                const models = [...new Set(promptsArray.map(p => p.model).filter(Boolean))];
+                console.log('🤖 Available models:', models);
+                
+                // Populate type dropdown
+                typeSelect.innerHTML = '<option value="">Select Type</option>' + types.map(type => {
+                    const displayName = type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ');
+                    const isSelected = type === promptManagementState.selectedPromptType;
+                    return `<option value="${type}" ${isSelected ? 'selected' : ''}>${displayName}</option>`;
+                }).join('');
+                
+                // Populate model dropdown
+                modelSelect.innerHTML = '<option value="">Select Model</option>' + models.map(model => {
+                    const displayName = model.charAt(0).toUpperCase() + model.slice(1);
+                    const isSelected = model === promptManagementState.selectedPromptModel;
+                    return `<option value="${model}" ${isSelected ? 'selected' : ''}>${displayName}</option>`;
+                }).join('');
+                
+                // Populate version dropdown
+                updateVersionDropdown(promptsArray);
+                
+                console.log('✅ Prompt dropdowns populated successfully');
+            }
+            
+            // Update Version Dropdown
+            function updateVersionDropdown(availablePrompts) {
+                const versionSelect = document.getElementById('promptVersionSelect');
+                if (!versionSelect) {
+                    console.warn('⚠️ Version select element not found');
+                    return;
+                }
+                
+                console.log('🔄 Updating version dropdown with filters:', {
+                    selectedType: promptManagementState.selectedPromptType,
+                    selectedModel: promptManagementState.selectedPromptModel
+                });
+                
+                const filteredPrompts = availablePrompts.filter(p => {
+                    const typeMatch = !promptManagementState.selectedPromptType || p.type === promptManagementState.selectedPromptType;
+                    const modelMatch = !promptManagementState.selectedPromptModel || p.model === promptManagementState.selectedPromptModel;
+                    return typeMatch && modelMatch;
+                });
+                
+                console.log('📋 Filtered prompts:', filteredPrompts);
+                
+                if (filteredPrompts.length === 0) {
+                    versionSelect.innerHTML = '<option value="">No matching prompts</option>';
+                    return;
+                }
+                
+                versionSelect.innerHTML = '<option value="">Select Version</option>' + filteredPrompts.map((prompt, index) => {
+                    const successRate = prompt.performance_stats?.success_rate || prompt.performance?.success_rate || 'N/A';
+                    const isSelected = prompt.id === promptManagementState.selectedPromptVersion || (index === 0 && !promptManagementState.selectedPromptVersion);
+                    return `<option value="${prompt.id}" ${isSelected ? 'selected' : ''}>${prompt.version} (${successRate}% success)</option>`;
+                }).join('');
+                
+                if (filteredPrompts.length > 0 && !promptManagementState.selectedPromptVersion) {
+                    promptManagementState.selectedPromptVersion = filteredPrompts[0].id;
+                    loadPromptPreview(filteredPrompts[0].id);
+                }
+            }
+            
+            // Handle Prompt Selection Changes
+            async function onPromptSelectionChange() {
+                const typeSelect = document.getElementById('promptTypeSelect');
+                const modelSelect = document.getElementById('promptModelSelect');
+                const versionSelect = document.getElementById('promptVersionSelect');
+                
+                if (typeSelect) promptManagementState.selectedPromptType = typeSelect.value;
+                if (modelSelect) promptManagementState.selectedPromptModel = modelSelect.value;
+                
+                console.log('🔄 Prompt selection changed:', {
+                    type: promptManagementState.selectedPromptType,
+                    model: promptManagementState.selectedPromptModel
+                });
+                
+                // Reload available prompts with filters
+                try {
+                    const response = await fetch(`/api/prompts/available?type=${promptManagementState.selectedPromptType}&model=${promptManagementState.selectedPromptModel}`);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load filtered prompts: ${response.status}`);
+                    }
+                    const availablePrompts = await response.json();
+                    console.log('✅ Filtered prompts loaded:', availablePrompts);
+                    updateVersionDropdown(availablePrompts);
+                } catch (error) {
+                    console.error('❌ Failed to update prompt selection:', error);
+                    // Show error in version dropdown
+                    const versionSelect = document.getElementById('promptVersionSelect');
+                    if (versionSelect) {
+                        versionSelect.innerHTML = '<option value="">Error loading prompts</option>';
+                    }
+                }
+            }
+            
+            // Load Prompt Preview
+            async function loadPromptPreview(promptId) {
+                try {
+                    console.log('🔍 Loading prompt preview for ID:', promptId);
+                    
+                    const response = await fetch(`/api/prompts/${promptId}`);
+                    if (!response.ok) {
+                        console.error(`❌ Failed to fetch prompt ${promptId}: ${response.status} ${response.statusText}`);
+                        throw new Error(`Failed to load prompt: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    const prompt = await response.json();
+                    console.log('✅ Prompt loaded successfully:', prompt);
+                    
+                    promptManagementState.selectedPrompt = prompt;
+                    
+                    // Update preview content
+                    const contentElement = document.getElementById('promptPreviewContent');
+                    if (contentElement) {
+                        // Try different possible content fields
+                        const content = prompt.content || prompt.full_content || prompt.template || prompt.prompt_text || 'No content available';
+                        console.log('📝 Prompt content length:', content.length);
+                        
+                        if (content === 'No content available') {
+                            contentElement.innerHTML = `
+                                <div style="color: #f59e0b; padding: 10px; background: #fef3c7; border-radius: 4px;">
+                                    ⚠️ No content found for this prompt<br>
+                                    <small>Available fields: ${Object.keys(prompt).join(', ')}</small>
+                                </div>
+                            `;
+                        } else {
+                            // Show first 500 characters
+                            const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+                            contentElement.innerHTML = `
+                                <div style="background: #f8fafc; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; line-height: 1.4; white-space: pre-wrap;">
+                                    ${escapeHtml(truncatedContent)}
+                                </div>
+                                <div style="margin-top: 8px; font-size: 10px; color: #64748b;">
+                                    ${content.length > 500 ? `Showing first 500 of ${content.length} characters` : `${content.length} characters total`}
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    // Update performance metrics
+                    const performanceStats = prompt.performance_stats || prompt.performance || {};
+                    updatePerformanceMetrics(performanceStats);
+                    
+                    // Update editor content
+                    const editorElement = document.getElementById('promptEditorContent');
+                    if (editorElement) {
+                        const content = prompt.content || prompt.full_content || prompt.template || prompt.prompt_text || '';
+                        editorElement.value = content;
+                        promptManagementState.editedPromptContent = content;
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Failed to load prompt preview:', error);
+                    
+                    // Show detailed error in preview
+                    const contentElement = document.getElementById('promptPreviewContent');
+                    if (contentElement) {
+                        contentElement.innerHTML = `
+                            <div style="color: #ef4444; padding: 10px; background: #fef2f2; border-radius: 4px;">
+                                ❌ Error loading prompt: ${error.message}<br>
+                                <small>Prompt ID: ${promptId}</small><br>
+                                <small>Check browser console for details</small>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            
+            // Update Performance Metrics
+            function updatePerformanceMetrics(stats) {
+                const metricsContainer = document.getElementById('performanceMetrics');
+                if (!metricsContainer) {
+                    console.warn('⚠️ Performance metrics container not found');
+                    return;
+                }
+                
+                console.log('📊 Updating performance metrics:', stats);
+                
+                // Handle missing or undefined stats
+                const successRate = stats.success_rate || stats.accuracy || 'N/A';
+                const usageCount = stats.usage_count || stats.uses || 0;
+                const avgCost = stats.avg_cost || stats.cost || 0;
+                const errorRate = stats.error_rate || (1 - (stats.success_rate || 0));
+                
+                metricsContainer.innerHTML = `
+                    <div class="metric">
+                        <div class="metric-label">Success Rate</div>
+                        <div class="metric-value">${typeof successRate === 'number' ? successRate.toFixed(1) + '%' : successRate}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Usage Count</div>
+                        <div class="metric-value">${usageCount}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Avg Cost</div>
+                        <div class="metric-value">£${typeof avgCost === 'number' ? avgCost.toFixed(3) : avgCost}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Error Rate</div>
+                        <div class="metric-value">${typeof errorRate === 'number' ? (errorRate * 100).toFixed(1) + '%' : 'N/A'}</div>
+                    </div>
+                `;
+            }
+            
+            // Save New Prompt Version
+            async function saveNewPromptVersion() {
+                try {
+                    const response = await fetch('/api/prompts/create-version', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            base_prompt_id: promptManagementState.selectedPrompt.id,
+                            content: promptManagementState.editedPromptContent,
+                            notes: 'Created via sidebar interface'
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert('New prompt version created successfully!');
+                        // Refresh available prompts
+                        const availablePrompts = await fetch('/api/prompts/available').then(r => r.json());
+                        populatePromptDropdowns(availablePrompts);
+                    }
+                } catch (error) {
+                    console.error('Failed to save prompt version:', error);
+                    alert('Failed to save prompt version');
+                }
+            }
+            
+            // Activate Prompt
+            async function activatePrompt() {
+                try {
+                    const response = await fetch(`/api/prompts/${promptManagementState.selectedPromptVersion}/activate`, {
+                        method: 'POST'
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert('Prompt activated successfully!');
+                    }
+                } catch (error) {
+                    console.error('Failed to activate prompt:', error);
+                    alert('Failed to activate prompt');
+                }
+            }
+            
+            // Enhanced queue functionality is now integrated into renderQueue()
+            
+            // Get Item Display Name
+            function getItemDisplayName(item) {
+                if (item.uploads && item.uploads.collections && item.uploads.collections.stores) {
+                    const store = item.uploads.collections.stores;
+                    return `${store.retailer_name} - ${item.uploads.category || 'Unknown Category'}`;
+                }
+                return `Item #${item.id}`;
+            }
+            
+            // Toggle Select All
+            function toggleSelectAll() {
+                promptManagementState.allSelected = !promptManagementState.allSelected;
+                
+                if (promptManagementState.allSelected) {
+                    // Select all visible items
+                    const allItemIds = Array.from(document.querySelectorAll('.queue-item')).map(el => 
+                        parseInt(el.getAttribute('data-item-id'))
+                    );
+                    promptManagementState.selectedQueueItems = allItemIds;
+                } else {
+                    promptManagementState.selectedQueueItems = [];
+                }
+                
+                // Re-render to update UI
+                renderQueue();
+            }
+            
+            // Toggle Item Selection
+            function toggleItemSelection(itemId) {
+                const index = promptManagementState.selectedQueueItems.indexOf(itemId);
+                if (index > -1) {
+                    promptManagementState.selectedQueueItems.splice(index, 1);
+                } else {
+                    promptManagementState.selectedQueueItems.push(itemId);
+                }
+                
+                // Update select all state
+                const totalItems = document.querySelectorAll('.queue-item').length;
+                promptManagementState.allSelected = promptManagementState.selectedQueueItems.length === totalItems;
+                
+                // Re-render to update UI
+                renderQueue();
+            }
+            
+            // Apply Config to Selected Items
+            async function applyConfigToSelected() {
+                if (promptManagementState.selectedQueueItems.length === 0) {
+                    alert('No items selected');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/queue/batch-configure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: promptManagementState.selectedQueueItems,
+                            system: promptManagementState.selectedSystem,
+                            prompt_overrides: {
+                                [promptManagementState.selectedPromptType]: promptManagementState.selectedPromptVersion
+                            }
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert(`Configuration applied to ${result.updated_items.length} items`);
+                        loadQueue(); // Reload the detailed queue
+                    }
+                } catch (error) {
+                    console.error('Failed to apply configuration:', error);
+                    alert('Failed to apply configuration');
+                }
+            }
+            
+            // Reset Selected Items
+            async function resetSelectedItems() {
+                if (promptManagementState.selectedQueueItems.length === 0) {
+                    alert('No items selected');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/queue/batch-reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: promptManagementState.selectedQueueItems
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert(`Configuration reset for ${result.reset_items.length} items`);
+                        promptManagementState.selectedQueueItems = [];
+                        loadQueue(); // Reload the detailed queue
+                    }
+                } catch (error) {
+                    console.error('Failed to reset configuration:', error);
+                    alert('Failed to reset configuration');
+                }
+            }
+            
+            // Process Queue Item
+            async function processQueueItem(itemId) {
+                try {
+                    const response = await fetch(`/api/queue/process/${itemId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            systems: [promptManagementState.selectedSystem]
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert('Processing started successfully!');
+                        loadQueue(); // Reload the detailed queue
+                    }
+                } catch (error) {
+                    console.error('Failed to start processing:', error);
+                    alert('Failed to start processing');
+                }
+            }
+            
+            // Override Queue Item
+            function overrideQueueItem(itemId) {
+                // Find the item data
+                const item = queueData.find(i => i.id === itemId);
+                if (!item) {
+                    alert('Item not found');
+                    return;
+                }
+                
+                // Create a simple override modal
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: white; border-radius: 12px; max-width: 500px; width: 100%; padding: 30px;">
+                        <h3 style="margin: 0 0 20px 0; color: #1f2937;">⚙️ Override Configuration for Item #${itemId}</h3>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 10px;">Extraction System:</label>
+                            <select id="overrideSystem" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                <option value="custom_consensus" ${item.current_extraction_system === 'custom_consensus' ? 'selected' : ''}>Custom Consensus</option>
+                                <option value="langgraph" ${item.current_extraction_system === 'langgraph' ? 'selected' : ''}>LangGraph</option>
+                                <option value="hybrid" ${item.current_extraction_system === 'hybrid' ? 'selected' : ''}>Hybrid</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 10px;">Status:</label>
+                            <select id="overrideStatus" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                <option value="pending" ${item.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="processing" ${item.status === 'processing' ? 'selected' : ''}>Processing</option>
+                                <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                <option value="failed" ${item.status === 'failed' ? 'selected' : ''}>Failed</option>
+                            </select>
+                        </div>
+                        
+                        <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                            <h4 style="margin: 0 0 10px 0; color: #374151;">Current Configuration:</h4>
+                            <div style="font-size: 14px; color: #6b7280;">
+                                <div><strong>Store:</strong> ${item.uploads?.metadata?.store_name || 'Unknown'}</div>
+                                <div><strong>Category:</strong> ${item.uploads?.category || 'Unknown'}</div>
+                                <div><strong>System:</strong> ${item.current_extraction_system}</div>
+                                <div><strong>Status:</strong> ${item.status}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
+                            <button onclick="applyOverride(${itemId})" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Apply Override</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                // Close on background click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        modal.remove();
+                    }
+                });
+            }
+            
+            async function applyOverride(itemId) {
+                const system = document.getElementById('overrideSystem').value;
+                const status = document.getElementById('overrideStatus').value;
+                
+                try {
+                    const response = await fetch(`/api/queue/batch-configure`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            item_ids: [itemId],
+                            system: system
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        // Also update status if needed
+                        if (status !== queueData.find(i => i.id === itemId)?.status) {
+                            await fetch(`/api/queue/items/${itemId}/status`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: status })
+                            });
+                        }
+                        
+                        alert('Override applied successfully!');
+                        
+                        // Close modal and reload queue
+                        document.querySelector('div[style*="position: fixed"]').remove();
+                        loadQueue();
+                    } else {
+                        alert('Failed to apply override');
+                    }
+                } catch (error) {
+                    console.error('Error applying override:', error);
+                    alert('Error applying override: ' + error.message);
+                }
+            }
+            
+            // Toggle Right Sidebar
+            function toggleRightSidebar() {
+                const sidebar = document.getElementById('rightSidebar');
+                if (sidebar) {
+                    const toggle = sidebar.querySelector('.sidebar-toggle');
+                    const isCollapsed = sidebar.classList.contains('collapsed');
+                    
+                    if (isCollapsed) {
+                        // Expand sidebar
+                        sidebar.classList.remove('collapsed');
+                        if (toggle) {
+                            toggle.innerHTML = '◀';
+                            toggle.style.right = '-30px';
+                            toggle.style.borderRadius = '4px 0 0 4px';
+                        }
+                    } else {
+                        // Collapse sidebar
+                        sidebar.classList.add('collapsed');
+                        if (toggle) {
+                            toggle.innerHTML = '▶';
+                            toggle.style.right = '0px';
+                            toggle.style.borderRadius = '0 4px 4px 0';
+                        }
+                    }
+                }
+            }
+            
+            // Initialize everything when DOM is loaded
+            document.addEventListener('DOMContentLoaded', function() {
+                // Initialize existing functionality
+                loadReactComponent();
+                
+                // Initialize prompt management
+                initializePromptManagement();
+                
+                console.log('✅ Prompt Management Interface initialized');
+            });
         </script>
+        
+        </div>
+    
+    <style>
+        /* Right Sidebar - Prompt Management */
+        .right-sidebar {
+            width: 350px;
+            background: white;
+            border-left: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            z-index: 100;
+            position: relative;
+            flex-shrink: 0;
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .right-sidebar.collapsed {
+            transform: translateX(330px);
+            width: 20px;
+        }
+        
+        /* Prompt Management Styles */
+        .prompt-section {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .prompt-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .system-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .radio-option:hover {
+            background: #f8fafc;
+            border-color: #3b82f6;
+        }
+        
+        .radio-option.selected {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+        
+        .radio-option input[type="radio"] {
+            margin: 0;
+        }
+        
+        .radio-option label {
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        .prompt-dropdowns {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .dropdown-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .dropdown-group label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .dropdown-group select {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 12px;
+            background: white;
+        }
+        
+        .prompt-preview {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .prompt-content {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 11px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            line-height: 1.4;
+            color: #374151;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .metric {
+            background: #f1f5f9;
+            padding: 6px 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .metric-label {
+            font-size: 10px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .prompt-editor {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .prompt-editor textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            resize: vertical;
+            background: white;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        
+        .editor-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .editor-actions button.primary {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .editor-actions button:hover {
+            background: #f8fafc;
+        }
+        
+        .editor-actions button.primary:hover {
+            background: #2563eb;
+        }
+        
+        /* Batch Operations */
+        .batch-controls {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .batch-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .batch-selection {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .batch-actions {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .batch-actions button {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            background: white;
+        }
+        
+        .batch-actions button:hover {
+            background: #f8fafc;
+        }
+        
+        .batch-actions button.primary {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .batch-actions button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Enhanced Queue Items */
+        .queue-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+        
+        .queue-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+        }
+        
+        .queue-item.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        
+        .queue-item-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .queue-item-checkbox {
+            margin: 0;
+        }
+        
+        .queue-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            flex: 1;
+        }
+        
+        .queue-item-config {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+        
+        .config-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #64748b;
+        }
+        
+        .config-indicator.override {
+            color: #dc2626;
+            font-weight: 500;
+        }
+        
+        .queue-item-actions {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .queue-item-actions button {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            background: white;
+        }
+        
+        .queue-item-actions button:hover {
+            background: #f8fafc;
+        }
+        
+        .queue-item-actions button.primary {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
     </body>
     </html>
     """

@@ -14,6 +14,13 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 from supabase import create_client
 import requests
+from prompt_management import (
+    render_prompt_management_sidebar,
+    edit_prompt_modal,
+    test_prompt_modal,
+    compare_versions_modal,
+    performance_analysis_modal
+)
 
 # Page configuration
 st.set_page_config(
@@ -70,6 +77,19 @@ CUSTOM_CSS = """
 /* Dark mode components */
 .stSelectbox > div > div { background-color: #2d2d30; color: #ffffff; }
 .stTextArea > div > div > textarea { background-color: #2d2d30; color: #ffffff; }
+
+/* Sidebar styling */
+.sidebar .sidebar-content {
+    background-color: #1a1b1e;
+}
+.sidebar .sidebar-content .stButton button {
+    width: 100%;
+    margin: 5px 0;
+}
+.sidebar .sidebar-content .stRadio > div {
+    flex-direction: row;
+    justify-content: space-between;
+}
 </style>
 """
 
@@ -100,220 +120,27 @@ def init_supabase():
         st.error(f"❌ Failed to connect to Supabase: {e}")
         return None
 
-# Get API stats
-@st.cache_data(ttl=10)
-def get_api_stats():
-    """Get real-time stats from API"""
-    try:
-        response = requests.get("http://localhost:8000/", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except:
-        return None
+# Initialize session state
+if 'editing_prompt' not in st.session_state:
+    st.session_state['editing_prompt'] = False
+if 'testing_prompt' not in st.session_state:
+    st.session_state['testing_prompt'] = False
+if 'comparing_versions' not in st.session_state:
+    st.session_state['comparing_versions'] = False
+if 'analyzing_performance' not in st.session_state:
+    st.session_state['analyzing_performance'] = False
 
-# Get queue data
-def get_queue_data(_supabase):
-    """Get real queue data from ai_extraction_queue"""
-    if not _supabase:
-        return pd.DataFrame()
-    
-    try:
-        result = _supabase.table("ai_extraction_queue") \
-            .select("*") \
-            .order("created_at", desc=True) \
-            .limit(100) \
-            .execute()
-        
-        if result.data:
-            return pd.DataFrame(result.data)
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Failed to fetch queue data: {e}")
-        return pd.DataFrame()
-
-# Get processing stats
-def get_processing_stats(_supabase):
-    """Get processing statistics"""
-    if not _supabase:
-        return {}
-    
-    try:
-        total_result = _supabase.table("ai_extraction_queue").select("id", count="exact").execute()
-        pending_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "pending").execute()
-        processing_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "processing").execute()
-        completed_result = _supabase.table("ai_extraction_queue").select("id", count="exact").eq("status", "completed").execute()
-        
-        avg_accuracy = 0
-        
-        return {
-            'total_processed': total_result.count or 0,
-            'pending': pending_result.count or 0,
-            'processing': processing_result.count or 0,
-            'completed': completed_result.count or 0,
-            'avg_accuracy': avg_accuracy,
-            'success_rate': (completed_result.count / max(1, total_result.count)) * 100 if total_result.count else 0
-        }
-    except Exception as e:
-        st.error(f"Failed to fetch processing stats: {e}")
-        return {}
-
-# Get prompt templates
-def get_prompt_templates(_supabase):
-    """Get prompt templates from database"""
-    if not _supabase:
-        return pd.DataFrame()
-    
-    try:
-        result = _supabase.table("prompt_templates") \
-            .select("*") \
-            .order("created_at", desc=True) \
-            .execute()
-        
-        if result.data:
-            return pd.DataFrame(result.data)
-        return pd.DataFrame()
-    except:
-        return pd.DataFrame()
-
-# Get human corrections
-def get_human_corrections(_supabase, days=7):
-    """Get recent human corrections"""
-    if not _supabase:
-        return pd.DataFrame()
-    
-    try:
-        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
-        result = _supabase.table("human_corrections") \
-            .select("*") \
-            .gte("created_at", cutoff_date) \
-            .order("created_at", desc=True) \
-            .execute()
-        
-        if result.data:
-            return pd.DataFrame(result.data)
-        return pd.DataFrame()
-    except:
-        return pd.DataFrame()
-
-# Get extraction results for consensus analysis
-def get_extraction_results(_supabase, days=7):
-    """Get recent extraction results"""
-    if not _supabase:
-        return pd.DataFrame()
-    
-    try:
-        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
-        result = _supabase.table("extraction_results") \
-            .select("*") \
-            .gte("created_at", cutoff_date) \
-            .order("created_at", desc=True) \
-            .execute()
-        
-        if result.data:
-            return pd.DataFrame(result.data)
-        return pd.DataFrame()
-    except:
-        return pd.DataFrame()
-
-# Get real pipeline data from processing queue
-def get_real_pipeline_data(_supabase, queue_df):
-    """Get real pipeline debugging data from currently processing items"""
-    if not _supabase or queue_df.empty:
-        return None
-    
-    # Find currently processing item
-    processing_items = queue_df[queue_df['status'] == 'processing']
-    if processing_items.empty:
-        # No active processing, return None
-        return None
-    
-    # Get the most recent processing item
-    current_item = processing_items.iloc[0]
-    
-    # Extract real data from the processing item
-    pipeline_data = {
-        "upload_id": current_item.get('id', 'unknown'),
-        "processing_status": {
-            "current_stage": current_item.get('current_stage', 1),
-            "iteration": current_item.get('iterations_completed', 1),
-            "max_iterations": 5,  # Default max iterations
-            "accuracy": current_item.get('current_accuracy', 0.0),
-            "cost": current_item.get('api_cost', 0.0),
-            "status": current_item.get('status', 'pending'),
-            "current_task": current_item.get('current_task', 'Processing image...'),
-            "ai_reasoning": current_item.get('ai_reasoning', 'Analyzing shelf structure...'),
-            "next_action": current_item.get('next_action', 'Continue processing')
-        }
-    }
-    
-    # Try to get model results from extraction_result field
-    if 'extraction_result' in current_item and current_item['extraction_result']:
-        try:
-            extraction_result = current_item['extraction_result']
-            if isinstance(extraction_result, str):
-                extraction_result = json.loads(extraction_result)
-            
-            # Extract model-specific results if available
-            model_results = {}
-            if 'models_used' in extraction_result:
-                for model in extraction_result['models_used']:
-                    model_results[model] = {
-                        "stage": "Processing",
-                        "accuracy": extraction_result.get(f'{model}_accuracy', 0.0),
-                        "confidence": extraction_result.get(f'{model}_confidence', 0.0),
-                        "processing_time": extraction_result.get(f'{model}_time', 0.0),
-                        "products_detected": len(extraction_result.get('products', []))
-                    }
-            
-            pipeline_data['model_results'] = model_results if model_results else {
-                "claude-4-sonnet": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0},
-                "gpt-4o": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0},
-                "gemini-2.5-flash": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0}
-            }
-            
-            # Extract pipeline stages
-            stages = []
-            stage_names = ["Structure Analysis", "Product Detection", "Position Validation", "Final Planogram"]
-            current_stage = pipeline_data["processing_status"]["current_stage"]
-            
-            for i, stage_name in enumerate(stage_names):
-                if i < current_stage - 1:
-                    status = "completed"
-                    accuracy = extraction_result.get(f'stage_{i+1}_accuracy', 0.85 + (i * 0.03))
-                elif i == current_stage - 1:
-                    status = "processing"
-                    accuracy = pipeline_data["processing_status"]["accuracy"]
-                else:
-                    status = "pending"
-                    accuracy = None
-                
-                stages.append({
-                    "stage": stage_name,
-                    "status": status,
-                    "accuracy": accuracy
-                })
-            
-            pipeline_data['pipeline_stages'] = stages
-            
-        except Exception as e:
-            # If parsing fails, use defaults
-            pipeline_data['model_results'] = {
-                "claude-4-sonnet": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0},
-                "gpt-4o": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0},
-                "gemini-2.5-flash": {"stage": "Processing", "accuracy": 0.0, "confidence": 0.0, "processing_time": 0.0, "products_detected": 0}
-            }
-            pipeline_data['pipeline_stages'] = [
-                {"stage": "Structure Analysis", "status": "pending", "accuracy": None},
-                {"stage": "Product Detection", "status": "pending", "accuracy": None},
-                {"stage": "Position Validation", "status": "pending", "accuracy": None},
-                {"stage": "Final Planogram", "status": "pending", "accuracy": None}
-            ]
-    
-    return pipeline_data
-
-# Initialize
+# Initialize Supabase
 supabase = init_supabase()
+
+# Render prompt management sidebar
+render_prompt_management_sidebar(supabase)
+
+# Render modals
+edit_prompt_modal()
+test_prompt_modal()
+compare_versions_modal()
+performance_analysis_modal()
 
 # Title with version badge
 col1, col2 = st.columns([4, 1])

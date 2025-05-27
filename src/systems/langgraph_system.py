@@ -85,53 +85,53 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         workflow = StateGraph(LangGraphExtractionState)
         
         # Add nodes for each stage
-        workflow.add_node("structure_consensus", self._structure_consensus_node)
-        workflow.add_node("position_consensus", self._position_consensus_node)
-        workflow.add_node("quantity_consensus", self._quantity_consensus_node)
-        workflow.add_node("detail_consensus", self._detail_consensus_node)
-        workflow.add_node("generate_planogram", self._generate_planogram_node)
-        workflow.add_node("validate_end_to_end", self._validate_end_to_end_node)
-        workflow.add_node("smart_retry", self._smart_retry_node)
-        workflow.add_node("finalize_result", self._finalize_result_node)
+        workflow.add_node("structure_analysis_node", self._structure_consensus_node)
+        workflow.add_node("position_consensus_node", self._position_consensus_node)
+        workflow.add_node("quantity_consensus_node", self._quantity_consensus_node)
+        workflow.add_node("detail_consensus_node", self._detail_consensus_node)
+        workflow.add_node("generate_planogram_node", self._generate_planogram_node)
+        workflow.add_node("validate_end_to_end_node", self._validate_end_to_end_node)
+        workflow.add_node("smart_retry_node", self._smart_retry_node)
+        workflow.add_node("finalize_result_node", self._finalize_result_node)
         
         # Add conditional edges for smart routing
         workflow.add_conditional_edges(
-            "structure_consensus",
-            lambda state: "position_consensus" if state.get("structure_consensus") else "smart_retry"
+            "structure_analysis_node",
+            lambda state: "position_consensus_node" if state.get("structure_consensus") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "position_consensus",
-            lambda state: "quantity_consensus" if state.get("position_consensus") else "smart_retry"
+            "position_consensus_node",
+            lambda state: "quantity_consensus_node" if state.get("position_consensus") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "quantity_consensus",
-            lambda state: "detail_consensus" if state.get("quantity_consensus") else "smart_retry"
+            "quantity_consensus_node",
+            lambda state: "detail_consensus_node" if state.get("quantity_consensus") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "detail_consensus",
-            lambda state: "generate_planogram" if state.get("detail_consensus") else "smart_retry"
+            "detail_consensus_node",
+            lambda state: "generate_planogram_node" if state.get("detail_consensus") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "generate_planogram",
-            lambda state: "validate_end_to_end" if state.get("planogram") else "smart_retry"
+            "generate_planogram_node",
+            lambda state: "validate_end_to_end_node" if state.get("planogram") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "validate_end_to_end", 
+            "validate_end_to_end_node", 
             self._should_retry_or_finalize
         )
         
         workflow.add_conditional_edges(
-            "smart_retry",
-            lambda state: "structure_consensus" if state["iteration_count"] < 5 else "finalize_result"
+            "smart_retry_node",
+            lambda state: "structure_analysis_node" if state["iteration_count"] < 5 else "finalize_result_node"
         )
         
         # Set entry point
-        workflow.set_entry_point("structure_consensus")
+        workflow.set_entry_point("structure_analysis_node")
         
         return workflow.compile(checkpointer=MemorySaver())
     
@@ -510,9 +510,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         iteration = state.get('iteration_count', 1)
         
         if accuracy >= 0.90 or iteration >= 5:
-            return "finalize_result"
+            return "finalize_result_node"
         else:
-            return "smart_retry"
+            return "smart_retry_node"
     
     async def _run_structure_agents(self, image_data: bytes) -> List[Dict]:
         """Run structure analysis agents (mock implementation)"""

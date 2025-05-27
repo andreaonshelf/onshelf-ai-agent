@@ -210,7 +210,7 @@ class OnShelfAIAgent:
                 # Track iteration
                 iteration_data = AgentIteration(
                     iteration_number=iteration,
-                    extraction_steps=[s.dict() for s in extraction_steps],
+                    extraction_steps=[s.model_dump() if hasattr(s, 'model_dump') else s.dict() for s in extraction_steps],
                     extraction_duration=extraction_duration,
                     planogram_generation_duration=planogram_duration,
                     comparison_duration=comparison_duration,
@@ -231,8 +231,8 @@ class OnShelfAIAgent:
                     best_result = AgentResult(
                         agent_id=self.agent_id,
                         upload_id=identifier,
-                        extraction=extraction_result.dict(),
-                        planogram=planogram.dict(),
+                                        extraction=extraction_result.model_dump() if hasattr(extraction_result, 'model_dump') else extraction_result.dict(),
+                planogram=planogram.model_dump() if hasattr(planogram, 'model_dump') else planogram.dict(),
                         mismatch_analysis=mismatch_analysis,
                         accuracy=current_accuracy,
                         iterations_completed=iteration,

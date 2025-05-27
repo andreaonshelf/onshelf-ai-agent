@@ -139,7 +139,7 @@ class MasterOrchestrator:
                 "timestamp": datetime.utcnow().isoformat(),
                 "extraction_data": {
                     "total_products": len(extraction_result.products),
-                    "products": [p.dict() for p in extraction_result.products],
+                    "products": [p.model_dump() if hasattr(p, 'model_dump') else p.dict() for p in extraction_result.products],
                     "model_used": extraction_result.model_used,
                     "confidence": extraction_result.overall_confidence
                 },
@@ -148,7 +148,7 @@ class MasterOrchestrator:
                     "shelves": structure_context.shelf_count,
                     "width": structure_context.estimated_width_meters
                 },
-                "failure_areas": [area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
+                "failure_areas": [area.model_dump() if hasattr(area, 'model_dump') else area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
             })
             
             # Update best result
