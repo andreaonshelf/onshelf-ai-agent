@@ -763,50 +763,74 @@ async def get_queue_item_analysis(item_id: int):
 
 @router.post("/batch-configure")
 async def batch_configure_items(request_data: Dict[str, Any]):
-    """Apply configuration to multiple queue items"""
+    """Apply extraction configuration to multiple queue items"""
     
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
         item_ids = request_data.get('item_ids', [])
-        system = request_data.get('system')
-        prompt_overrides = request_data.get('prompt_overrides', {})
+        extraction_config = request_data.get('extraction_config', {})
         
         if not item_ids:
             raise HTTPException(status_code=400, detail="item_ids is required")
         
-        if not system:
-            raise HTTPException(status_code=400, detail="system is required")
+        if not extraction_config:
+            raise HTTPException(status_code=400, detail="extraction_config is required")
+        
+        # Extract system and validate
+        system = extraction_config.get('system', 'custom_consensus')
+        models = extraction_config.get('models', {})
+        prompts = extraction_config.get('prompts', {})
+        reasoning = extraction_config.get('reasoning', {})
         
         # Validate system
         valid_systems = ['custom_consensus', 'langgraph', 'hybrid']
         if system not in valid_systems:
             raise HTTPException(status_code=400, detail=f"Invalid system. Must be one of: {valid_systems}")
         
-        # Prepare extraction config
-        extraction_config = {
-            "system": system,
-            "system_override": True,
-            "prompt_overrides": prompt_overrides,
-            "applied_at": datetime.utcnow().isoformat()
-        }
-        
-        # Update all specified items using existing schema
+        # Update all specified items
         updated_items = []
+        failed_items = []
+        
         for item_id in item_ids:
             try:
-                # Use existing columns that we know exist
-                result = supabase.table("ai_extraction_queue").update({
+                # First check if extraction_config column exists by trying to update
+                update_data = {
                     "current_extraction_system": system,
-                    "status": "pending"  # Reset to pending so it can be reprocessed with new config
-                }).eq("id", item_id).execute()
+                    "status": "configured",
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                # Try to add extraction_config if the column exists
+                try:
+                    result = supabase.table("ai_extraction_queue").update({
+                        **update_data,
+                        "extraction_config": extraction_config
+                    }).eq("id", item_id).execute()
+                except Exception as e:
+                    # If extraction_config column doesn't exist, use other columns
+                    logger.warning(f"extraction_config column may not exist, using fallback: {e}")
+                    result = supabase.table("ai_extraction_queue").update({
+                        **update_data,
+                        "prompt_overrides": prompts,
+                        "enhanced_config": {
+                            "system": system,
+                            "models": models,
+                            "prompts": prompts,
+                            "reasoning": reasoning,
+                            "applied_at": datetime.utcnow().isoformat()
+                        }
+                    }).eq("id", item_id).execute()
                 
                 if result.data:
                     updated_items.append(item_id)
+                else:
+                    failed_items.append({"id": item_id, "error": "Update failed"})
                     
             except Exception as e:
                 logger.warning(f"Failed to update item {item_id}: {e}")
+                failed_items.append({"id": item_id, "error": str(e)})
         
         logger.info(f"Applied batch configuration to {len(updated_items)} items", 
                    component="queue_api", 
@@ -815,8 +839,9 @@ async def batch_configure_items(request_data: Dict[str, Any]):
         
         return {
             "success": True,
+            "updated_count": len(updated_items),
             "updated_items": updated_items,
-            "failed_items": [id for id in item_ids if id not in updated_items],
+            "failed_items": failed_items,
             "configuration": extraction_config,
             "message": f"Configuration applied to {len(updated_items)} items"
         }

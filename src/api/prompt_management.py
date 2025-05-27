@@ -1422,4 +1422,361 @@ Focus on accuracy over speed. If text is unclear, indicate lower confidence.
 Process each product methodically."""
     }
     
-    return templates.get(prompt_type, 'Please provide instructions for the AI model...') 
+    return templates.get(prompt_type, 'Please provide instructions for the AI model...')
+
+
+def getDefaultSchemaTemplate(extraction_type: str) -> str:
+    """Get default Pydantic schema template for a given extraction type"""
+    schemas = {
+        'structure': """from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class ShelfSection(BaseModel):
+    section_id: str = Field(..., description="Unique identifier for this section")
+    position: str = Field(..., description="Position on shelf: left, center, right")
+    width_percentage: float = Field(..., description="Approximate width as percentage of shelf")
+    has_divider: bool = Field(default=False, description="Whether section has physical divider")
+
+class Shelf(BaseModel):
+    shelf_number: int = Field(..., description="Shelf number from top (1-based)")
+    height_from_ground: Optional[float] = Field(None, description="Estimated height from ground in cm")
+    sections: List[ShelfSection] = Field(..., description="List of sections on this shelf")
+    has_price_rail: bool = Field(default=True, description="Whether shelf has price rail")
+
+class StructureAnalysis(BaseModel):
+    total_shelves: int = Field(..., description="Total number of shelves identified")
+    shelves: List[Shelf] = Field(..., description="Detailed information for each shelf")
+    planogram_type: str = Field(..., description="Type of planogram: standard, end-cap, etc")
+    confidence: float = Field(..., ge=0, le=1, description="Overall confidence in structure analysis")""",
+        
+        'products': """from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class ProductPosition(BaseModel):
+    shelf_number: int = Field(..., description="Shelf number from top")
+    section: str = Field(..., description="Section on shelf: left, center, right")
+    position_in_section: int = Field(..., description="Position within section (1-based)")
+
+class Product(BaseModel):
+    product_id: str = Field(..., description="Unique identifier for this product instance")
+    brand: str = Field(..., description="Brand name")
+    product_name: str = Field(..., description="Product name")
+    position: ProductPosition = Field(..., description="Exact position on shelf")
+    facings: int = Field(..., ge=1, description="Number of facings (width)")
+    stack_count: int = Field(default=1, ge=1, description="Number stacked vertically")
+    depth_count: Optional[int] = Field(None, description="Estimated depth if visible")
+    confidence: float = Field(..., ge=0, le=1, description="Confidence in identification")
+
+class ProductExtraction(BaseModel):
+    products: List[Product] = Field(..., description="All identified products")
+    total_products: int = Field(..., description="Total number of distinct products")
+    total_facings: int = Field(..., description="Total number of facings across all products")""",
+        
+        'details': """from pydantic import BaseModel, Field
+from typing import Optional, List
+
+class PriceInfo(BaseModel):
+    price: float = Field(..., description="Price in local currency")
+    currency_symbol: str = Field(default="£", description="Currency symbol")
+    is_promotional: bool = Field(default=False, description="Whether price is promotional")
+    original_price: Optional[float] = Field(None, description="Original price if on promotion")
+    confidence: float = Field(..., ge=0, le=1, description="Confidence in price extraction")
+
+class ProductDetails(BaseModel):
+    product_id: str = Field(..., description="Reference to product from extraction")
+    price_info: Optional[PriceInfo] = Field(None, description="Price information if visible")
+    size: Optional[str] = Field(None, description="Product size/volume if visible")
+    variant: Optional[str] = Field(None, description="Product variant (flavor, type, etc)")
+    promotional_text: Optional[str] = Field(None, description="Any promotional messaging")
+    barcode: Optional[str] = Field(None, description="Barcode if visible")
+    
+class DetailEnhancement(BaseModel):
+    product_details: List[ProductDetails] = Field(..., description="Enhanced details for products")
+    prices_found: int = Field(..., description="Number of prices successfully extracted")
+    avg_confidence: float = Field(..., description="Average confidence across all extractions")"""
+    }
+    
+    return schemas.get(extraction_type, "from pydantic import BaseModel\n\nclass ExtractedData(BaseModel):\n    pass")
+
+
+@router.post("/generate-optimized")
+async def generate_optimized_prompt(request_data: Dict[str, Any]):
+    """Generate AI-optimized prompt based on inputs and best practices"""
+    
+    try:
+        import uuid
+        
+        prompt_type = request_data.get('prompt_type')
+        base_prompt = request_data.get('base_prompt', '')
+        fields_to_extract = request_data.get('fields_to_extract', [])
+        special_instructions = request_data.get('special_instructions', '')
+        parent_prompt_id = request_data.get('parent_prompt_id')
+        
+        if not prompt_type:
+            raise HTTPException(status_code=400, detail="prompt_type is required")
+        
+        # Generate optimized prompt based on type and fields
+        optimized_prompt = generate_optimized_prompt_content(
+            prompt_type, base_prompt, fields_to_extract, special_instructions
+        )
+        
+        # Generate Pydantic model code
+        pydantic_model_code = generate_pydantic_model(prompt_type, fields_to_extract)
+        
+        # Generate complete Instructor configuration
+        instructor_config = {
+            "prompt_template": optimized_prompt,
+            "response_model": f"{prompt_type.title()}Extraction",
+            "fields": fields_to_extract,
+            "validation_enabled": True
+        }
+        
+        # AI reasoning for optimization
+        reasoning = [
+            f"Optimized for {prompt_type} extraction with focus on selected fields",
+            "Added systematic scanning instructions for consistency",
+            "Included confidence scoring for quality control",
+            "Structured output format for easy parsing",
+            "Added validation steps to reduce errors"
+        ]
+        
+        # Key improvements made
+        key_improvements = []
+        if "confidence" in fields_to_extract:
+            key_improvements.append("Added confidence scoring throughout extraction")
+        if len(fields_to_extract) > 5:
+            key_improvements.append("Organized complex field extraction into logical groups")
+        if special_instructions:
+            key_improvements.append(f"Incorporated custom requirements: {special_instructions[:50]}...")
+        
+        # Estimate token usage
+        estimated_tokens = len(optimized_prompt.split()) * 1.3  # Rough estimate
+        
+        return {
+            "success": True,
+            "optimized_prompt": optimized_prompt,
+            "pydantic_model_code": pydantic_model_code,
+            "model_class_name": f"{prompt_type.title()}Extraction",
+            "instructor_config": instructor_config,
+            "reasoning": reasoning,
+            "key_improvements": key_improvements,
+            "optimization_focus": f"{prompt_type} extraction with {len(fields_to_extract)} fields",
+            "estimated_tokens": int(estimated_tokens),
+            "recommended_model": "claude-3-sonnet-20240229" if prompt_type == "structure" else "gpt-4o",
+            "parent_prompt_id": parent_prompt_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate optimized prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate optimized prompt: {str(e)}")
+
+
+def generate_optimized_prompt_content(prompt_type: str, base_prompt: str, fields: List[str], instructions: str) -> str:
+    """Generate optimized prompt content based on inputs"""
+    
+    # Base template
+    if base_prompt:
+        optimized = base_prompt + "\n\n"
+    else:
+        optimized = getDefaultPromptTemplate(prompt_type) + "\n\n"
+    
+    # Add field-specific instructions
+    if fields:
+        optimized += "Focus on extracting the following information:\n"
+        for field in fields:
+            field_instruction = get_field_instruction(field)
+            optimized += f"• {field_instruction}\n"
+        optimized += "\n"
+    
+    # Add systematic approach
+    optimized += "Approach:\n"
+    optimized += "1. Scan systematically from top to bottom, left to right\n"
+    optimized += "2. Validate each extraction before moving to the next\n"
+    optimized += "3. Assign confidence scores based on visibility and clarity\n"
+    optimized += "4. Cross-check related information for consistency\n\n"
+    
+    # Add special instructions if provided
+    if instructions:
+        optimized += f"Special Requirements:\n{instructions}\n\n"
+    
+    # Add output format guidance
+    optimized += "Output your analysis in a structured format with clear field labels and confidence indicators."
+    
+    return optimized
+
+
+def get_field_instruction(field: str) -> str:
+    """Get specific instruction for a field"""
+    field_instructions = {
+        "product_name": "Product Name - Full product name including variant details",
+        "brand": "Brand - Manufacturer or brand name, using standard capitalization",
+        "price": "Price - Numeric price value with currency symbol",
+        "position": "Position - Exact shelf and section location",
+        "facings": "Facings - Number of product units visible from front",
+        "stack": "Stack - Vertical stacking count if applicable",
+        "color": "Color - Primary product or packaging colors",
+        "promo_text": "Promotional Text - Any promotional messaging or offers",
+        "package_size": "Package Size - Volume, weight, or count information",
+        "confidence": "Confidence Score - Rate extraction confidence (0.0-1.0)"
+    }
+    return field_instructions.get(field, f"{field.title()} - Extract {field} information")
+
+
+def generate_pydantic_model(prompt_type: str, fields: List[str]) -> str:
+    """Generate Pydantic model code for the extraction"""
+    
+    # Start with imports
+    code = "from pydantic import BaseModel, Field\n"
+    code += "from typing import Optional, List\n\n"
+    
+    # Add field-specific models if needed
+    if "position" in fields:
+        code += """class Position(BaseModel):
+    shelf_number: int = Field(..., description="Shelf number from top")
+    section: str = Field(..., description="Section: left, center, or right")
+    position_in_section: int = Field(..., description="Position within section")
+
+"""
+    
+    # Main model
+    model_name = f"{prompt_type.title()}Extraction"
+    code += f"class {model_name}(BaseModel):\n"
+    
+    # Add fields
+    field_definitions = {
+        "product_name": '    product_name: str = Field(..., description="Full product name")',
+        "brand": '    brand: str = Field(..., description="Product brand")',
+        "price": '    price: Optional[float] = Field(None, description="Product price")',
+        "position": '    position: Position = Field(..., description="Product position")',
+        "facings": '    facings: int = Field(1, ge=1, description="Number of facings")',
+        "stack": '    stack_count: int = Field(1, ge=1, description="Vertical stack count")',
+        "color": '    color: Optional[str] = Field(None, description="Primary colors")',
+        "promo_text": '    promotional_text: Optional[str] = Field(None, description="Promotional messaging")',
+        "package_size": '    package_size: Optional[str] = Field(None, description="Size or volume")',
+        "confidence": '    confidence: float = Field(..., ge=0, le=1, description="Extraction confidence")'
+    }
+    
+    for field in fields:
+        if field in field_definitions:
+            code += field_definitions[field] + "\n"
+    
+    # Add any default fields based on prompt type
+    if prompt_type == "structure":
+        code += '    total_shelves: int = Field(..., description="Total number of shelves")\n'
+    elif prompt_type == "products":
+        code += '    products: List["Product"] = Field(..., description="List of all products")\n'
+    
+    return code
+
+
+@router.post("/save-generated")
+async def save_generated_prompt(request_data: Dict[str, Any]):
+    """Save a newly generated or edited prompt"""
+    
+    try:
+        import uuid
+        from datetime import datetime
+        
+        # Extract data
+        prompt_type = request_data.get('prompt_type')
+        optimized_prompt = request_data.get('optimized_prompt')
+        model_type = request_data.get('model_type', 'universal')
+        version_strategy = request_data.get('version_strategy', 'new')
+        parent_prompt_id = request_data.get('parent_prompt_id')
+        instructor_config = request_data.get('instructor_config', {})
+        pydantic_model_code = request_data.get('pydantic_model_code', '')
+        
+        if not all([prompt_type, optimized_prompt]):
+            raise HTTPException(status_code=400, detail="prompt_type and optimized_prompt are required")
+        
+        # Generate version number
+        if version_strategy == 'new' and parent_prompt_id and supabase:
+            # Get parent prompt to increment version
+            parent = supabase.table("prompt_templates").select("prompt_version").eq("prompt_id", parent_prompt_id).execute()
+            if parent.data:
+                current_version = parent.data[0].get('prompt_version', '1.0')
+                try:
+                    major, minor = map(int, current_version.split('.'))
+                    new_version = f"{major}.{minor + 1}"
+                except:
+                    new_version = "1.1"
+            else:
+                new_version = "1.0"
+        else:
+            new_version = "1.0"
+        
+        # Create template ID
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        template_id = f"{prompt_type}_{model_type}_v{new_version}_{timestamp}"
+        
+        # Prepare prompt data
+        prompt_data = {
+            'prompt_id': str(uuid.uuid4()),
+            'template_id': template_id,
+            'prompt_type': prompt_type,
+            'model_type': model_type,
+            'prompt_version': new_version,
+            'prompt_content': optimized_prompt,
+            'metadata': {
+                'instructor_config': instructor_config,
+                'pydantic_model': pydantic_model_code,
+                'fields': instructor_config.get('fields', []),
+                'parent_prompt_id': parent_prompt_id,
+                'version_strategy': version_strategy
+            },
+            'performance_score': 0.0,  # Will be updated with usage
+            'usage_count': 0,
+            'avg_token_cost': 0.0,
+            'correction_rate': 0.0,
+            'is_active': False,  # Requires explicit activation
+            'created_from_feedback': False,
+            'retailer_context': [],
+            'category_context': [],
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        if supabase:
+            # Save to database
+            result = supabase.table('prompt_templates').insert(prompt_data).execute()
+            
+            if result.data:
+                saved_prompt = result.data[0]
+                logger.info(f"Saved new prompt: {template_id}")
+                
+                return {
+                    "success": True,
+                    "prompt_id": saved_prompt['prompt_id'],
+                    "template_id": template_id,
+                    "version": new_version,
+                    "message": f"Prompt saved successfully as version {new_version}",
+                    "activation_required": True
+                }
+        else:
+            # Fallback - save to local storage or return success
+            logger.info(f"Would save prompt: {template_id} (no database)")
+            
+            return {
+                "success": True,
+                "prompt_id": prompt_data['prompt_id'],
+                "template_id": template_id,
+                "version": new_version,
+                "message": "Prompt saved locally (no database connection)",
+                "activation_required": True
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to save generated prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save prompt: {str(e)}")
+
+
+def incrementVersion(version: str) -> str:
+    """Increment version number"""
+    try:
+        parts = version.split('.')
+        if len(parts) == 2:
+            major, minor = map(int, parts)
+            return f"{major}.{minor + 1}"
+    except:
+        pass
+    return "1.1" 

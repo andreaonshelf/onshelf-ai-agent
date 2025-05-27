@@ -19,18 +19,20 @@ from ..models.extraction_models import ExtractionResult
 from ..models.shelf_structure import ShelfStructure
 from ..utils import logger
 from .models import MasterResult
+from ..extraction.state_tracker import get_state_tracker, ExtractionStage, ExtractionStatus
 
 
 class MasterOrchestrator:
     """Top-level orchestrator managing extraction + planogram + feedback loops"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, supabase_client=None):
         self.config = config
         self.extraction_orchestrator = ExtractionOrchestrator(config)
         self.planogram_orchestrator = PlanogramOrchestrator(config)
         self.feedback_manager = CumulativeFeedbackManager()
         self.comparison_agent = ImageComparisonAgent(config)
         self.human_evaluation = HumanEvaluationSystem(config)
+        self.state_tracker = get_state_tracker(supabase_client)
         
         logger.info(
             "Master Orchestrator initialized",
@@ -42,11 +44,15 @@ class MasterOrchestrator:
     async def achieve_target_accuracy(self, 
                                     upload_id: str, 
                                     target_accuracy: float = 0.95,
-                                    max_iterations: int = 5) -> MasterResult:
+                                    max_iterations: int = 5,
+                                    queue_item_id: Optional[int] = None,
+                                    system: str = "custom_consensus",
+                                    configuration: Optional[Dict[str, Any]] = None) -> MasterResult:
         """Main entry point: iterate until target accuracy achieved"""
         
         start_time = time.time()
         agent_id = str(uuid.uuid4())
+        run_id = f"run_{upload_id}_{agent_id[:8]}"
         
         logger.info(
             f"Starting master orchestration for upload {upload_id}",
@@ -54,8 +60,19 @@ class MasterOrchestrator:
             upload_id=upload_id,
             target_accuracy=target_accuracy,
             max_iterations=max_iterations,
-            agent_id=agent_id
+            agent_id=agent_id,
+            run_id=run_id
         )
+        
+        # Create extraction run in state tracker
+        if queue_item_id:
+            extraction_run = await self.state_tracker.create_run(
+                run_id=run_id,
+                queue_item_id=queue_item_id,
+                upload_id=upload_id,
+                system=system,
+                configuration=configuration or {}
+            )
         
         # Get images
         images = await self._get_images(upload_id)
@@ -73,122 +90,179 @@ class MasterOrchestrator:
             'iterations': []
         }
         
-        for iteration in range(1, max_iterations + 1):
-            logger.info(
-                f"Master Orchestrator Iteration {iteration}/{max_iterations}",
-                component="master_orchestrator",
-                iteration=iteration,
-                current_accuracy=best_accuracy
-            )
-            
-            # Step 1: Extract with cumulative learning
-            extraction_result = await self.extraction_orchestrator.extract_with_cumulative_learning(
-                image=images['enhanced'],
-                iteration=iteration,
-                previous_attempts=previous_attempts,
-                focus_areas=self._get_focus_areas_from_previous(iteration_history),
-                locked_positions=self._get_locked_positions_from_previous(iteration_history),
-                agent_id=agent_id
-            )
-            
-            if iteration == 1:
-                structure_context = extraction_result.structure
-            
-            # Step 2: Generate planogram
-            planogram_result = await self.planogram_orchestrator.generate_for_agent_iteration(
-                agent_number=iteration,
-                extraction_result=extraction_result,
-                structure_context=structure_context,
-                abstraction_level="product_view",
-                original_image=images['enhanced']
-            )
-            
-            # Step 3: AI comparison analysis
-            comparison_result = await self.comparison_agent.compare_image_vs_planogram(
-                original_image=images['enhanced'],
-                planogram=planogram_result.planogram,
-                structure_context=structure_context
-            )
-            
-            # Step 4: Calculate accuracy and analyze failures
-            accuracy_analysis = self.feedback_manager.analyze_accuracy_with_failure_areas(
-                comparison_result, structure_context
-            )
-            
-            current_accuracy = accuracy_analysis.overall_accuracy
-            
-            # Step 5: Track iteration with detailed data for debugging
-            iteration_data = {
-                "iteration": iteration,
-                "accuracy": current_accuracy,
-                "extraction_result": extraction_result,
-                "planogram": planogram_result,
-                "comparison_result": comparison_result,
-                "accuracy_analysis": accuracy_analysis,
-                "failure_areas": accuracy_analysis.failure_areas,
-                "locked_positions": accuracy_analysis.high_confidence_positions,
-                "timestamp": datetime.utcnow()
-            }
-            iteration_history.append(iteration_data)
-            previous_attempts.append(extraction_result)
-            
-            # Store detailed iteration data for dashboard
-            self.iteration_details['iterations'].append({
-                "iteration": iteration,
-                "accuracy": current_accuracy,
-                "timestamp": datetime.utcnow().isoformat(),
-                "extraction_data": {
-                    "total_products": len(extraction_result.products),
-                    "products": [p.model_dump() if hasattr(p, 'model_dump') else p.dict() for p in extraction_result.products],
-                    "model_used": extraction_result.model_used,
-                    "confidence": extraction_result.overall_confidence
-                },
-                "planogram_svg": planogram_result.planogram.svg_data if hasattr(planogram_result.planogram, 'svg_data') else None,
-                "structure": {
-                    "shelves": structure_context.shelf_count,
-                    "width": structure_context.estimated_width_meters
-                },
-                "failure_areas": [area.model_dump() if hasattr(area, 'model_dump') else area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
-            })
-            
-            # Update best result
-            if current_accuracy > best_accuracy:
-                best_accuracy = current_accuracy
-                best_planogram = planogram_result
-            
-            # Step 6: Check if target achieved
-            if current_accuracy >= target_accuracy:
+        try:
+            for iteration in range(1, max_iterations + 1):
                 logger.info(
-                    f"Target accuracy {target_accuracy:.1%} achieved!",
+                    f"Master Orchestrator Iteration {iteration}/{max_iterations}",
                     component="master_orchestrator",
-                    final_accuracy=current_accuracy,
-                    iterations=iteration
-                )
-                break
-            
-            # Step 7: Prepare next iteration focus areas
-            if iteration < max_iterations:
-                logger.info(
-                    f"Accuracy: {current_accuracy:.1%} - Preparing iteration {iteration + 1}",
-                    component="master_orchestrator",
-                    current_accuracy=current_accuracy,
-                    next_iteration=iteration + 1
+                    iteration=iteration,
+                    current_accuracy=best_accuracy
                 )
                 
-                # Create focused instructions for next iteration
-                instructions = self.feedback_manager.create_focused_extraction_instructions(
-                    accuracy_analysis.failure_areas,
-                    accuracy_analysis.high_confidence_positions,
-                    structure_context
+                # Update state: Starting structure extraction
+                if queue_item_id:
+                        await self.state_tracker.update_stage(
+                            run_id=run_id,
+                            stage=ExtractionStage.STRUCTURE_EXTRACTION
+                    )
+                
+                # Step 1: Extract with cumulative learning
+                extraction_start = time.time()
+                extraction_result = await self.extraction_orchestrator.extract_with_cumulative_learning(
+                    image=images['enhanced'],
+                    iteration=iteration,
+                    previous_attempts=previous_attempts,
+                    focus_areas=self._get_focus_areas_from_previous(iteration_history),
+                    locked_positions=self._get_locked_positions_from_previous(iteration_history),
+                    agent_id=agent_id
                 )
                 
-                logger.info(
-                    f"Next iteration will focus on {len(instructions.improve_focus)} areas",
-                    component="master_orchestrator",
-                    focus_areas=len(instructions.improve_focus),
-                    locked_positions=len(instructions.preserve_exact),
-                    efficiency_gain=instructions.efficiency_metrics['efficiency_gain']
+                # Record extraction metrics
+                if queue_item_id:
+                    extraction_time = time.time() - extraction_start
+                    await self.state_tracker.record_stage_metrics(
+                        run_id=run_id,
+                        stage=ExtractionStage.STRUCTURE_EXTRACTION,
+                        metrics={
+                            "duration_seconds": extraction_time,
+                            "tokens_used": getattr(extraction_result, 'token_count', 0),
+                            "cost": extraction_result.api_cost_estimate,
+                            "model_used": extraction_result.model_used
+                        }
+                    )
+            
+                if iteration == 1:
+                    structure_context = extraction_result.structure
+            
+                # Step 2: Generate planogram
+                planogram_result = await self.planogram_orchestrator.generate_for_agent_iteration(
+                    agent_number=iteration,
+                    extraction_result=extraction_result,
+                    structure_context=structure_context,
+                    abstraction_level="product_view",
+                    original_image=images['enhanced']
                 )
+            
+                # Update state: Validation
+                if queue_item_id:
+                    await self.state_tracker.update_stage(
+                        run_id=run_id,
+                        stage=ExtractionStage.VALIDATION
+                    )
+            
+                # Step 3: AI comparison analysis
+                validation_start = time.time()
+                comparison_result = await self.comparison_agent.compare_image_vs_planogram(
+                    original_image=images['enhanced'],
+                    planogram=planogram_result.planogram,
+                    structure_context=structure_context
+                )
+            
+                # Step 4: Calculate accuracy and analyze failures
+                accuracy_analysis = self.feedback_manager.analyze_accuracy_with_failure_areas(
+                    comparison_result, structure_context
+                )
+            
+                current_accuracy = accuracy_analysis.overall_accuracy
+            
+                # Record validation metrics
+                if queue_item_id:
+                    validation_time = time.time() - validation_start
+                    await self.state_tracker.record_stage_metrics(
+                        run_id=run_id,
+                        stage=ExtractionStage.VALIDATION,
+                        metrics={
+                            "duration_seconds": validation_time,
+                            "accuracy": current_accuracy
+                        }
+                    )
+            
+                # Step 5: Track iteration with detailed data for debugging
+                iteration_data = {
+                    "iteration": iteration,
+                    "accuracy": current_accuracy,
+                    "extraction_result": extraction_result,
+                    "planogram": planogram_result,
+                    "comparison_result": comparison_result,
+                    "accuracy_analysis": accuracy_analysis,
+                    "failure_areas": accuracy_analysis.failure_areas,
+                    "locked_positions": accuracy_analysis.high_confidence_positions,
+                    "timestamp": datetime.utcnow()
+                }
+                iteration_history.append(iteration_data)
+                previous_attempts.append(extraction_result)
+            
+                # Store detailed iteration data for dashboard
+                self.iteration_details['iterations'].append({
+                    "iteration": iteration,
+                    "accuracy": current_accuracy,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "extraction_data": {
+                        "total_products": len(extraction_result.products),
+                        "products": [p.model_dump() if hasattr(p, 'model_dump') else p.dict() for p in extraction_result.products],
+                        "model_used": extraction_result.model_used,
+                        "confidence": extraction_result.overall_confidence
+                    },
+                    "planogram_svg": planogram_result.planogram.svg_data if hasattr(planogram_result.planogram, 'svg_data') else None,
+                    "structure": {
+                        "shelves": structure_context.shelf_count,
+                        "width": structure_context.estimated_width_meters
+                    },
+                    "failure_areas": [area.model_dump() if hasattr(area, 'model_dump') else area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
+                })
+            
+                # Update best result
+                if current_accuracy > best_accuracy:
+                    best_accuracy = current_accuracy
+                    best_planogram = planogram_result
+            
+                # Step 6: Check if target achieved
+                if current_accuracy >= target_accuracy:
+                    logger.info(
+                        f"Target accuracy {target_accuracy:.1%} achieved!",
+                        component="master_orchestrator",
+                        final_accuracy=current_accuracy,
+                        iterations=iteration
+                    )
+                    break
+            
+                # Step 7: Prepare next iteration focus areas
+                if iteration < max_iterations:
+                    logger.info(
+                        f"Accuracy: {current_accuracy:.1%} - Preparing iteration {iteration + 1}",
+                        component="master_orchestrator",
+                        current_accuracy=current_accuracy,
+                        next_iteration=iteration + 1
+                    )
+                
+                    # Create focused instructions for next iteration
+                    instructions = self.feedback_manager.create_focused_extraction_instructions(
+                        accuracy_analysis.failure_areas,
+                        accuracy_analysis.high_confidence_positions,
+                        structure_context
+                    )
+                
+                    logger.info(
+                        f"Next iteration will focus on {len(instructions.improve_focus)} areas",
+                        component="master_orchestrator",
+                        focus_areas=len(instructions.improve_focus),
+                        locked_positions=len(instructions.preserve_exact),
+                        efficiency_gain=instructions.efficiency_metrics['efficiency_gain']
+                    )
+            
+        except Exception as e:
+            logger.error(f"Error during extraction: {e}", component="master_orchestrator", error=str(e))
+            
+            # Mark run as failed in state tracker
+            if queue_item_id:
+                await self.state_tracker.fail_run(
+                    run_id=run_id,
+                    error_message=str(e),
+                    stage=ExtractionStage.STRUCTURE_EXTRACTION if iteration == 1 else ExtractionStage.VALIDATION
+                )
+            
+            # Re-raise the exception
+            raise
         
         # Calculate totals
         total_duration = time.time() - start_time
@@ -196,6 +270,22 @@ class MasterOrchestrator:
         
         # Determine if human review needed
         needs_human_review = current_accuracy < target_accuracy
+        
+        # Complete the extraction run in state tracker
+        if queue_item_id:
+            final_status = ExtractionStatus.COMPLETED if best_accuracy >= target_accuracy else ExtractionStatus.REQUIRES_REVIEW
+            await self.state_tracker.complete_run(
+                run_id=run_id,
+                status=final_status,
+                result_data={
+                    "final_accuracy": best_accuracy,
+                    "target_achieved": best_accuracy >= target_accuracy,
+                    "iterations": len(iteration_history),
+                    "best_planogram_id": best_planogram.planogram_id if best_planogram else None,
+                    "total_duration": total_duration,
+                    "total_cost": total_cost
+                }
+            )
         
         # Create final result
         result = MasterResult(
