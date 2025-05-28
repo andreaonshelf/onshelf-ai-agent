@@ -373,6 +373,222 @@ def _get_system_description(system_key: str) -> str:
     return descriptions.get(system_key, "Unknown system")
 
 
+@router.get("/library")
+async def get_prompt_library(
+    prompt_type: Optional[str] = None,
+    model_type: Optional[str] = None,
+    min_accuracy: Optional[float] = None,
+    sort_by: Optional[str] = "performance_score",
+    limit: Optional[int] = 50
+):
+    """Get all prompts with performance metrics for browsing and inspiration"""
+    
+    try:
+        if not supabase:
+            # Return mock data for testing
+            return {
+                "prompts": [
+                    {
+                        "id": "mock-1",
+                        "name": "High-Accuracy Retail Extraction v2",
+                        "description": "Optimized for dense shelf layouts with 95%+ accuracy",
+                        "prompt_type": "products",
+                        "model_type": "gpt4o",
+                        "performance_score": 0.95,
+                        "usage_count": 127,
+                        "avg_cost": 0.023,
+                        "error_rate": 0.05,
+                        "avg_processing_time": 4.2,
+                        "last_used": "2 hours ago",
+                        "created_at": "2024-01-15T10:00:00Z",
+                        "tags": ["retail", "high-density", "production"],
+                        "preview": "Extract all products from this retail shelf image with high precision..."
+                    },
+                    {
+                        "id": "mock-2", 
+                        "name": "Budget-Optimized Scanner",
+                        "description": "Low-cost extraction with acceptable accuracy for bulk processing",
+                        "prompt_type": "products",
+                        "model_type": "gemini",
+                        "performance_score": 0.82,
+                        "usage_count": 453,
+                        "avg_cost": 0.008,
+                        "error_rate": 0.18,
+                        "avg_processing_time": 2.1,
+                        "last_used": "5 minutes ago",
+                        "created_at": "2024-01-10T08:00:00Z",
+                        "tags": ["budget", "bulk", "fast"],
+                        "preview": "Quickly identify products in this retail shelf image..."
+                    }
+                ]
+            }
+        
+        # Build query
+        query = supabase.table("prompt_templates").select("*")
+        
+        # Apply filters
+        if prompt_type:
+            query = query.eq("prompt_type", prompt_type)
+        if model_type:
+            query = query.eq("model_type", model_type)
+        if min_accuracy:
+            query = query.gte("performance_score", min_accuracy)
+        
+        # Sort and limit
+        if sort_by == "performance_score":
+            query = query.order("performance_score", desc=True)
+        elif sort_by == "usage_count":
+            query = query.order("usage_count", desc=True)
+        elif sort_by == "cost":
+            query = query.order("avg_token_cost", desc=False)
+        elif sort_by == "recent":
+            query = query.order("last_used", desc=True)
+        
+        query = query.limit(limit)
+        result = query.execute()
+        
+        # Enhance prompt data
+        enhanced_prompts = []
+        for prompt in result.data:
+            # Calculate relative time
+            if prompt.get('last_used'):
+                last_used_dt = datetime.fromisoformat(prompt['last_used'].replace('Z', '+00:00'))
+                delta = datetime.utcnow() - last_used_dt.replace(tzinfo=None)
+                
+                if delta.days > 0:
+                    last_used = f"{delta.days} days ago"
+                elif delta.seconds > 3600:
+                    last_used = f"{delta.seconds // 3600} hours ago"
+                else:
+                    last_used = "Recently"
+            else:
+                last_used = "Never"
+            
+            # Extract tags from metadata
+            tags = []
+            if prompt.get('metadata'):
+                tags = prompt['metadata'].get('tags', [])
+            
+            # Get preview (first 150 chars)
+            preview = prompt['prompt_content'][:150] + "..." if len(prompt['prompt_content']) > 150 else prompt['prompt_content']
+            
+            enhanced_prompts.append({
+                "id": prompt['prompt_id'],
+                "name": prompt.get('template_id', 'Unnamed Prompt'),
+                "description": prompt.get('description', ''),
+                "prompt_type": prompt['prompt_type'],
+                "model_type": prompt['model_type'],
+                "performance_score": float(prompt.get('performance_score') or 0),
+                "usage_count": prompt.get('usage_count', 0),
+                "avg_cost": float(prompt.get('avg_token_cost') or 0),
+                "error_rate": float(prompt.get('correction_rate') or 0),
+                "avg_processing_time": prompt.get('avg_processing_time', 0),
+                "last_used": last_used,
+                "created_at": prompt['created_at'],
+                "tags": tags,
+                "preview": preview,
+                "version": prompt.get('prompt_version', 1),
+                "parent_id": prompt.get('parent_prompt_id'),
+                "created_from_feedback": prompt.get('created_from_feedback', False)
+            })
+        
+        return {
+            "prompts": enhanced_prompts,
+            "total": len(enhanced_prompts),
+            "filters_applied": {
+                "prompt_type": prompt_type,
+                "model_type": model_type,
+                "min_accuracy": min_accuracy,
+                "sort_by": sort_by
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get prompt library: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/library/stats")
+async def get_prompt_library_stats():
+    """Get aggregate statistics for the prompt library"""
+    
+    try:
+        if not supabase:
+            return {
+                "total_prompts": 42,
+                "avg_performance": 0.87,
+                "most_used_type": "products",
+                "most_successful_model": "gpt4o",
+                "total_usage": 2341,
+                "avg_cost_per_extraction": 0.018
+            }
+        
+        # Get aggregate stats
+        result = supabase.table("prompt_templates").select("*").execute()
+        
+        if not result.data:
+            return {
+                "total_prompts": 0,
+                "avg_performance": 0,
+                "most_used_type": None,
+                "most_successful_model": None,
+                "total_usage": 0,
+                "avg_cost_per_extraction": 0
+            }
+        
+        # Calculate statistics
+        total_prompts = len(result.data)
+        performances = [p['performance_score'] for p in result.data if p.get('performance_score')]
+        avg_performance = sum(performances) / len(performances) if performances else 0
+        
+        # Count by type
+        type_counts = {}
+        model_performances = {}
+        total_usage = 0
+        total_cost = 0
+        
+        for prompt in result.data:
+            # Type counts
+            ptype = prompt['prompt_type']
+            type_counts[ptype] = type_counts.get(ptype, 0) + prompt.get('usage_count', 0)
+            
+            # Model performances
+            model = prompt['model_type']
+            if model not in model_performances:
+                model_performances[model] = []
+            if prompt.get('performance_score'):
+                model_performances[model].append(prompt['performance_score'])
+            
+            # Usage and cost
+            total_usage += prompt.get('usage_count', 0)
+            if prompt.get('avg_token_cost') and prompt.get('usage_count'):
+                total_cost += prompt['avg_token_cost'] * prompt['usage_count']
+        
+        # Find most used type
+        most_used_type = max(type_counts.items(), key=lambda x: x[1])[0] if type_counts else None
+        
+        # Find most successful model
+        model_avg_scores = {}
+        for model, scores in model_performances.items():
+            if scores:
+                model_avg_scores[model] = sum(scores) / len(scores)
+        
+        most_successful_model = max(model_avg_scores.items(), key=lambda x: x[1])[0] if model_avg_scores else None
+        
+        return {
+            "total_prompts": total_prompts,
+            "avg_performance": round(avg_performance, 3),
+            "most_used_type": most_used_type,
+            "most_successful_model": most_successful_model,
+            "total_usage": total_usage,
+            "avg_cost_per_extraction": round(total_cost / total_usage if total_usage else 0, 4)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get prompt library stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{prompt_id}")
 async def get_prompt_details(prompt_id: str):
     """Get full prompt details for preview/editing"""

@@ -84,6 +84,10 @@ app.include_router(feedback_router)
 from src.api.iteration_tracking import router as iteration_router, iteration_storage
 app.include_router(iteration_router)
 
+# Include field definitions API
+from src.api.field_definitions import router as field_definitions_router
+app.include_router(field_definitions_router)
+
 # Initialize mock iteration data on startup
 @app.on_event("startup")
 async def initialize_mock_data():
@@ -3332,30 +3336,36 @@ async def root():
                     
                     <!-- Model Configuration (shown when customizing) -->
                     <div class="config-group" id="modelConfig" style="display: none;">
-                        <label>Model Assignment</label>
+                        <label>Model Override (Optional)</label>
+                        <p style="font-size: 12px; color: #6b7280; margin: 5px 0 10px 0;">
+                            ⚡ The system automatically selects optimal models. Use these overrides only if you have specific requirements.
+                        </p>
                         <div class="model-selectors">
                             <div class="model-row">
                                 <span>Structure:</span>
                                 <select id="model-structure" onchange="updatePromptOptions('structure')">
-                                    <option value="claude">Claude</option>
-                                    <option value="gpt4o">GPT-4o</option>
-                                    <option value="gemini">Gemini</option>
+                                    <option value="">System Choice</option>
+                                    <option value="claude">Force Claude</option>
+                                    <option value="gpt4o">Force GPT-4o</option>
+                                    <option value="gemini">Force Gemini</option>
                                 </select>
                             </div>
                             <div class="model-row">
                                 <span>Products:</span>
                                 <select id="model-products" onchange="updatePromptOptions('products')">
-                                    <option value="claude">Claude</option>
-                                    <option value="gpt4o">GPT-4o</option>
-                                    <option value="gemini">Gemini</option>
+                                    <option value="">System Choice</option>
+                                    <option value="claude">Force Claude</option>
+                                    <option value="gpt4o">Force GPT-4o</option>
+                                    <option value="gemini">Force Gemini</option>
                                 </select>
                             </div>
                             <div class="model-row">
                                 <span>Details:</span>
                                 <select id="model-details" onchange="updatePromptOptions('details')">
-                                    <option value="claude">Claude</option>
-                                    <option value="gpt4o">GPT-4o</option>
-                                    <option value="gemini">Gemini</option>
+                                    <option value="">System Choice</option>
+                                    <option value="claude">Force Claude</option>
+                                    <option value="gpt4o">Force GPT-4o</option>
+                                    <option value="gemini">Force Gemini</option>
                                 </select>
                             </div>
                         </div>
@@ -3436,6 +3446,20 @@ async def root():
                         </button>
                         <button onclick="saveAsDefault()" class="btn btn-secondary">
                             Save as Default
+                        </button>
+                    </div>
+                    
+                    <!-- Prompt Management Section -->
+                    <div class="config-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                        <h4 style="margin: 0 0 10px 0; color: #1f2937;">📝 Prompt Management</h4>
+                        <button onclick="createNewPrompt()" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">
+                            ✨ Write New Prompt
+                        </button>
+                        <button onclick="openPromptLibrary()" class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;">
+                            📚 Browse Prompt Library
+                        </button>
+                        <button onclick="manageFieldDefinitions()" class="btn btn-secondary" style="width: 100%;">
+                            📋 Manage Field Definitions
                         </button>
                     </div>
                 </div>
@@ -4254,6 +4278,7 @@ async def root():
                                     <h3>⚡ Quick Actions</h3>
                                 </div>
                                 <div class="quick-actions">
+                                    <button class="btn btn-primary" onclick="openPromptLibrary()">📚 Browse Prompt Library</button>
                                     <button class="btn btn-primary" onclick="generateRecommendations()">🔮 Generate Recommendations</button>
                                     <button class="btn btn-secondary" onclick="exportIntelligence()">📥 Export Report</button>
                                     <button class="btn btn-warning" onclick="optimizePrompts()">🚀 Optimize Prompts</button>
@@ -8730,7 +8755,7 @@ async def root():
                     <div style="background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
                         <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                             <h3 style="margin: 0; color: #1f2937;">Full Prompt Content</h3>
-                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
                         </div>
                         <div style="padding: 20px; overflow-y: auto; flex: 1;">
                             <pre style="background: #f8fafc; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 13px; line-height: 1.4; color: #374151; white-space: pre-wrap; margin: 0;">${escapeHtml(fullContent)}</pre>
@@ -10607,6 +10632,8 @@ async def root():
             
             // Create New Prompt
             function createNewPrompt(extractionType) {
+                // If no extraction type specified, default to 'products'
+                extractionType = extractionType || 'products';
                 // Open the enhanced prompt engineering modal
                 openPromptEngineeringModal(extractionType);
             }
@@ -10896,6 +10923,9 @@ async def root():
                 
                 modal.appendChild(modalContent);
                 document.body.appendChild(modal);
+                
+                // Load field definitions for tooltips
+                loadFieldDefinitions();
                 
                 // Close on background click
                 modal.addEventListener('click', function(e) {
@@ -11590,7 +11620,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                         </div>
                         
                         <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
+                            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
                             <button onclick="applyOverride(${itemId})" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Apply Override</button>
                         </div>
                     </div>
@@ -12144,7 +12174,12 @@ ${getOptimizationTips(goal, extractionType)}`;
                             <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <h2 style="margin: 0; color: #1f2937; font-size: 20px;">✨ AI-Assisted Prompt Engineering</h2>
-                                    <button onclick="closePromptEngineeringModal()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <button onclick="openPromptLibrary()" style="background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                            📚 Browse Library
+                                        </button>
+                                        <button onclick="closePromptEngineeringModal()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                                    </div>
                                 </div>
                                 
                                 ${existingPrompt ? `
@@ -12182,8 +12217,11 @@ ${getOptimizationTips(goal, extractionType)}`;
                                     </div>
                                     
                                     <div style="margin-bottom: 15px;">
-                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Fields to Extract:</label>
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 120px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 10px; border-radius: 4px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                                            Fields to Extract:
+                                            <button onclick="manageFieldDefinitions()" style="float: right; padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer;">📝 Manage Definitions</button>
+                                        </label>
+                                        <div id="fieldCheckboxContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 180px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 10px; border-radius: 4px;">
                                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="product_name" checked> Product Name</label>
                                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="brand" checked> Brand</label>
                                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="price" checked> Price</label>
@@ -12195,6 +12233,10 @@ ${getOptimizationTips(goal, extractionType)}`;
                                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="package_size"> Package Size</label>
                                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="confidence"> Confidence</label>
                                         </div>
+                                        <div id="fieldDefinitionsPreview" style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 4px; border: 1px solid #e5e7eb; display: none;">
+                                            <h5 style="margin: 0 0 8px 0; font-size: 13px; color: #4b5563;">📖 Field Definitions:</h5>
+                                            <div id="definitionsList" style="font-size: 12px; color: #6b7280;"></div>
+                                        </div>
                                     </div>
                                     
                                     <div style="margin-bottom: 15px;">
@@ -12205,6 +12247,17 @@ ${getOptimizationTips(goal, extractionType)}`;
                                     <div style="margin-bottom: 20px;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 8px;">Special Instructions:</label>
                                         <textarea id="specialInstructions" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="E.g., This prompt is optimized for Tesco shelves with high product density..."></textarea>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 20px;">
+                                        <details style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">
+                                            <summary style="cursor: pointer; font-weight: 600; color: #1f2937;">🧠 Advanced: View/Edit Meta-Prompt</summary>
+                                            <div style="margin-top: 10px;">
+                                                <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">This is the prompt sent to Claude to generate your optimized prompt. You can customize it:</p>
+                                                <textarea id="metaPromptEditor" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; min-height: 200px; font-family: monospace; font-size: 12px;" placeholder="Leave empty to use default meta-prompt"></textarea>
+                                                <button onclick="resetMetaPrompt()" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">Reset to Default</button>
+                                            </div>
+                                        </details>
                                     </div>
                                     
                                     <button onclick="generateOptimizedPrompt()" class="btn-primary" style="width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
@@ -12226,6 +12279,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                                             <button class="result-tab-btn" onclick="showResultTab('prompt')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Prompt Only</button>
                                             <button class="result-tab-btn" onclick="showResultTab('schema')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Pydantic Schema</button>
                                             <button class="result-tab-btn" onclick="showResultTab('reasoning')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">AI Reasoning</button>
+                                            <button class="result-tab-btn" onclick="showResultTab('meta')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Meta-Prompt</button>
                                         </div>
                                         
                                         <!-- Combined View Tab -->
@@ -12270,6 +12324,13 @@ ${getOptimizationTips(goal, extractionType)}`;
                                                 <h5 style="margin: 0 0 10px 0; color: #1f2937;">🚀 Key Improvements:</h5>
                                                 <ul id="improvementsList" style="margin: 0; padding-left: 20px; line-height: 1.6;"></ul>
                                             </div>
+                                        </div>
+                                        
+                                        <!-- Meta-Prompt Tab -->
+                                        <div id="metaTab" class="result-tab" style="display: none; flex: 1; padding: 20px; overflow-y: auto;">
+                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">🔍 Meta-Prompt Used:</h4>
+                                            <p style="font-size: 12px; color: #64748b; margin-bottom: 10px;">This is the exact prompt that was sent to Claude to generate your optimized prompt:</p>
+                                            <pre id="metaPromptUsed" style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 12px; overflow: auto; border: 1px solid #e5e7eb; white-space: pre-wrap;"></pre>
                                         </div>
                                         
                                         <!-- Actions -->
@@ -12330,6 +12391,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                 const baseContext = document.getElementById('basePromptContext').value;
                 const specialInstructions = document.getElementById('specialInstructions').value;
                 const promptType = document.getElementById('promptTypeSelect').value;
+                const metaPrompt = document.getElementById('metaPromptEditor').value;
                 
                 // Show loading
                 document.getElementById('aiThinking').style.display = 'flex';
@@ -12344,7 +12406,8 @@ ${getOptimizationTips(goal, extractionType)}`;
                             base_prompt: baseContext,
                             fields_to_extract: selectedFields,
                             special_instructions: specialInstructions,
-                            parent_prompt_id: editingPromptData?.prompt_id || null
+                            parent_prompt_id: editingPromptData?.prompt_id || null,
+                            meta_prompt: metaPrompt || null
                         })
                     });
                     
@@ -12411,6 +12474,11 @@ ${getOptimizationTips(goal, extractionType)}`;
                 improvementsList.innerHTML = (result.key_improvements || ['Enhanced clarity and structure'])
                     .map(imp => `<li>${imp}</li>`)
                     .join('');
+                
+                // Display meta-prompt if available
+                if (result.meta_prompt_used) {
+                    document.getElementById('metaPromptUsed').textContent = result.meta_prompt_used;
+                }
             }
             
             // Switch between result tabs
@@ -12548,6 +12616,833 @@ ${getOptimizationTips(goal, extractionType)}`;
                 if (!promptData) return;
                 
                 showNotification('Performance analytics coming soon!', 'info');
+            }
+            
+            // Reset meta-prompt to default
+            function resetMetaPrompt() {
+                const defaultMetaPrompt = `Create an optimized extraction prompt for retail shelf images.
+
+Type: {prompt_type}
+Fields to extract: {fields}
+Base context: {base_prompt}
+Special instructions: {special_instructions}
+
+Generate:
+1. An optimized prompt that will achieve >90% accuracy
+2. A Pydantic model for structured output with the requested fields
+3. Key improvements and reasoning
+
+The prompt should be clear, specific, and include examples where helpful.
+Format the response as JSON with keys:
+- optimized_prompt: The full prompt text
+- pydantic_model_code: Complete Pydantic model code
+- model_class_name: Name of the Pydantic class
+- reasoning: List of optimization decisions made
+- key_improvements: List of key improvements
+- optimization_focus: What this prompt is optimized for
+- recommended_model: Which AI model to use (claude/gpt4o/gemini)`;
+                
+                document.getElementById('metaPromptEditor').value = defaultMetaPrompt;
+                showNotification('Meta-prompt reset to default', 'success');
+            }
+            
+            // ========== Field Definitions Functions ==========
+            
+            // Load field definitions when modal opens
+            async function loadFieldDefinitions() {
+                try {
+                    const response = await fetch('/field-definitions');
+                    const data = await response.json();
+                    
+                    if (data.definitions) {
+                        window.fieldDefinitions = data.definitions.reduce((acc, def) => {
+                            acc[def.field_name] = def;
+                            return acc;
+                        }, {});
+                        
+                        // Update field checkboxes with tooltips
+                        updateFieldCheckboxes();
+                    }
+                } catch (error) {
+                    console.error('Failed to load field definitions:', error);
+                }
+            }
+            
+            // Update field checkboxes with definition tooltips
+            function updateFieldCheckboxes() {
+                const container = document.getElementById('fieldCheckboxContainer');
+                if (!container || !window.fieldDefinitions) return;
+                
+                // Get all checkbox labels
+                const labels = container.querySelectorAll('label');
+                labels.forEach(label => {
+                    const checkbox = label.querySelector('input[type="checkbox"]');
+                    if (!checkbox) return;
+                    
+                    const fieldName = checkbox.value;
+                    const definition = window.fieldDefinitions[fieldName];
+                    
+                    if (definition) {
+                        // Add info icon with tooltip
+                        const infoIcon = document.createElement('span');
+                        infoIcon.innerHTML = ' ℹ️';
+                        infoIcon.style.cursor = 'help';
+                        infoIcon.title = `${definition.definition}${definition.examples ? '\\nExamples: ' + definition.examples : ''}`;
+                        label.appendChild(infoIcon);
+                    }
+                });
+                
+                // Show field definitions preview when checkboxes change
+                container.addEventListener('change', updateFieldDefinitionsPreview);
+            }
+            
+            // Update field definitions preview
+            function updateFieldDefinitionsPreview() {
+                const checkedFields = Array.from(document.querySelectorAll('input[name="field"]:checked'))
+                    .map(cb => cb.value);
+                
+                const preview = document.getElementById('fieldDefinitionsPreview');
+                const list = document.getElementById('definitionsList');
+                
+                if (!preview || !list || !window.fieldDefinitions) return;
+                
+                const definitions = checkedFields
+                    .map(field => window.fieldDefinitions[field])
+                    .filter(def => def);
+                
+                if (definitions.length > 0) {
+                    preview.style.display = 'block';
+                    list.innerHTML = definitions.map(def => `
+                        <div style="margin-bottom: 8px;">
+                            <strong>${def.display_name}:</strong> ${def.definition}
+                            ${def.examples ? `<br><em style="color: #9ca3af;">Examples: ${def.examples}</em>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    preview.style.display = 'none';
+                }
+            }
+            
+            // Manage field definitions modal
+            function manageFieldDefinitions() {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10001;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: white; border-radius: 8px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                        <h2 style="margin: 0 0 20px 0;">📝 Manage Field Definitions</h2>
+                        
+                        <div id="fieldDefinitionsList" style="margin-bottom: 20px;">
+                            <p style="color: #6b7280;">Loading field definitions...</p>
+                        </div>
+                        
+                        <button onclick="addFieldDefinition()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                            ➕ Add New Field
+                        </button>
+                        
+                        <button onclick="this.closest('.fixed').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                loadFieldDefinitionsList();
+            }
+            
+            // Load field definitions list for management
+            async function loadFieldDefinitionsList() {
+                const container = document.getElementById('fieldDefinitionsList');
+                if (!container) return;
+                
+                try {
+                    const response = await fetch('/field-definitions?organized=true');
+                    const data = await response.json();
+                    
+                    if (data.categories && data.categories.length > 0) {
+                        container.innerHTML = `
+                            <div style="margin-bottom: 20px;">
+                                <button onclick="toggleAllCategories()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 10px;">
+                                    ↕️ Toggle All
+                                </button>
+                                <button onclick="showReorderInterface()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                    🔢 Reorder Fields
+                                </button>
+                            </div>
+                            ${data.categories.map(category => `
+                                <div class="field-category" style="margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                                    <div onclick="toggleCategory('${category.name}')" style="background: #f8fafc; padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <h3 style="margin: 0; font-size: 16px; color: #1f2937;">
+                                            <span id="category-arrow-${category.name}" style="display: inline-block; transition: transform 0.2s;">▶</span>
+                                            ${category.name} (${category.fields.length})
+                                        </h3>
+                                        <button onclick="event.stopPropagation(); addFieldToCategory('${category.name}')" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                                            + Add Field
+                                        </button>
+                                    </div>
+                                    <div id="category-fields-${category.name}" style="display: none; padding: 15px;">
+                                        ${category.fields.map((def, index) => `
+                                            <div style="border: 1px solid #e5e7eb; padding: 12px; border-radius: 6px; margin-bottom: 10px; background: white;">
+                                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                                    <div style="flex: 1;">
+                                                        <h4 style="margin: 0 0 6px 0; color: #1f2937;">
+                                                            ${def.display_name} 
+                                                            <span style="font-size: 12px; color: #6b7280; font-weight: normal;">(${def.field_name})</span>
+                                                            ${def.is_required ? '<span style="color: #ef4444; font-size: 12px;">*</span>' : ''}
+                                                        </h4>
+                                                        <p style="margin: 0 0 6px 0; color: #4b5563; font-size: 14px;">${def.definition}</p>
+                                                        ${def.examples ? `<p style="margin: 0; font-size: 12px; color: #9ca3af;"><em>Examples: ${def.examples}</em></p>` : ''}
+                                                        <div style="margin-top: 6px; font-size: 11px; color: #9ca3af;">
+                                                            Type: ${def.data_type} | Order: ${def.sort_order || 999}
+                                                        </div>
+                                                    </div>
+                                                    <div style="display: flex; gap: 5px;">
+                                                        <button onclick="moveFieldUp('${def.field_name}', '${category.name}', ${index})" ${index === 0 ? 'disabled' : ''} style="padding: 4px 8px; background: ${index === 0 ? '#e5e7eb' : '#f3f4f6'}; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: ${index === 0 ? 'not-allowed' : 'pointer'};">
+                                                            ↑
+                                                        </button>
+                                                        <button onclick="moveFieldDown('${def.field_name}', '${category.name}', ${index})" ${index === category.fields.length - 1 ? 'disabled' : ''} style="padding: 4px 8px; background: ${index === category.fields.length - 1 ? '#e5e7eb' : '#f3f4f6'}; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: ${index === category.fields.length - 1 ? 'not-allowed' : 'pointer'};">
+                                                            ↓
+                                                        </button>
+                                                        <button onclick="editFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                                            ✏️
+                                                        </button>
+                                                        <button onclick="deleteFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                                            🗑
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `).join('')}`;
+                    } else if (data.definitions && data.definitions.length > 0) {
+                        // Fallback for non-organized view
+                        container.innerHTML = data.definitions.map(def => `
+                            <div style="border: 1px solid #e5e7eb; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+                                <h4 style="margin: 0 0 8px 0;">${def.display_name} (${def.field_name})</h4>
+                                <p style="margin: 0 0 8px 0; color: #4b5563;">${def.definition}</p>
+                                ${def.examples ? `<p style="margin: 0; font-size: 12px; color: #9ca3af;"><em>Examples: ${def.examples}</em></p>` : ''}
+                                <div style="margin-top: 10px;">
+                                    <button onclick="editFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 5px;">
+                                        Edit
+                                    </button>
+                                    <button onclick="deleteFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = '<p style="color: #6b7280;">No field definitions found. Add some to help the AI understand your extraction requirements!</p>';
+                    }
+                } catch (error) {
+                    container.innerHTML = '<p style="color: #ef4444;">Failed to load field definitions. Please try again.</p>';
+                    console.error('Failed to load field definitions:', error);
+                }
+            }
+            
+            // Add new field definition
+            function addFieldDefinition() {
+                const form = `
+                    <div style="border: 1px solid #e5e7eb; padding: 20px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb;">
+                        <h3 style="margin: 0 0 15px 0;">Add New Field Definition</h3>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Field Name (e.g., "facings"):</label>
+                            <input type="text" id="newFieldName" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Display Name:</label>
+                            <input type="text" id="newDisplayName" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Definition:</label>
+                            <textarea id="newDefinition" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Examples (optional):</label>
+                            <textarea id="newExamples" rows="2" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;" placeholder="e.g., '3 facings means 3 identical products side by side'"></textarea>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Category:</label>
+                            <select id="newCategory" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                <option value="Product Info">Product Info</option>
+                                <option value="Shelf Layout">Shelf Layout</option>
+                                <option value="Pricing">Pricing</option>
+                                <option value="Inventory">Inventory</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Sort Order:</label>
+                            <input type="number" id="newSortOrder" value="99" min="1" max="999" style="width: 100px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                        </div>
+                        <button onclick="saveNewFieldDefinition()" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                            Save
+                        </button>
+                        <button onclick="loadFieldDefinitionsList()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                    </div>
+                `;
+                
+                const container = document.getElementById('fieldDefinitionsList');
+                if (container) {
+                    container.innerHTML = form + container.innerHTML;
+                }
+            }
+            
+            // Save new field definition
+            async function saveNewFieldDefinition() {
+                const fieldName = document.getElementById('newFieldName').value.trim();
+                const displayName = document.getElementById('newDisplayName').value.trim();
+                const definition = document.getElementById('newDefinition').value.trim();
+                const examples = document.getElementById('newExamples').value.trim();
+                const category = document.getElementById('newCategory').value;
+                const sortOrder = parseInt(document.getElementById('newSortOrder').value) || 99;
+                
+                if (!fieldName || !displayName || !definition) {
+                    showNotification('Please fill in all required fields', 'error');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/field-definitions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            field_name: fieldName,
+                            display_name: displayName,
+                            definition: definition,
+                            examples: examples || null,
+                            category: category,
+                            sort_order: sortOrder
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Field definition added successfully', 'success');
+                        loadFieldDefinitionsList();
+                        loadFieldDefinitions(); // Reload for the main form
+                    } else {
+                        const error = await response.json();
+                        showNotification(error.detail || 'Failed to add field definition', 'error');
+                    }
+                } catch (error) {
+                    showNotification('Failed to add field definition', 'error');
+                    console.error('Failed to add field definition:', error);
+                }
+            }
+            
+            // Edit field definition
+            async function editFieldDefinition(fieldName) {
+                try {
+                    const response = await fetch(`/field-definitions/${fieldName}`);
+                    const def = await response.json();
+                    
+                    const form = `
+                        <div style="border: 1px solid #e5e7eb; padding: 20px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb;">
+                            <h3 style="margin: 0 0 15px 0;">Edit Field Definition</h3>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Field Name:</label>
+                                <input type="text" value="${def.field_name}" disabled style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6;">
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Display Name:</label>
+                                <input type="text" id="editDisplayName" value="${def.display_name}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Definition:</label>
+                                <textarea id="editDefinition" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">${def.definition}</textarea>
+                            </div>
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Examples (optional):</label>
+                                <textarea id="editExamples" rows="2" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">${def.examples || ''}</textarea>
+                            </div>
+                            <button onclick="saveEditedFieldDefinition('${def.field_name}')" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                                Save Changes
+                            </button>
+                            <button onclick="loadFieldDefinitionsList()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Cancel
+                            </button>
+                        </div>
+                    `;
+                    
+                    const container = document.getElementById('fieldDefinitionsList');
+                    if (container) {
+                        container.innerHTML = form;
+                    }
+                } catch (error) {
+                    showNotification('Failed to load field definition', 'error');
+                    console.error('Failed to load field definition:', error);
+                }
+            }
+            
+            // Save edited field definition
+            async function saveEditedFieldDefinition(fieldName) {
+                const displayName = document.getElementById('editDisplayName').value.trim();
+                const definition = document.getElementById('editDefinition').value.trim();
+                const examples = document.getElementById('editExamples').value.trim();
+                
+                if (!displayName || !definition) {
+                    showNotification('Please fill in all required fields', 'error');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/field-definitions/${fieldName}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            field_name: fieldName,
+                            display_name: displayName,
+                            definition: definition,
+                            examples: examples || null
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Field definition updated successfully', 'success');
+                        loadFieldDefinitionsList();
+                        loadFieldDefinitions(); // Reload for the main form
+                    } else {
+                        const error = await response.json();
+                        showNotification(error.detail || 'Failed to update field definition', 'error');
+                    }
+                } catch (error) {
+                    showNotification('Failed to update field definition', 'error');
+                    console.error('Failed to update field definition:', error);
+                }
+            }
+            
+            // Delete field definition
+            async function deleteFieldDefinition(fieldName) {
+                if (!confirm(`Are you sure you want to delete the field definition for "${fieldName}"?`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/field-definitions/${fieldName}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Field definition deleted successfully', 'success');
+                        loadFieldDefinitionsList();
+                        loadFieldDefinitions(); // Reload for the main form
+                    } else {
+                        const error = await response.json();
+                        showNotification(error.detail || 'Failed to delete field definition', 'error');
+                    }
+                } catch (error) {
+                    showNotification('Failed to delete field definition', 'error');
+                    console.error('Failed to delete field definition:', error);
+                }
+            }
+            
+            // Toggle category visibility
+            function toggleCategory(categoryName) {
+                const fieldsDiv = document.getElementById(`category-fields-${categoryName}`);
+                const arrow = document.getElementById(`category-arrow-${categoryName}`);
+                
+                if (fieldsDiv.style.display === 'none') {
+                    fieldsDiv.style.display = 'block';
+                    arrow.style.transform = 'rotate(90deg)';
+                } else {
+                    fieldsDiv.style.display = 'none';
+                    arrow.style.transform = 'rotate(0deg)';
+                }
+            }
+            
+            // Toggle all categories
+            function toggleAllCategories() {
+                const categories = document.querySelectorAll('.field-category');
+                const firstFieldsDiv = document.querySelector('[id^="category-fields-"]');
+                const shouldOpen = firstFieldsDiv && firstFieldsDiv.style.display === 'none';
+                
+                categories.forEach(cat => {
+                    const categoryName = cat.querySelector('[id^="category-arrow-"]').id.replace('category-arrow-', '');
+                    const fieldsDiv = document.getElementById(`category-fields-${categoryName}`);
+                    const arrow = document.getElementById(`category-arrow-${categoryName}`);
+                    
+                    if (shouldOpen) {
+                        fieldsDiv.style.display = 'block';
+                        arrow.style.transform = 'rotate(90deg)';
+                    } else {
+                        fieldsDiv.style.display = 'none';
+                        arrow.style.transform = 'rotate(0deg)';
+                    }
+                });
+            }
+            
+            // Move field up in sort order
+            async function moveFieldUp(fieldName, categoryName, currentIndex) {
+                // TODO: Implement API call to update sort_order
+                showNotification('Reordering functionality coming soon!', 'info');
+            }
+            
+            // Move field down in sort order
+            async function moveFieldDown(fieldName, categoryName, currentIndex) {
+                // TODO: Implement API call to update sort_order
+                showNotification('Reordering functionality coming soon!', 'info');
+            }
+            
+            // Add field to specific category
+            function addFieldToCategory(categoryName) {
+                // Show the add form with pre-selected category
+                addFieldDefinition();
+                // Pre-select the category after form is rendered
+                setTimeout(() => {
+                    const categorySelect = document.getElementById('newCategory');
+                    if (categorySelect) {
+                        categorySelect.value = categoryName;
+                    }
+                }, 100);
+            }
+            
+            // Show reorder interface
+            function showReorderInterface() {
+                showNotification('Drag-and-drop reordering coming soon!', 'info');
+            }
+            
+            // ========== Prompt Library Functions ==========
+            
+            // Open prompt library modal
+            function openPromptLibrary() {
+                const modal = document.createElement('div');
+                modal.id = 'promptLibraryModal';
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.6);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10002;
+                    backdrop-filter: blur(4px);
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: white; border-radius: 12px; padding: 0; max-width: 1200px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                        <!-- Header -->
+                        <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(to right, #f8fafc, #f3f4f6);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h2 style="margin: 0; color: #1f2937; font-size: 24px;">📚 Prompt Library</h2>
+                                <button onclick="document.getElementById(\'promptLibraryModal\').remove()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                                    Close
+                                </button>
+                            </div>
+                            <p style="margin: 10px 0 0 0; color: #6b7280;">Browse existing prompts and their performance metrics for inspiration</p>
+                        </div>
+                        
+                        <!-- Stats Bar -->
+                        <div id="libraryStats" style="padding: 15px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+                            <div style="display: flex; gap: 30px; align-items: center; font-size: 14px;">
+                                <span>Loading statistics...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Filter Bar -->
+                        <div style="padding: 15px 20px; background: white; border-bottom: 1px solid #e5e7eb;">
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                                <select id="libraryFilterType" onchange="filterPromptLibrary()" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                    <option value="">All Types</option>
+                                    <option value="structure">Structure</option>
+                                    <option value="products">Products</option>
+                                    <option value="details">Details</option>
+                                </select>
+                                
+                                <select id="libraryFilterModel" onchange="filterPromptLibrary()" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                    <option value="">All Models</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="gpt4o">GPT-4o</option>
+                                    <option value="gemini">Gemini</option>
+                                </select>
+                                
+                                <select id="libraryFilterAccuracy" onchange="filterPromptLibrary()" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                    <option value="">Any Accuracy</option>
+                                    <option value="0.9">90%+ Accuracy</option>
+                                    <option value="0.8">80%+ Accuracy</option>
+                                    <option value="0.7">70%+ Accuracy</option>
+                                </select>
+                                
+                                <select id="librarySortBy" onchange="filterPromptLibrary()" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                                    <option value="performance_score">Best Performance</option>
+                                    <option value="usage_count">Most Used</option>
+                                    <option value="cost">Lowest Cost</option>
+                                    <option value="recent">Recently Used</option>
+                                </select>
+                                
+                                <input type="text" id="librarySearch" placeholder="Search prompts..." onkeyup="filterPromptLibrary()" 
+                                    style="flex: 1; padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Prompt Grid -->
+                        <div id="promptLibraryContent" style="flex: 1; overflow-y: auto; padding: 20px;">
+                            <div id="promptGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+                                <!-- Prompts will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                loadPromptLibrary();
+                loadLibraryStats();
+            }
+            
+            // Load prompt library
+            async function loadPromptLibrary() {
+                const grid = document.getElementById('promptGrid');
+                if (!grid) return;
+                
+                // Show loading state
+                grid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #6b7280;">Loading prompts...</p>';
+                
+                try {
+                    const params = new URLSearchParams({
+                        prompt_type: document.getElementById('libraryFilterType')?.value || '',
+                        model_type: document.getElementById('libraryFilterModel')?.value || '',
+                        min_accuracy: document.getElementById('libraryFilterAccuracy')?.value || '',
+                        sort_by: document.getElementById('librarySortBy')?.value || 'performance_score'
+                    });
+                    
+                    // Remove empty params
+                    for (const [key, value] of [...params]) {
+                        if (!value) params.delete(key);
+                    }
+                    
+                    const response = await fetch(`/api/prompts/library?${params}`);
+                    const data = await response.json();
+                    
+                    if (data.prompts && data.prompts.length > 0) {
+                        grid.innerHTML = data.prompts.map(prompt => createPromptCard(prompt)).join('');
+                    } else {
+                        grid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #6b7280;">No prompts found matching your criteria.</p>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load prompt library:', error);
+                    grid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #ef4444;">Failed to load prompts. Please try again.</p>';
+                }
+            }
+            
+            // Create prompt card
+            function createPromptCard(prompt) {
+                const perfColor = prompt.performance_score >= 0.9 ? '#10b981' : 
+                                prompt.performance_score >= 0.8 ? '#f59e0b' : '#ef4444';
+                
+                return `
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; background: white; hover: box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: all 0.2s;">
+                        <!-- Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                            <div style="flex: 1;">
+                                <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #1f2937;">${prompt.name}</h3>
+                                <p style="margin: 0; font-size: 12px; color: #6b7280;">${prompt.description || 'No description'}</p>
+                            </div>
+                            <span style="background: ${perfColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                                ${(prompt.performance_score * 100).toFixed(0)}%
+                            </span>
+                        </div>
+                        
+                        <!-- Metadata -->
+                        <div style="display: flex; gap: 12px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
+                            <span>📱 ${prompt.model_type.toUpperCase()}</span>
+                            <span>📦 ${prompt.prompt_type}</span>
+                            <span>🔥 ${prompt.usage_count} uses</span>
+                            <span>💰 $${prompt.avg_cost.toFixed(3)}</span>
+                        </div>
+                        
+                        <!-- Preview -->
+                        <div style="background: #f9fafb; padding: 10px; border-radius: 4px; margin-bottom: 12px;">
+                            <p style="margin: 0; font-size: 11px; color: #4b5563; font-family: monospace; line-height: 1.4;">
+                                ${prompt.preview}
+                            </p>
+                        </div>
+                        
+                        <!-- Tags -->
+                        ${prompt.tags && prompt.tags.length > 0 ? `
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                                ${prompt.tags.map(tag => `
+                                    <span style="background: #e5e7eb; color: #4b5563; padding: 2px 8px; border-radius: 12px; font-size: 10px;">
+                                        ${tag}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Actions -->
+                        <div style="display: flex; gap: 8px; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 11px; color: #9ca3af;">
+                                Last used: ${prompt.last_used}
+                            </span>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="viewPromptDetails('${prompt.id}')" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                                    View Details
+                                </button>
+                                <button onclick="usePromptAsTemplate('${prompt.id}')" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                                    Use as Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Load library statistics
+            async function loadLibraryStats() {
+                const statsDiv = document.getElementById('libraryStats');
+                if (!statsDiv) return;
+                
+                try {
+                    const response = await fetch('/api/prompts/library/stats');
+                    const stats = await response.json();
+                    
+                    statsDiv.innerHTML = `
+                        <div style="display: flex; gap: 30px; align-items: center; font-size: 14px;">
+                            <span><strong>${stats.total_prompts}</strong> Total Prompts</span>
+                            <span><strong>${(stats.avg_performance * 100).toFixed(0)}%</strong> Avg Performance</span>
+                            <span><strong>${stats.most_used_type || 'N/A'}</strong> Most Used Type</span>
+                            <span><strong>${stats.most_successful_model || 'N/A'}</strong> Best Model</span>
+                            <span><strong>$${stats.avg_cost_per_extraction.toFixed(3)}</strong> Avg Cost</span>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Failed to load library stats:', error);
+                }
+            }
+            
+            // Filter prompt library
+            function filterPromptLibrary() {
+                // Debounce search
+                clearTimeout(window.libraryFilterTimeout);
+                window.libraryFilterTimeout = setTimeout(() => {
+                    loadPromptLibrary();
+                }, 300);
+            }
+            
+            // View prompt details
+            async function viewPromptDetails(promptId) {
+                try {
+                    const response = await fetch(`/api/prompts/${promptId}`);
+                    const prompt = await response.json();
+                    
+                    // Create detail modal
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0, 0, 0, 0.5);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 10003;
+                    `;
+                    
+                    modal.innerHTML = `
+                        <div style="background: white; border-radius: 8px; padding: 30px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                            <h2 style="margin: 0 0 20px 0;">${prompt.name || 'Prompt Details'}</h2>
+                            
+                            <div style="background: #f9fafb; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                                <h4 style="margin: 0 0 10px 0;">Full Prompt Content:</h4>
+                                <pre style="margin: 0; white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.5;">${prompt.content}</pre>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div>
+                                    <h4 style="margin: 0 0 10px 0;">Performance Metrics:</h4>
+                                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                                        <li>Success Rate: ${(prompt.performance_stats.success_rate || 0).toFixed(1)}%</li>
+                                        <li>Usage Count: ${prompt.performance_stats.usage_count || 0}</li>
+                                        <li>Avg Cost: $${(prompt.performance_stats.avg_cost || 0).toFixed(3)}</li>
+                                        <li>Error Rate: ${(prompt.performance_stats.error_rate || 0).toFixed(1)}%</li>
+                                    </ul>
+                                </div>
+                                
+                                <div>
+                                    <h4 style="margin: 0 0 10px 0;">Metadata:</h4>
+                                    <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                                        <li>Type: ${prompt.prompt_type}</li>
+                                        <li>Model: ${prompt.model_type}</li>
+                                        <li>Created: ${new Date(prompt.metadata.created_at).toLocaleDateString()}</li>
+                                        <li>Version: ${prompt.version || 1}</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    Close
+                                </button>
+                                <button onclick="usePromptAsTemplate('${promptId}'); this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    Use as Template
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    
+                    // Close on background click
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            modal.remove();
+                        }
+                    });
+                } catch (error) {
+                    console.error('Failed to load prompt details:', error);
+                    showNotification('Failed to load prompt details', 'error');
+                }
+            }
+            
+            // Use prompt as template
+            async function usePromptAsTemplate(promptId) {
+                try {
+                    const response = await fetch(`/api/prompts/${promptId}`);
+                    const prompt = await response.json();
+                    
+                    // Close library modal
+                    const libraryModal = document.getElementById('promptLibraryModal');
+                    if (libraryModal) {
+                        libraryModal.remove();
+                    }
+                    
+                    // Open prompt engineering modal with this prompt as template
+                    openPromptEngineeringModal(prompt.prompt_type, prompt);
+                    
+                    // Pre-fill the fields
+                    setTimeout(() => {
+                        const basePromptTextarea = document.getElementById('basePromptContext');
+                        if (basePromptTextarea) {
+                            basePromptTextarea.value = prompt.content;
+                        }
+                        
+                        // Set the parent prompt info
+                        editingPromptData = prompt;
+                        
+                        showNotification('Loaded prompt as template. Modify and generate your own version!', 'success');
+                    }, 100);
+                } catch (error) {
+                    console.error('Failed to use prompt as template:', error);
+                    showNotification('Failed to load prompt template', 'error');
+                }
             }
             
             // ========== Feedback System Functions ==========

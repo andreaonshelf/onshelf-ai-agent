@@ -673,42 +673,71 @@ async def generate_optimized_prompt(request: Dict[str, Any]):
         return await generate_template_based_prompt(request)
     
     try:
+        logger.info("Starting prompt optimization with Claude")
+        
         prompt_type = request.get("prompt_type", "products")
         base_prompt = request.get("base_prompt", "")
         fields = request.get("fields_to_extract", [])
         special_instructions = request.get("special_instructions", "")
         parent_prompt_id = request.get("parent_prompt_id")
         
+        # Allow custom meta-prompt if provided
+        custom_meta_prompt = request.get("meta_prompt")
+        
+        # Fetch field definitions for the requested fields
+        field_definitions_text = ""
+        if fields:
+            try:
+                # Import httpx for making internal API calls
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    params = "&".join([f"field_names={field}" for field in fields])
+                    response = await client.get(f"http://localhost:8000/field-definitions-for-prompt?{params}")
+                    if response.status_code == 200:
+                        definitions_data = response.json()
+                        field_definitions_text = definitions_data.get("definitions_text", "")
+            except Exception as e:
+                logger.warning(f"Could not fetch field definitions: {e}")
+        
         # Build the generation prompt for Claude
-        generation_prompt = f"""
+        field_context = f"\n\nField Definitions:\n{field_definitions_text}" if field_definitions_text else ""
+        
+        generation_prompt = custom_meta_prompt or f"""
         Create an optimized extraction prompt for retail shelf images.
         
         Type: {prompt_type}
         Fields to extract: {', '.join(fields)}
         Base context: {base_prompt}
-        Special instructions: {special_instructions}
+        Special instructions: {special_instructions}{field_context}
         
         Generate:
         1. An optimized prompt that will achieve >90% accuracy
         2. A Pydantic model for structured output with the requested fields
         3. Key improvements and reasoning
         
+        IMPORTANT: The prompt and Pydantic model will be used with the Instructor library.
         The prompt should be clear, specific, and include examples where helpful.
+        The Pydantic model must use proper type annotations and Field descriptors.
+        
         Format the response as JSON with keys:
-        - optimized_prompt: The full prompt text
-        - pydantic_model_code: Complete Pydantic model code
-        - model_class_name: Name of the Pydantic class
+        - optimized_prompt: The full prompt text that will be passed to the AI model
+        - pydantic_model_code: Complete Pydantic model code with proper imports and Field descriptors
+        - model_class_name: Name of the main Pydantic class (e.g., "ExtractionResult")
         - reasoning: List of optimization decisions made
         - key_improvements: List of key improvements
         - optimization_focus: What this prompt is optimized for
         - recommended_model: Which AI model to use (claude/gpt4o/gemini)
         """
         
+        logger.info(f"Sending request to Claude with {len(generation_prompt)} chars")
+        
         response = claude_client.messages.create(
             model="claude-3-sonnet-20240229",
             messages=[{"role": "user", "content": generation_prompt}],
             max_tokens=2000
         )
+        
+        logger.info("Received response from Claude")
         
         # Parse response
         try:
@@ -736,6 +765,10 @@ async def generate_optimized_prompt(request: Dict[str, Any]):
         # Estimate tokens
         result["estimated_tokens"] = len(result["optimized_prompt"].split()) * 1.3
         
+        # Include the meta-prompt used for transparency
+        result["meta_prompt_used"] = generation_prompt
+        
+        logger.info("Successfully generated optimized prompt")
         return result
         
     except Exception as e:
