@@ -228,6 +228,25 @@
             color: white;
         }
         
+        .stage-tab.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        
+        .stage-tab-container {
+            position: relative;
+        }
+        
+        .stage-tab-container.drag-over::before {
+            content: '';
+            position: absolute;
+            left: -4px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #3b82f6;
+        }
+        
         .prompt-editor {
             margin-bottom: 20px;
         }
@@ -1013,6 +1032,330 @@
             );
         };
         
+        // Model Selector Component
+        const ModelSelector = ({ selectedModels, onChange, stageType }) => {
+            // Actual model definitions with real model IDs and current pricing
+            const models = [
+                // Claude models (Anthropic)
+                {
+                    id: 'claude-opus-4',
+                    provider: 'Anthropic',
+                    family: 'Claude 4',
+                    name: 'Claude 4 Opus',
+                    capabilities: ['vision', 'reasoning', 'complex', 'multimodal'],
+                    speed: 'medium',
+                    cost: 'high',
+                    inputPrice: 15.00,
+                    outputPrice: 75.00,
+                    contextWindow: 200000,
+                    recommended: ['structure', 'products', 'validation'],
+                    description: 'Most capable Anthropic model with vision'
+                },
+                {
+                    id: 'claude-sonnet-4',
+                    provider: 'Anthropic',
+                    family: 'Claude 4',
+                    name: 'Claude 4 Sonnet',
+                    capabilities: ['vision', 'reasoning', 'balanced'],
+                    speed: 'fast',
+                    cost: 'medium',
+                    inputPrice: 3.00,
+                    outputPrice: 15.00,
+                    contextWindow: 200000,
+                    recommended: ['products', 'details'],
+                    description: 'Balanced performance and cost with vision'
+                },
+                {
+                    id: 'claude-3-7-sonnet',
+                    provider: 'Anthropic',
+                    family: 'Claude 3.7',
+                    name: 'Claude 3.7 Sonnet',
+                    capabilities: ['vision', 'fast', 'efficient'],
+                    speed: 'fast',
+                    cost: 'low',
+                    inputPrice: 1.00,
+                    outputPrice: 5.00,
+                    contextWindow: 200000,
+                    recommended: ['details', 'validation'],
+                    description: 'Fast and efficient with vision capabilities'
+                },
+                
+                // OpenAI models
+                {
+                    id: 'gpt-4o',
+                    provider: 'OpenAI',
+                    family: 'GPT-4',
+                    name: 'GPT-4o',
+                    capabilities: ['vision', 'reasoning', 'multimodal'],
+                    speed: 'fast',
+                    cost: 'medium',
+                    inputPrice: 5.00,
+                    outputPrice: 15.00,
+                    contextWindow: 128000,
+                    recommended: ['products', 'structure'],
+                    description: 'Optimized GPT-4 with vision, faster and cheaper'
+                },
+                {
+                    id: 'gpt-4o-mini',
+                    provider: 'OpenAI',
+                    family: 'GPT-4',
+                    name: 'GPT-4o mini',
+                    capabilities: ['vision', 'fast'],
+                    speed: 'very-fast',
+                    cost: 'very-low',
+                    inputPrice: 0.15,
+                    outputPrice: 0.60,
+                    contextWindow: 128000,
+                    recommended: ['details'],
+                    description: 'Small, fast, and affordable with vision'
+                },
+                {
+                    id: 'gpt-4-turbo',
+                    provider: 'OpenAI',
+                    family: 'GPT-4',
+                    name: 'GPT-4 Turbo',
+                    capabilities: ['vision', 'reasoning'],
+                    speed: 'medium',
+                    cost: 'high',
+                    inputPrice: 10.00,
+                    outputPrice: 30.00,
+                    contextWindow: 128000,
+                    recommended: ['validation'],
+                    description: 'GPT-4 Turbo with vision capabilities'
+                },
+                {
+                    id: 'gpt-3.5-turbo',
+                    provider: 'OpenAI',
+                    family: 'GPT-3.5',
+                    name: 'GPT-3.5 Turbo',
+                    capabilities: ['fast', 'basic'],
+                    speed: 'very-fast',
+                    cost: 'very-low',
+                    inputPrice: 0.50,
+                    outputPrice: 1.50,
+                    contextWindow: 16384,
+                    recommended: ['details'],
+                    description: 'Legacy model, no vision support'
+                },
+                
+                // Google models
+                {
+                    id: 'gemini-1.5-pro',
+                    provider: 'Google',
+                    family: 'Gemini 1.5',
+                    name: 'Gemini 1.5 Pro',
+                    capabilities: ['vision', 'multimodal', 'long-context'],
+                    speed: 'medium',
+                    cost: 'low',
+                    inputPrice: 3.50,
+                    outputPrice: 10.50,
+                    contextWindow: 1000000,
+                    recommended: ['products', 'structure'],
+                    description: 'Massive context window, great for vision'
+                },
+                {
+                    id: 'gemini-1.5-flash',
+                    provider: 'Google',
+                    family: 'Gemini 1.5',
+                    name: 'Gemini 1.5 Flash',
+                    capabilities: ['vision', 'fast'],
+                    speed: 'very-fast',
+                    cost: 'very-low',
+                    inputPrice: 0.35,
+                    outputPrice: 1.05,
+                    contextWindow: 1000000,
+                    recommended: ['details'],
+                    description: 'Fast and efficient multimodal model'
+                },
+                {
+                    id: 'gemini-1.0-pro',
+                    provider: 'Google',
+                    family: 'Gemini 1.0',
+                    name: 'Gemini 1.0 Pro',
+                    capabilities: ['reasoning'],
+                    speed: 'fast',
+                    cost: 'very-low',
+                    inputPrice: 0.50,
+                    outputPrice: 1.50,
+                    contextWindow: 32000,
+                    recommended: ['validation'],
+                    description: 'Text-only, no vision support'
+                }
+            ];
+            
+            // Group models by provider
+            const modelsByProvider = models.reduce((acc, model) => {
+                if (!acc[model.provider]) acc[model.provider] = [];
+                acc[model.provider].push(model);
+                return acc;
+            }, {});
+            
+            const isSelected = (modelId) => selectedModels.includes(modelId);
+            
+            const toggleModel = (modelId) => {
+                if (isSelected(modelId)) {
+                    onChange(selectedModels.filter(id => id !== modelId));
+                } else {
+                    onChange([...selectedModels, modelId]);
+                }
+            };
+            
+            const getCostIndicator = (cost) => {
+                switch(cost) {
+                    case 'very-low': return '$';
+                    case 'low': return '$$';
+                    case 'medium': return '$$$';
+                    case 'high': return '$$$$';
+                    default: return '?';
+                }
+            };
+            
+            const getSpeedIndicator = (speed) => {
+                switch(speed) {
+                    case 'very-fast': return '⚡⚡⚡';
+                    case 'fast': return '⚡⚡';
+                    case 'medium': return '⚡';
+                    case 'slow': return '🐌';
+                    default: return '?';
+                }
+            };
+            
+            return (
+                <div style={{ 
+                    background: '#f8fafc', 
+                    padding: '16px', 
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0'
+                }}>
+                    {/* Quick select buttons */}
+                    <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.recommended.includes(stageType)).map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Recommended for {stageType}
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.capabilities.includes('vision')).map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            All Vision Models
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.cost === 'low' || m.cost === 'very-low').map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Budget Models
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange([])}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Clear All
+                        </button>
+                    </div>
+                    
+                    {/* Model selection grid */}
+                    {Object.entries(modelsByProvider).map(([provider, providerModels]) => (
+                        <div key={provider} style={{ marginBottom: '20px' }}>
+                            <h4 style={{ 
+                                fontSize: '14px', 
+                                fontWeight: 600, 
+                                marginBottom: '12px',
+                                color: '#475569'
+                            }}>
+                                {provider}
+                            </h4>
+                            
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                                {providerModels.map(model => (
+                                    <label
+                                        key={model.id}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '12px',
+                                            background: isSelected(model.id) ? '#dbeafe' : 'white',
+                                            border: `2px solid ${isSelected(model.id) ? '#3b82f6' : '#e2e8f0'}`,
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected(model.id)}
+                                            onChange={() => toggleModel(model.id)}
+                                            style={{ marginRight: '12px' }}
+                                        />
+                                        
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                marginBottom: '4px'
+                                            }}>
+                                                <span style={{ fontWeight: 500 }}>{model.name}</span>
+                                                <div style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
+                                                    <span title="Speed">{getSpeedIndicator(model.speed)}</span>
+                                                    <span title="Cost">{getCostIndicator(model.cost)}</span>
+                                                    {model.capabilities.includes('vision') && 
+                                                        <span title="Vision capable">👁️</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                {model.description}
+                                            </div>
+                                            
+                                            <div style={{ 
+                                                fontSize: '11px', 
+                                                color: '#94a3b8',
+                                                marginTop: '4px'
+                                            }}>
+                                                ${model.inputPrice}/${model.outputPrice} per 1M tokens • 
+                                                {Math.floor(model.contextWindow/1000)}k context
+                                            </div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {/* Selected models summary */}
+                    {selectedModels.length > 0 && (
+                        <div style={{ 
+                            marginTop: '16px', 
+                            padding: '12px',
+                            background: '#f0f9ff',
+                            borderRadius: '6px',
+                            fontSize: '13px'
+                        }}>
+                            <strong>Selected {selectedModels.length} model{selectedModels.length !== 1 ? 's' : ''}:</strong>
+                            <div style={{ marginTop: '4px' }}>
+                                {selectedModels.map(id => {
+                                    const model = models.find(m => m.id === id);
+                                    return model ? `${model.name} ` : '';
+                                }).join('• ')}
+                            </div>
+                            {selectedModels.length > 1 && (
+                                <div style={{ marginTop: '4px', color: '#3b82f6' }}>
+                                    Models will vote on extraction results
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
         // Extraction Config Page Component
         const ExtractionConfigPage = () => {
             const [activeStage, setActiveStage] = useState('structure');
@@ -1025,15 +1368,90 @@
             const [fields, setFields] = useState([]);
             const [schemaValidation, setSchemaValidation] = useState(null);
             const [stages, setStages] = useState([
-                { id: 'structure', label: 'Structure Analysis', removable: false },
-                { id: 'products', label: 'Product Extraction', removable: false }
+                { id: 'structure', label: 'Structure Analysis', removable: true },
+                { id: 'products', label: 'Product Extraction', removable: false },
+                // Example removable stage for testing - remove this after verifying the UI works
+                { id: 'details', label: 'Detail Analysis', removable: true }
             ]);
             const [stageConfigs, setStageConfigs] = useState({});
+            const [draggedStage, setDraggedStage] = useState(null);
+            const [dragOverIndex, setDragOverIndex] = useState(null);
+            const [savedStages, setSavedStages] = useState(new Set());
+            const [configPreview, setConfigPreview] = useState(null);
+            const [saveMessage, setSaveMessage] = useState(null);
+            
+            const updateConfigPreview = () => {
+                const preview = {
+                    system: selectedSystem,
+                    max_budget: maxBudget,
+                    stages: {}
+                };
+                
+                // Add all configured stages
+                stages.forEach(stage => {
+                    if (stageConfigs[stage.id]) {
+                        preview.stages[stage.id] = {
+                            prompt_id: stageConfigs[stage.id].prompt_id,
+                            prompt_text: stageConfigs[stage.id].prompt_text,
+                            fields: stageConfigs[stage.id].fields,
+                            models: stageConfigs[stage.id].models
+                        };
+                    }
+                });
+                
+                setConfigPreview(preview);
+            };
             
             useEffect(() => {
                 fetchAvailablePrompts();
                 loadExampleSchema();
+                
+                // Load saved configuration for this stage if it exists
+                if (stageConfigs[activeStage]) {
+                    const config = stageConfigs[activeStage];
+                    setPromptText(config.prompt_text || '');
+                    setSelectedPrompt(config.prompt);
+                    setFields(config.fields || []);
+                }
             }, [activeStage]);
+            
+            useEffect(() => {
+                // Update configuration preview whenever relevant data changes
+                updateConfigPreview();
+            }, [selectedSystem, maxBudget, stageConfigs, stages]);
+            
+            // Load last used configuration on mount
+            useEffect(() => {
+                const loadLastUsedConfig = () => {
+                    const lastUsedConfig = localStorage.getItem('lastUsedConfig');
+                    const lastUsedConfigName = localStorage.getItem('lastUsedConfigName');
+                    
+                    if (lastUsedConfig) {
+                        try {
+                            const config = JSON.parse(lastUsedConfig);
+                            
+                            // Apply configuration
+                            if (config.system) setSelectedSystem(config.system);
+                            if (config.max_budget) setMaxBudget(config.max_budget);
+                            if (config.stages) setStageConfigs(config.stages);
+                            if (config.stage_order) {
+                                const restoredStages = config.stage_order.map(stageId => ({
+                                    id: stageId,
+                                    label: stageId.charAt(0).toUpperCase() + stageId.slice(1),
+                                    removable: stageId !== 'products'
+                                }));
+                                setStages(restoredStages);
+                            }
+                            
+                            console.log(`Loaded last used configuration: ${lastUsedConfigName || 'Unnamed'}`);
+                        } catch (error) {
+                            console.error('Failed to load last used configuration:', error);
+                        }
+                    }
+                };
+                
+                loadLastUsedConfig();
+            }, []); // Only run once on mount
             
             const fetchAvailablePrompts = async () => {
                 try {
@@ -1199,39 +1617,218 @@
                 }
             };
             
-            const handleSaveConfiguration = async () => {
+            const handleSaveStage = async () => {
                 // Validate schema first
                 const isValid = await validateSchema();
                 if (!isValid) {
-                    alert('Schema validation failed. Please check your field definitions.');
+                    setSaveMessage({ type: 'error', text: 'Schema validation failed. Please check your field definitions.' });
+                    setTimeout(() => setSaveMessage(null), 3000);
                     return;
                 }
                 
-                const config = {
-                    system: selectedSystem,
-                    max_budget: maxBudget,
-                    stages: {
-                        [activeStage]: {
-                            prompt_id: selectedPrompt?.id,
-                            prompt_text: promptText,
-                            fields: fields
-                        }
-                    }
+                // Save stage configuration to state
+                const newStageConfig = {
+                    prompt_id: selectedPrompt?.id,
+                    prompt_text: promptText,
+                    prompt: selectedPrompt,
+                    fields: fields,
+                    models: document.querySelector('.stage-content select')?.value || 'All 3 models (vote)'
                 };
                 
+                setStageConfigs({
+                    ...stageConfigs,
+                    [activeStage]: newStageConfig
+                });
+                
+                setSavedStages(new Set([...savedStages, activeStage]));
+                setSaveMessage({ type: 'success', text: `Stage "${activeStage}" saved successfully!` });
+                setTimeout(() => setSaveMessage(null), 3000);
+                
+                // Update preview
+                updateConfigPreview();
+            };
+            
+            const handleSaveConfiguration = async () => {
+                // Check if at least one stage is configured
+                if (Object.keys(stageConfigs).length === 0) {
+                    alert('Please configure and save at least one stage before saving the configuration.');
+                    return;
+                }
+                
+                // Get configuration name and description
+                const configName = prompt('Enter configuration name:');
+                if (!configName) {
+                    alert('Configuration name is required');
+                    return;
+                }
+                
+                const configDescription = prompt('Enter configuration description (optional):') || '';
+                
+                const config = {
+                    name: configName,
+                    description: configDescription,
+                    system: selectedSystem,
+                    max_budget: maxBudget,
+                    stages: {},
+                    stage_order: stages.map(s => s.id), // Save the current order of stages
+                    created_at: new Date().toISOString()
+                };
+                
+                // Include all saved stage configurations
+                Object.entries(stageConfigs).forEach(([stageId, stageConfig]) => {
+                    config.stages[stageId] = {
+                        prompt_id: stageConfig.prompt_id,
+                        prompt_text: stageConfig.prompt_text,
+                        fields: stageConfig.fields,
+                        models: stageConfig.models
+                    };
+                });
+                
                 try {
-                    const response = await fetch(`${API_BASE}/config/save`, {
+                    // Save to field definitions
+                    for (const [stageId, stageConfig] of Object.entries(stageConfigs)) {
+                        if (stageConfig.fields && stageConfig.fields.length > 0) {
+                            await fetch(`${API_BASE}/field-definitions`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    name: `${stageId}_extraction`,
+                                    stage: stageId,
+                                    fields: stageConfig.fields,
+                                    version: '1.0',
+                                    is_active: true
+                                })
+                            });
+                        }
+                    }
+                    
+                    // Save prompts
+                    for (const [stageId, stageConfig] of Object.entries(stageConfigs)) {
+                        if (stageConfig.prompt_text) {
+                            await fetch(`${API_BASE}/prompts`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    name: stageConfig.prompt?.name || `${stageId} prompt`,
+                                    stage: stageId,
+                                    content: stageConfig.prompt_text,
+                                    version: '1.0',
+                                    is_active: true
+                                })
+                            });
+                        }
+                    }
+                    
+                    // Save configuration as a named configuration (not default)
+                    const response = await fetch(`${API_BASE}/configurations`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(config)
                     });
                     
                     if (response.ok) {
-                        alert('Configuration saved successfully!');
+                        const result = await response.json();
+                        alert(`Configuration "${configName}" saved successfully!`);
+                        
+                        // Mark this as the last used configuration
+                        localStorage.setItem('lastUsedConfigId', result.id || result.config_id);
+                        localStorage.setItem('lastUsedConfigName', configName);
+                        localStorage.setItem('lastUsedConfigTimestamp', new Date().toISOString());
+                        
+                        // Also save the full config for quick access
+                        localStorage.setItem('lastUsedConfig', JSON.stringify(config));
+                        
+                        // Reset saved stages indicator
+                        setSavedStages(new Set());
+                    } else {
+                        throw new Error('Failed to save configuration');
                     }
                 } catch (error) {
                     console.error('Failed to save configuration:', error);
-                    alert('Failed to save configuration');
+                    alert('Failed to save configuration: ' + error.message);
+                }
+            };
+            
+            const handleLoadConfiguration = async () => {
+                try {
+                    // First, get list of saved configurations
+                    const configsResponse = await fetch(`${API_BASE}/configurations`);
+                    if (!configsResponse.ok) {
+                        throw new Error('Failed to load configurations');
+                    }
+                    
+                    const configs = await configsResponse.json();
+                    if (!configs || configs.length === 0) {
+                        alert('No saved configurations found');
+                        return;
+                    }
+                    
+                    // Show selection dialog
+                    const configList = configs.map((c, i) => 
+                        `${i + 1}. ${c.name} (${c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Unknown date'})`
+                    ).join('\n');
+                    
+                    const selection = prompt(`Select a configuration to load:\n\n${configList}\n\nEnter number:`);
+                    if (!selection) return;
+                    
+                    const selectedIndex = parseInt(selection) - 1;
+                    if (selectedIndex < 0 || selectedIndex >= configs.length) {
+                        alert('Invalid selection');
+                        return;
+                    }
+                    
+                    const selectedConfig = configs[selectedIndex];
+                    
+                    // Load the selected configuration
+                    const configResponse = await fetch(`${API_BASE}/configurations/${selectedConfig.id}`);
+                    if (configResponse.ok) {
+                        const fullConfig = await configResponse.json();
+                        
+                        // Apply configuration settings
+                        setSelectedSystem(fullConfig.system);
+                        setMaxBudget(fullConfig.max_budget);
+                        
+                        // Restore stage order if available
+                        if (fullConfig.stage_order) {
+                            const restoredStages = fullConfig.stage_order.map(stageId => {
+                                // Find the stage definition
+                                const existingStage = stages.find(s => s.id === stageId);
+                                if (existingStage) return existingStage;
+                                
+                                // Create new stage if it doesn't exist
+                                return {
+                                    id: stageId,
+                                    label: stageId.charAt(0).toUpperCase() + stageId.slice(1),
+                                    removable: stageId !== 'products'
+                                };
+                            });
+                            setStages(restoredStages);
+                        }
+                        
+                        // Load stage configurations
+                        setStageConfigs(fullConfig.stages || {});
+                        
+                        // Load the current stage's configuration
+                        if (fullConfig.stages[activeStage]) {
+                            const config = fullConfig.stages[activeStage];
+                            setPromptText(config.prompt_text || '');
+                            setSelectedPrompt(config.prompt);
+                            setFields(config.fields || []);
+                        }
+                        
+                        // Mark as last used
+                        localStorage.setItem('lastUsedConfigId', selectedConfig.id);
+                        localStorage.setItem('lastUsedConfigName', selectedConfig.name);
+                        localStorage.setItem('lastUsedConfigTimestamp', new Date().toISOString());
+                        localStorage.setItem('lastUsedConfig', JSON.stringify(fullConfig));
+                        
+                        alert(`Configuration "${selectedConfig.name}" loaded successfully!`);
+                    } else {
+                        throw new Error('Failed to load configuration details');
+                    }
+                } catch (error) {
+                    console.error('Failed to load configuration:', error);
+                    alert('Failed to load configuration');
                 }
             };
             
@@ -1250,6 +1847,43 @@
                 const newConfigs = { ...stageConfigs };
                 delete newConfigs[stageId];
                 setStageConfigs(newConfigs);
+            };
+            
+            const handleDragStart = (e, index) => {
+                setDraggedStage(index);
+                e.dataTransfer.effectAllowed = 'move';
+            };
+            
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDragOverIndex(index);
+            };
+            
+            const handleDragLeave = () => {
+                setDragOverIndex(null);
+            };
+            
+            const handleDrop = (e, dropIndex) => {
+                e.preventDefault();
+                
+                if (draggedStage === null || draggedStage === dropIndex) {
+                    setDragOverIndex(null);
+                    return;
+                }
+                
+                const newStages = [...stages];
+                const [removed] = newStages.splice(draggedStage, 1);
+                newStages.splice(dropIndex, 0, removed);
+                
+                setStages(newStages);
+                setDraggedStage(null);
+                setDragOverIndex(null);
+            };
+            
+            const handleDragEnd = () => {
+                setDraggedStage(null);
+                setDragOverIndex(null);
             };
             
             const systems = [
@@ -1315,36 +1949,85 @@
                         <div className="card-header">Stage Configuration</div>
                         
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center' }}>
-                            {stages.map(stage => (
-                                <div key={stage.id} style={{ position: 'relative' }}>
+                            {stages.map((stage, index) => (
+                                <div 
+                                    key={stage.id} 
+                                    style={{ 
+                                        position: 'relative', 
+                                        display: 'inline-block',
+                                        opacity: draggedStage === index ? '0.5' : '1',
+                                        transform: dragOverIndex === index ? 'translateX(5px)' : 'translateX(0)',
+                                        transition: 'transform 0.2s'
+                                    }}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragOver={(e) => handleDragOver(e, index)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDrop(e, index)}
+                                    onDragEnd={handleDragEnd}
+                                >
                                     <div
                                         className={`stage-tab ${activeStage === stage.id ? 'active' : ''}`}
                                         onClick={() => setActiveStage(stage.id)}
-                                        style={{ paddingRight: stage.removable ? '24px' : '16px' }}
+                                        style={{ 
+                                            paddingRight: stage.removable ? '30px' : '16px',
+                                            cursor: 'move',
+                                            userSelect: 'none',
+                                            position: 'relative'
+                                        }}
                                     >
+                                        <span style={{ marginRight: '6px', opacity: '0.5', fontSize: '12px' }}>⋮⋮</span>
                                         {stage.label}
+                                        {savedStages.has(stage.id) && (
+                                            <span style={{
+                                                position: 'absolute',
+                                                top: '-6px',
+                                                right: stage.removable ? '28px' : '8px',
+                                                background: '#16a34a',
+                                                color: 'white',
+                                                borderRadius: '50%',
+                                                width: '16px',
+                                                height: '16px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold'
+                                            }}>✓</span>
+                                        )}
                                     </div>
                                     {stage.removable && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleRemoveStage(stage.id);
+                                                if (confirm(`Remove stage "${stage.label}"?`)) {
+                                                    handleRemoveStage(stage.id);
+                                                }
                                             }}
                                             style={{
                                                 position: 'absolute',
                                                 right: '4px',
                                                 top: '50%',
                                                 transform: 'translateY(-50%)',
-                                                background: '#fee2e2',
-                                                border: '1px solid #dc2626',
-                                                color: '#dc2626',
+                                                background: '#94a3b8',
+                                                border: 'none',
+                                                color: 'white',
                                                 cursor: 'pointer',
-                                                padding: '0 4px',
-                                                fontSize: '16px',
+                                                padding: '2px 6px',
+                                                fontSize: '14px',
                                                 borderRadius: '3px',
                                                 lineHeight: '1',
-                                                fontWeight: 'bold'
+                                                fontWeight: 'bold',
+                                                height: '20px',
+                                                width: '20px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: '0.7',
+                                                transition: 'opacity 0.2s'
                                             }}
+                                            onMouseEnter={(e) => e.target.style.opacity = '1'}
+                                            onMouseLeave={(e) => e.target.style.opacity = '0.7'}
                                             title="Remove stage"
                                         >
                                             ×
@@ -1454,30 +2137,84 @@
                             
                             <div style={{ marginTop: '20px' }}>
                                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-                                    Models:
+                                    Models for {activeStage}:
                                 </label>
-                                <select 
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '6px'
+                                <ModelSelector 
+                                    selectedModels={stageConfigs[activeStage]?.models || []}
+                                    onChange={(models) => {
+                                        const updatedConfig = {
+                                            ...stageConfigs[activeStage],
+                                            models: models
+                                        };
+                                        setStageConfigs({
+                                            ...stageConfigs,
+                                            [activeStage]: updatedConfig
+                                        });
+                                    }}
+                                    stageType={activeStage}
+                                />
+                            </div>
+                            
+                            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveStage}
+                                    style={{ 
+                                        background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
                                     }}
                                 >
-                                    <option>All 3 models (vote)</option>
-                                    <option>Claude only</option>
-                                    <option>GPT-4 only</option>
-                                    <option>Gemini only</option>
-                                </select>
+                                    {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
+                                </button>
+                                
+                                {saveMessage && (
+                                    <div style={{ 
+                                        fontSize: '14px', 
+                                        color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
+                                        fontWeight: 500
+                                    }}>
+                                        {saveMessage.text}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                     
+                    {/* Configuration Preview */}
+                    {configPreview && Object.keys(configPreview.stages).length > 0 && (
+                        <div className="card" style={{ marginTop: '20px' }}>
+                            <div className="card-header">Configuration Preview</div>
+                            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
+                                <div><strong>System:</strong> {configPreview.system}</div>
+                                <div><strong>Max Budget:</strong> ${configPreview.max_budget}</div>
+                                <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
+                                {Object.entries(configPreview.stages).map(([stageId, config]) => (
+                                    <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>
+                                        <div style={{ fontWeight: 600 }}>• {stages.find(s => s.id === stageId)?.label || stageId}:</div>
+                                        <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
+                                            - Prompt: {config.prompt_id ? `ID ${config.prompt_id}` : 'Custom'}<br/>
+                                            - Fields: {config.fields?.length || 0} defined<br/>
+                                            - Models: {config.models && config.models.length > 0 
+                                                ? `${config.models.length} selected${config.models.length > 1 ? ' (voting)' : ''}` 
+                                                : 'None selected'}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
                     <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                        <button className="btn btn-primary" onClick={handleSaveConfiguration}>
-                            Save Configuration
+                        <button 
+                            className="btn btn-primary" 
+                            onClick={handleSaveConfiguration}
+                            disabled={Object.keys(stageConfigs).length === 0}
+                        >
+                            Save Full Configuration
                         </button>
-                        <button className="btn btn-secondary">
+                        <button 
+                            className="btn btn-secondary"
+                            onClick={handleLoadConfiguration}
+                        >
                             Load Previous Config
                         </button>
                     </div>
