@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Prompt Library</title>
+</head>
+<body>
+    <h1>Test Prompt Library Features</h1>
+    
+    <button onclick="testLibraryAPI()">Test Library API</button>
+    <button onclick="testFieldDefinitionsAPI()">Test Field Definitions API</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function testLibraryAPI() {
+            try {
+                const response = await fetch('http://localhost:8000/api/prompts/library');
+                const data = await response.json();
+                document.getElementById('results').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('results').innerHTML = 'Error: ' + error;
+            }
+        }
+        
+        async function testFieldDefinitionsAPI() {
+            try {
+                const response = await fetch('http://localhost:8000/field-definitions');
+                const data = await response.json();
+                document.getElementById('results').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('results').innerHTML = 'Error: ' + error;
+            }
+        }
+    </script>
+</body>
+</html>

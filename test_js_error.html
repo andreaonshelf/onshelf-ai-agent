@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test JS Error</title>
+</head>
+<body>
+    <h1>Testing JavaScript Error</h1>
+    <div id="test"></div>
+    
+    <script>
+        // Test 1: Normal string
+        document.getElementById('test').innerHTML = "Normal string works";
+        console.log('✅ Test 1 passed');
+        
+        // Test 2: String with ellipsis
+        document.getElementById('test').innerHTML = "AI is optimizing your prompt...";
+        console.log('✅ Test 2 passed');
+        
+        // Test 3: Check if there's an issue with the exact line
+        var testHtml = '<p style="color: #64748b; font-size: 16px;">AI is optimizing your prompt...</p>';
+        document.getElementById('test').innerHTML = testHtml;
+        console.log('✅ Test 3 passed');
+        
+        // Test 4: Check fetch API
+        fetch('/api/queue/items')
+            .then(response => response.json())
+            .then(data => {
+                console.log('✅ API test passed:', data);
+            })
+            .catch(error => {
+                console.log('❌ API test failed:', error);
+            });
+    </script>
+</body>
+</html>

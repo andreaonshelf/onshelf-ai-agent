@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OnShelf Interface Visual Comparison</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        .description {
+            color: #64748b;
+            font-size: 16px;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .interface-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .interface-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        .interface-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .interface-icon {
+            font-size: 24px;
+        }
+        .interface-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .interface-content {
+            color: #475569;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-list li:before {
+            content: "✓";
+            color: #10b981;
+            font-weight: bold;
+        }
+        .unique-element {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .unique-element strong {
+            color: #0c4a6e;
+        }
+        .test-button {
+            width: 100%;
+            padding: 12px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OnShelf Planogram Extractor - Interface Comparison</h1>
+        <p class="description">Each interface has unique features and content designed for specific workflows</p>
+    </div>
+
+    <div class="comparison-grid">
+        <!-- Extractions Interface -->
+        <div class="interface-card">
+            <div class="interface-header">
+                <span class="interface-icon">📋</span>
+                <h2 class="interface-title">Extractions</h2>
+            </div>
+            <div class="interface-content">
+                <p>Main extraction queue management interface with split-view layout</p>
+                <ul class="feature-list">
+                    <li>Queue List Panel (left side)</li>
+                    <li>Results View Panel (right side)</li>
+                    <li>Planogram visualization</li>
+                    <li>Extracted products table</li>
+                    <li>Process/Reprocess actions</li>
+                </ul>
+                <div class="unique-element">
+                    <strong>Unique:</strong> Split-view layout with queue-panel and results-panel
+                </div>
+                <button class="test-button" onclick="testInterface('extractions')">View Extractions</button>
+                <div id="status-extractions" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Pipeline Studio -->
+        <div class="interface-card">
+            <div class="interface-header">
+                <span class="interface-icon">🔧</span>
+                <h2 class="interface-title">Pipeline Studio</h2>
+            </div>
+            <div class="interface-content">
+                <p>Configure extraction systems and monitor live execution</p>
+                <ul class="feature-list">
+                    <li>System Configuration tab</li>
+                    <li>Live Monitoring dashboard</li>
+                    <li>System Comparison view</li>
+                    <li>Custom Consensus/LangGraph/Hybrid selection</li>
+                    <li>Model pipeline configuration</li>
+                </ul>
+                <div class="unique-element">
+                    <strong>Unique:</strong> System cards with radio buttons for extraction system selection
+                </div>
+                <button class="test-button" onclick="testInterface('pipeline')">View Pipeline Studio</button>
+                <div id="status-pipeline" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Prompt Lab -->
+        <div class="interface-card">
+            <div class="interface-header">
+                <span class="interface-icon">🧪</span>
+                <h2 class="interface-title">Prompt Lab</h2>
+            </div>
+            <div class="interface-content">
+                <p>Design and optimize prompts for each extraction model</p>
+                <ul class="feature-list">
+                    <li>Three-column layout (Structure/Products/Details)</li>
+                    <li>Prompt template editors</li>
+                    <li>Extraction structure JSON editor</li>
+                    <li>AI-formatted Pydantic models</li>
+                    <li>Test and performance metrics</li>
+                </ul>
+                <div class="unique-element">
+                    <strong>Unique:</strong> Model columns with prompt-editor textareas
+                </div>
+                <button class="test-button" onclick="testInterface('prompts')">View Prompt Lab</button>
+                <div id="status-prompts" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Analytics Dashboard -->
+        <div class="interface-card">
+            <div class="interface-header">
+                <span class="interface-icon">📊</span>
+                <h2 class="interface-title">Analytics</h2>
+            </div>
+            <div class="interface-content">
+                <p>Real-time extraction metrics and performance analytics</p>
+                <ul class="feature-list">
+                    <li>Key metrics cards (Total/Success/Time/Cost)</li>
+                    <li>Time range selector</li>
+                    <li>Model performance charts</li>
+                    <li>Store distribution map</li>
+                    <li>Recent extractions table</li>
+                </ul>
+                <div class="unique-element">
+                    <strong>Unique:</strong> Analytics metrics grid with large metric cards
+                </div>
+                <button class="test-button" onclick="testInterface('analytics')">View Analytics</button>
+                <div id="status-analytics" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="interface-card">
+            <div class="interface-header">
+                <span class="interface-icon">⚙️</span>
+                <h2 class="interface-title">Settings</h2>
+            </div>
+            <div class="interface-content">
+                <p>Configure system preferences and API integrations</p>
+                <ul class="feature-list">
+                    <li>General settings (company info)</li>
+                    <li>API Keys management</li>
+                    <li>AI Model configurations</li>
+                    <li>Database connections</li>
+                    <li>Notification preferences</li>
+                </ul>
+                <div class="unique-element">
+                    <strong>Unique:</strong> Settings navigation tabs with multiple panels
+                </div>
+                <button class="test-button" onclick="testInterface('settings')">View Settings</button>
+                <div id="status-settings" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testInterface(mode) {
+            // Open main app in new tab and switch to mode
+            const appWindow = window.open('http://localhost:8000', '_blank');
+            
+            // Update status
+            const statusEl = document.getElementById(`status-${mode}`);
+            statusEl.style.display = 'block';
+            statusEl.className = 'status-message status-success';
+            statusEl.textContent = `Opening ${mode} interface in new tab...`;
+            
+            // Switch to the mode after a delay
+            setTimeout(() => {
+                if (appWindow && !appWindow.closed) {
+                    appWindow.switchMode(mode);
+                }
+            }, 1000);
+        }
+        
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            const shortcuts = {
+                '1': 'extractions',
+                '2': 'pipeline',
+                '3': 'prompts',
+                '4': 'analytics',
+                '5': 'settings'
+            };
+            
+            if (shortcuts[e.key]) {
+                testInterface(shortcuts[e.key]);
+            }
+        });
+    </script>
+</body>
+</html>
