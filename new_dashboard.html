@@ -653,7 +653,7 @@
         const { useState, useEffect, useRef, useCallback } = React;
         
         // API Configuration
-        const API_BASE = 'http://localhost:8000/api';
+        const API_BASE = window.location.origin + '/api';
         
         // Main App Component
         const App = () => {
@@ -2484,7 +2484,8 @@
                 fetchMonitoringData();
                 
                 // Setup WebSocket connection
-                const wsUrl = `ws://localhost:8000/ws/extraction/${queueItem.id}`;
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws/extraction/${queueItem.id}`;
                 const ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
                 

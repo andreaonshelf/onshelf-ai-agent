@@ -546,62 +546,6 @@ async def get_comparison_results(comparison_group_id: str):
         return {"results": [], "comparison_group_id": comparison_group_id}
 
 
-@router.post("/reset-fake-completed")
-async def reset_fake_completed_items():
-    """Reset items that are marked completed but have no extraction results"""
-    
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Database connection not available")
-    
-    try:
-        # Find items that are "completed" but have no real results
-        result = supabase.table("ai_extraction_queue").select("*").eq("status", "completed").execute()
-        
-        if not result.data:
-            return {"message": "No completed items found", "reset_count": 0}
-        
-        # Filter items that have null extraction results (fake completed)
-        fake_completed = [
-            item for item in result.data 
-            if not item.get('extraction_result') or not item.get('planogram_result')
-        ]
-        
-        if not fake_completed:
-            return {"message": "All completed items have valid results", "reset_count": 0}
-        
-        # Reset fake completed items to pending
-        reset_ids = [item['id'] for item in fake_completed]
-        
-        update_data = {
-            "status": "pending",
-            "extraction_result": None,
-            "planogram_result": None,
-            "final_accuracy": None,
-            "started_at": None,
-            "completed_at": None,
-            "error_message": None,
-            "iterations_completed": None,
-            "processing_duration_seconds": None,
-            "api_cost": None,
-            "human_review_required": False,
-            "escalation_reason": None
-        }
-        
-        # Update all fake completed items
-        for item_id in reset_ids:
-            supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
-        
-        logger.info(f"Reset {len(reset_ids)} fake completed items to pending", component="queue_api")
-        
-        return {
-            "message": f"Successfully reset {len(reset_ids)} items to pending status",
-            "reset_count": len(reset_ids),
-            "reset_ids": reset_ids
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to reset fake completed items: {e}", component="queue_api")
-        raise HTTPException(status_code=500, detail=f"Failed to reset items: {str(e)}")
 
 
 @router.get("/stores")
