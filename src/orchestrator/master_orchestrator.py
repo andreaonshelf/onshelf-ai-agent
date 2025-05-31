@@ -208,11 +208,29 @@ class MasterOrchestrator:
                     structure_context = extraction_result.structure
             
                 # Step 2: Generate planogram
+                # Get abstraction level from comparison config or use default
+                comparison_config = configuration.get('comparison_config', {}) if configuration else {}
+                abstraction_level = "product_view"  # Default
+                
+                # If abstraction layers are specified, use the first enabled one
+                if comparison_config.get('abstraction_layers'):
+                    enabled_layers = [layer for layer in comparison_config['abstraction_layers'] if layer.get('enabled', True)]
+                    if enabled_layers:
+                        # Map layer ID to abstraction level
+                        layer_mapping = {
+                            'brand': 'brand_view',
+                            'product': 'product_view',
+                            'confidence': 'product_view',  # Use product view with confidence coloring
+                            'price_range': 'product_view',  # Use product view with price info
+                            'category': 'product_view'  # Use product view with category grouping
+                        }
+                        abstraction_level = layer_mapping.get(enabled_layers[0]['id'], 'product_view')
+                
                 planogram_result = await self.planogram_orchestrator.generate_for_agent_iteration(
                     agent_number=iteration,
                     extraction_result=extraction_result,
                     structure_context=structure_context,
-                    abstraction_level="product_view",
+                    abstraction_level=abstraction_level,
                     original_image=images['enhanced']
                 )
             
@@ -225,10 +243,18 @@ class MasterOrchestrator:
             
                 # Step 3: AI comparison analysis
                 validation_start = time.time()
+                
+                # Get comparison config from configuration
+                comparison_config = configuration.get('comparison_config', {}) if configuration else {}
+                
                 comparison_result = await self.comparison_agent.compare_image_vs_planogram(
                     original_image=images['enhanced'],
                     planogram=planogram_result.planogram,
-                    structure_context=structure_context
+                    structure_context=structure_context,
+                    model_id=comparison_config.get('model'),
+                    custom_prompt=comparison_config.get('prompt'),
+                    use_visual_comparison=comparison_config.get('use_visual_comparison', False),
+                    abstraction_layers=comparison_config.get('abstraction_layers', [])
                 )
             
                 # Step 4: Calculate accuracy and analyze failures

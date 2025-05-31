@@ -1,0 +1,439 @@
+<!-- UI Implementation for Comparison Configuration -->
+<!-- This code should be inserted into new_dashboard.html after the Orchestrator settings section -->
+
+<!-- Add these state variables at the beginning of ExtractionConfigPage component -->
+<script>
+// Add to existing state declarations (around line 1475)
+const [comparisonModel, setComparisonModel] = useState('gpt-4-vision-preview');
+const [comparisonPrompt, setComparisonPrompt] = useState('');
+const [useVisualComparison, setUseVisualComparison] = useState(true);
+const [abstractionLayers, setAbstractionLayers] = useState([
+    { id: 'confidence', label: 'Confidence Levels', enabled: true, color: '#3b82f6' },
+    { id: 'brand', label: 'Brand Grouping', enabled: true, color: '#16a34a' },
+    { id: 'product', label: 'Product View', enabled: true, color: '#f59e0b' },
+    { id: 'price_range', label: 'Price Ranges', enabled: false, color: '#ef4444' },
+    { id: 'category', label: 'Category Grouping', enabled: false, color: '#8b5cf6' }
+]);
+const [newLayerName, setNewLayerName] = useState('');
+const [showAddLayer, setShowAddLayer] = useState(false);
+
+// Default comparison prompt
+const DEFAULT_COMPARISON_PROMPT = `Compare these two images:
+1. Original retail shelf photo
+2. Generated planogram representation
+
+The planogram is a simplified visual representation showing product positions.
+Each colored rectangle represents a product with its brand/name.
+
+Please analyze:
+- POSITION ACCURACY: Are products in the same relative positions?
+- PRODUCT IDENTIFICATION: Are the products correctly identified?
+- FACING COUNTS: Do the number of facings match?
+- MISSING/EXTRA: Any products in one image but not the other?
+
+Important: The planogram is abstract - focus on logical arrangement, not visual appearance.
+
+Provide structured output with:
+- Overall accuracy score (0-100%)
+- Per-shelf accuracy breakdown
+- Specific discrepancies found
+- Confidence in your assessment`;
+
+// Add this to updateConfigPreview function
+const updatedUpdateConfigPreview = () => {
+    const preview = {
+        system: selectedSystem,
+        max_budget: maxBudget,
+        temperature: modelCreativity,
+        orchestrator_model: orchestratorModel,
+        orchestrator_prompt: orchestratorPrompt,
+        comparison_config: {
+            model: comparisonModel,
+            prompt: comparisonPrompt || DEFAULT_COMPARISON_PROMPT,
+            use_visual_comparison: useVisualComparison,
+            abstraction_layers: abstractionLayers.filter(layer => layer.enabled)
+        },
+        stages: {}
+    };
+    
+    // ... rest of existing updateConfigPreview code
+};
+</script>
+
+<!-- Comparison Configuration Section -->
+<!-- Insert this after the Orchestrator Model Selection section (around line 2386) -->
+
+{/* Planogram Comparison Configuration */}
+<div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+    <h3 style={{ 
+        margin: '0 0 16px 0', 
+        fontSize: '16px', 
+        fontWeight: 600,
+        color: '#1e293b' 
+    }}>
+        Planogram Comparison Settings
+    </h3>
+    
+    {/* Comparison Model Selection */}
+    <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+            Comparison Model:
+        </label>
+        <select
+            value={comparisonModel}
+            onChange={(e) => setComparisonModel(e.target.value)}
+            style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                background: 'white',
+                fontSize: '14px'
+            }}
+        >
+            <optgroup label="Vision Models">
+                <option value="gpt-4-vision-preview">GPT-4 Vision (Recommended)</option>
+                <option value="claude-3-opus">Claude 3 Opus Vision</option>
+                <option value="claude-4-opus">Claude 4 Opus Vision</option>
+                <option value="gemini-pro-vision">Gemini Pro Vision</option>
+            </optgroup>
+        </select>
+        <div style={{ 
+            marginTop: '4px', 
+            fontSize: '12px', 
+            color: '#64748b' 
+        }}>
+            Model used to compare the planogram with the original image
+        </div>
+    </div>
+    
+    {/* Visual Comparison Toggle */}
+    <div style={{ marginBottom: '16px' }}>
+        <label style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            cursor: 'pointer'
+        }}>
+            <input
+                type="checkbox"
+                checked={useVisualComparison}
+                onChange={(e) => setUseVisualComparison(e.target.checked)}
+                style={{
+                    width: '18px',
+                    height: '18px',
+                    cursor: 'pointer'
+                }}
+            />
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                Use Visual Comparison Mode
+            </span>
+        </label>
+        <div style={{ 
+            marginTop: '4px', 
+            marginLeft: '26px',
+            fontSize: '12px', 
+            color: '#64748b' 
+        }}>
+            {useVisualComparison 
+                ? 'Converts planogram to image for direct visual comparison' 
+                : 'Uses text description of planogram positions'}
+        </div>
+    </div>
+    
+    {/* Comparison Prompt */}
+    <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+            Comparison Prompt:
+        </label>
+        <textarea
+            placeholder={DEFAULT_COMPARISON_PROMPT}
+            value={comparisonPrompt}
+            onChange={(e) => setComparisonPrompt(e.target.value)}
+            style={{
+                width: '100%',
+                minHeight: '150px',
+                padding: '12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                resize: 'vertical',
+                background: 'white'
+            }}
+        />
+        <div style={{ 
+            marginTop: '4px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+        }}>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                Instructions for comparing planogram accuracy
+            </span>
+            <button
+                onClick={() => setComparisonPrompt(DEFAULT_COMPARISON_PROMPT)}
+                style={{
+                    fontSize: '11px',
+                    color: '#3b82f6',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                }}
+            >
+                Reset to default
+            </button>
+        </div>
+    </div>
+    
+    {/* Abstraction Layers */}
+    <div>
+        <label style={{ 
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '12px', 
+            fontWeight: 500, 
+            fontSize: '14px' 
+        }}>
+            <span>Visual Abstraction Layers:</span>
+            <button
+                onClick={() => setShowAddLayer(!showAddLayer)}
+                style={{
+                    fontSize: '12px',
+                    color: '#3b82f6',
+                    background: 'none',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    cursor: 'pointer'
+                }}
+            >
+                + Add Layer
+            </button>
+        </label>
+        
+        {/* Add New Layer Form */}
+        {showAddLayer && (
+            <div style={{
+                marginBottom: '12px',
+                padding: '12px',
+                background: '#f1f5f9',
+                borderRadius: '6px',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center'
+            }}>
+                <input
+                    type="text"
+                    placeholder="Layer name (e.g., 'Target Customer')"
+                    value={newLayerName}
+                    onChange={(e) => setNewLayerName(e.target.value)}
+                    style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '4px',
+                        fontSize: '13px'
+                    }}
+                    onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newLayerName.trim()) {
+                            const newLayer = {
+                                id: newLayerName.toLowerCase().replace(/\s+/g, '_'),
+                                label: newLayerName,
+                                enabled: true,
+                                color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                            };
+                            setAbstractionLayers([...abstractionLayers, newLayer]);
+                            setNewLayerName('');
+                            setShowAddLayer(false);
+                        }
+                    }}
+                />
+                <button
+                    onClick={() => {
+                        if (newLayerName.trim()) {
+                            const newLayer = {
+                                id: newLayerName.toLowerCase().replace(/\s+/g, '_'),
+                                label: newLayerName,
+                                enabled: true,
+                                color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                            };
+                            setAbstractionLayers([...abstractionLayers, newLayer]);
+                            setNewLayerName('');
+                            setShowAddLayer(false);
+                        }
+                    }}
+                    style={{
+                        padding: '6px 12px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Add
+                </button>
+                <button
+                    onClick={() => {
+                        setNewLayerName('');
+                        setShowAddLayer(false);
+                    }}
+                    style={{
+                        padding: '6px 12px',
+                        background: '#94a3b8',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Cancel
+                </button>
+            </div>
+        )}
+        
+        {/* Layer List */}
+        <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '8px',
+            maxHeight: '200px',
+            overflowY: 'auto'
+        }}>
+            {abstractionLayers.map((layer, index) => (
+                <div
+                    key={layer.id}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: layer.enabled ? 'white' : '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <input
+                        type="checkbox"
+                        checked={layer.enabled}
+                        onChange={(e) => {
+                            const updated = [...abstractionLayers];
+                            updated[index].enabled = e.target.checked;
+                            setAbstractionLayers(updated);
+                        }}
+                        style={{
+                            marginRight: '12px',
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer'
+                        }}
+                    />
+                    <div
+                        style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '2px',
+                            backgroundColor: layer.color,
+                            marginRight: '12px'
+                        }}
+                    />
+                    <span style={{
+                        flex: 1,
+                        fontSize: '14px',
+                        color: layer.enabled ? '#1e293b' : '#94a3b8'
+                    }}>
+                        {layer.label}
+                    </span>
+                    {/* Only show remove button for custom layers */}
+                    {index >= 5 && (
+                        <button
+                            onClick={() => {
+                                const updated = abstractionLayers.filter((_, i) => i !== index);
+                                setAbstractionLayers(updated);
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#dc2626',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                fontSize: '16px',
+                                lineHeight: '1'
+                            }}
+                        >
+                            ×
+                        </button>
+                    )}
+                </div>
+            ))}
+        </div>
+        <div style={{ 
+            marginTop: '8px', 
+            fontSize: '12px', 
+            color: '#64748b' 
+        }}>
+            Selected layers will be visualized in the planogram for better analysis
+        </div>
+    </div>
+</div>
+
+<!-- Update the configuration preview to include comparison settings -->
+<!-- Replace the existing Configuration Preview section (around line 2414) -->
+{configPreview && Object.keys(configPreview.stages).length > 0 && (
+    <div className="card" style={{ marginTop: '20px' }}>
+        <div className="card-header">Configuration Preview</div>
+        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
+            <div><strong>System:</strong> {configPreview.system}</div>
+            <div><strong>Max Budget:</strong> £{configPreview.max_budget} GBP</div>
+            <div><strong>Temperature:</strong> {configPreview.temperature}</div>
+            <div><strong>Orchestrator:</strong> {configPreview.orchestrator_model}</div>
+            
+            {/* Add Comparison Settings to Preview */}
+            <div style={{ marginTop: '12px' }}><strong>Comparison Settings:</strong></div>
+            <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
+                - Model: {configPreview.comparison_config?.model || 'gpt-4-vision-preview'}<br/>
+                - Mode: {configPreview.comparison_config?.use_visual_comparison ? 'Visual comparison' : 'Text description'}<br/>
+                - Layers: {configPreview.comparison_config?.abstraction_layers?.map(l => l.label).join(', ') || 'None'}
+            </div>
+            
+            <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
+            {Object.entries(configPreview.stages).map(([stageId, config]) => (
+                <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>
+                    <div style={{ fontWeight: 600 }}>• {stages.find(s => s.id === stageId)?.label || stageId}:</div>
+                    <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
+                        - Prompt: {config.prompt_id ? `ID ${config.prompt_id}` : 'Custom'}<br/>
+                        - Fields: {config.fields?.length || 0} defined<br/>
+                        - Models: {config.models && config.models.length > 0 
+                            ? `${config.models.length} selected${config.models.length > 1 ? ' (voting)' : ''}` 
+                            : 'None selected'}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+)}
+
+<!-- Update the queue processing to include comparison config -->
+<!-- In handleProcessSelected function (around line 825) -->
+<script>
+// Update the body of the API request
+body: JSON.stringify({
+    system: currentConfig.system,
+    max_budget: currentConfig.budget,
+    temperature: fullConfig?.temperature || 0.7,
+    orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',
+    orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
+    stage_models: stageModels,
+    comparison_config: fullConfig?.comparison_config || {
+        model: 'gpt-4-vision-preview',
+        prompt: DEFAULT_COMPARISON_PROMPT,
+        use_visual_comparison: true,
+        abstraction_layers: []
+    }
+})
+</script>

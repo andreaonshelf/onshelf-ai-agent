@@ -349,6 +349,20 @@ class ExtractionOrchestrator:
                 self.orchestrator_prompt = self.model_config.get("orchestrator_prompt", "")
                 self.stage_models = self.model_config.get("stage_models", {})
                 
+                # Load stage configurations if available
+                self.stage_configs = self.model_config.get("stages", {})
+                
+                # Initialize stage prompts and fields from configuration
+                self.stage_prompts = {}
+                self.stage_fields = {}
+                
+                for stage_id, stage_config in self.stage_configs.items():
+                    if isinstance(stage_config, dict):
+                        if "prompt_text" in stage_config:
+                            self.stage_prompts[stage_id] = stage_config["prompt_text"]
+                        if "fields" in stage_config:
+                            self.stage_fields[stage_id] = stage_config["fields"]
+                
                 logger.info(
                     "Loaded model configuration from queue item",
                     component="extraction_orchestrator",
@@ -413,7 +427,17 @@ class ExtractionOrchestrator:
         
         all_products = []
         prompt_templates = PromptTemplates()
-        shelf_prompt_template = prompt_templates.get_template("shelf_by_shelf_extraction")
+        
+        # Check if we have a custom prompt for the products stage
+        if hasattr(self, 'stage_prompts') and 'products' in self.stage_prompts:
+            shelf_prompt_template = self.stage_prompts['products']
+            logger.info(
+                "Using custom products prompt from configuration",
+                component="extraction_orchestrator",
+                prompt_length=len(shelf_prompt_template)
+            )
+        else:
+            shelf_prompt_template = prompt_templates.get_template("shelf_by_shelf_extraction")
         
         logger.info(
             f"Starting shelf-by-shelf extraction for {context.structure.shelf_count} shelves",

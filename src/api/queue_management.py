@@ -201,13 +201,25 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
         comparison_group_id = str(uuid.uuid4())
         
         # Extract model configuration
-        model_config = {
-            "temperature": request_data.get('temperature', 0.7),
-            "orchestrator_model": request_data.get('orchestrator_model', 'claude-4-opus'),
-            "orchestrator_prompt": request_data.get('orchestrator_prompt', ''),
-            "stage_models": request_data.get('stage_models', {}),
-            "max_budget": request_data.get('max_budget', 1.50)
-        }
+        # Check if we have a complete configuration object
+        if 'configuration' in request_data:
+            # Use the complete configuration
+            model_config = request_data['configuration']
+        else:
+            # Fall back to legacy format
+            model_config = {
+                "temperature": request_data.get('temperature', 0.7),
+                "orchestrator_model": request_data.get('orchestrator_model', 'claude-4-opus'),
+                "orchestrator_prompt": request_data.get('orchestrator_prompt', ''),
+                "stage_models": request_data.get('stage_models', {}),
+                "max_budget": request_data.get('max_budget', 1.50),
+                "comparison_config": request_data.get('comparison_config', {
+                    "model": "gpt-4-vision-preview",
+                    "prompt": "",
+                    "use_visual_comparison": True,
+                    "abstraction_layers": []
+                })
+            }
         
         # Update queue item
         update_data = {
