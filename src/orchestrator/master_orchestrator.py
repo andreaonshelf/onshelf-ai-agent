@@ -27,9 +27,11 @@ from .smart_iteration_manager import SmartIterationManager
 class MasterOrchestrator:
     """Top-level orchestrator managing extraction + planogram + feedback loops"""
     
-    def __init__(self, config: SystemConfig, supabase_client=None):
+    def __init__(self, config: SystemConfig, supabase_client=None, queue_item_id: Optional[int] = None):
         self.config = config
-        self.extraction_orchestrator = ExtractionOrchestrator(config)
+        self.queue_item_id = queue_item_id
+        # Don't initialize extraction orchestrator here - do it per run
+        self.extraction_orchestrator = None
         self.planogram_orchestrator = PlanogramOrchestrator(config)
         self.feedback_manager = CumulativeFeedbackManager()
         self.comparison_agent = ImageComparisonAgent(config)
@@ -87,6 +89,22 @@ class MasterOrchestrator:
         # Get images
         images = await self._get_images(upload_id)
         
+        # Initialize extraction orchestrator with queue item ID and configuration
+        from .extraction_orchestrator import ExtractionOrchestrator
+        self.extraction_orchestrator = ExtractionOrchestrator(self.config, queue_item_id=queue_item_id)
+        
+        # Load configuration into orchestrator
+        if configuration:
+            self.extraction_orchestrator.model_config = configuration
+            self.extraction_orchestrator.temperature = configuration.get('temperature', 0.7)
+            self.extraction_orchestrator.orchestrator_model = configuration.get('orchestrator_model', 'claude-4-opus')
+            self.extraction_orchestrator.orchestrator_prompt = configuration.get('orchestrator_prompt', '')
+            self.extraction_orchestrator.stage_models = configuration.get('stage_models', {})
+            
+            # Reinitialize extraction engine with new temperature
+            from ..extraction.engine import ModularExtractionEngine
+            self.extraction_orchestrator.extraction_engine = ModularExtractionEngine(self.config, temperature=self.extraction_orchestrator.temperature)
+        
         # Initialize tracking
         iteration_history = []
         best_accuracy = 0.0
@@ -99,6 +117,25 @@ class MasterOrchestrator:
             'upload_id': upload_id,
             'iterations': []
         }
+        
+        # Log configuration usage
+        if configuration and queue_item_id:
+            from ..utils.model_usage_tracker import get_model_usage_tracker
+            tracker = get_model_usage_tracker()
+            
+            # Create configuration name from settings
+            config_name = f"{system}_{configuration.get('temperature', 0.7)}_{configuration.get('orchestrator_model', 'default')}"
+            
+            await tracker.log_configuration_usage(
+                configuration_name=config_name,
+                configuration_id=f"config_{queue_item_id}_{run_id}",
+                system=system,
+                orchestrator_model=configuration.get('orchestrator_model', 'claude-4-opus'),
+                orchestrator_prompt=configuration.get('orchestrator_prompt', ''),
+                temperature=configuration.get('temperature', 0.7),
+                max_budget=configuration.get('max_budget', 2.0),
+                stage_models=configuration.get('stage_models', {})
+            )
         
         try:
             for iteration in range(1, max_iterations + 1):
@@ -149,7 +186,8 @@ class MasterOrchestrator:
                     previous_attempts=previous_attempts,
                     focus_areas=self._get_focus_areas_from_previous(iteration_history),
                     locked_positions=self._get_locked_positions_from_previous(iteration_history),
-                    agent_id=agent_id
+                    agent_id=agent_id,
+                    extraction_run_id=run_id
                 )
                 
                 # Record extraction metrics
@@ -345,6 +383,21 @@ class MasterOrchestrator:
                     "total_cost": total_cost
                 }
             )
+            
+            # Update configuration stats
+            if configuration:
+                from ..utils.model_usage_tracker import get_model_usage_tracker
+                tracker = get_model_usage_tracker()
+                
+                config_name = f"{system}_{configuration.get('temperature', 0.7)}_{configuration.get('orchestrator_model', 'default')}"
+                
+                await tracker.update_configuration_stats(
+                    configuration_name=config_name,
+                    accuracy=best_accuracy,
+                    cost=total_cost,
+                    duration_seconds=int(total_duration),
+                    success=best_accuracy >= target_accuracy
+                )
         
         # Create final result
         result = MasterResult(

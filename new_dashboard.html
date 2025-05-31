@@ -742,14 +742,33 @@
             const [loading, setLoading] = useState(true);
             const [currentConfig, setCurrentConfig] = useState({
                 system: 'custom_consensus',
-                budget: 1.50
+                budget: 2.00 // £2.00 GBP
             });
+            const [fullConfig, setFullConfig] = useState(null);
             
             useEffect(() => {
                 fetchQueueItems();
+                loadSavedConfiguration();
                 const interval = setInterval(fetchQueueItems, 5000);
                 return () => clearInterval(interval);
             }, []);
+            
+            const loadSavedConfiguration = () => {
+                const savedConfig = localStorage.getItem('lastUsedConfig');
+                if (savedConfig) {
+                    try {
+                        const config = JSON.parse(savedConfig);
+                        setFullConfig(config);
+                        // Update currentConfig with basic values
+                        setCurrentConfig({
+                            system: config.system || 'custom_consensus',
+                            budget: config.max_budget || 2.00
+                        });
+                    } catch (error) {
+                        console.error('Failed to load saved config:', error);
+                    }
+                }
+            };
             
             const fetchQueueItems = async () => {
                 try {
@@ -793,12 +812,26 @@
                 
                 for (const itemId of itemsToProcess) {
                     try {
+                        // Build stage models from full config
+                        const stageModels = {};
+                        if (fullConfig && fullConfig.stages) {
+                            Object.entries(fullConfig.stages).forEach(([stageId, stageConfig]) => {
+                                if (stageConfig.models && stageConfig.models.length > 0) {
+                                    stageModels[stageId] = stageConfig.models;
+                                }
+                            });
+                        }
+                        
                         const response = await fetch(`${API_BASE}/queue/process/${itemId}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 system: currentConfig.system,
-                                max_budget: currentConfig.budget
+                                max_budget: currentConfig.budget,
+                                temperature: fullConfig?.temperature || 0.7,
+                                orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',
+                                orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
+                                stage_models: stageModels
                             })
                         });
                         
@@ -929,7 +962,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label style={{ marginRight: '8px' }}>Budget: $</label>
+                                <label style={{ marginRight: '8px' }}>Budget: £</label>
                                 <input
                                     type="number"
                                     value={currentConfig.budget}
@@ -938,12 +971,13 @@
                                     min="0.50"
                                     max="10.00"
                                     style={{
-                                        width: '60px',
+                                        width: '70px',
                                         padding: '4px 8px',
                                         border: '1px solid #e2e8f0',
                                         borderRadius: '4px'
                                     }}
                                 />
+                                <span style={{ marginLeft: '4px', fontSize: '12px', color: '#64748b' }}>GBP</span>
                             </div>
                         </div>
                     </div>
@@ -1036,51 +1070,49 @@
         const ModelSelector = ({ selectedModels, onChange, stageType }) => {
             // Actual model definitions with real model IDs and current pricing
             const models = [
-                // Claude models (Anthropic)
+                // OpenAI models
                 {
-                    id: 'claude-opus-4',
-                    provider: 'Anthropic',
-                    family: 'Claude 4',
-                    name: 'Claude 4 Opus',
+                    id: 'gpt-4.1',
+                    provider: 'OpenAI',
+                    family: 'GPT-4.1',
+                    name: 'GPT-4.1',
                     capabilities: ['vision', 'reasoning', 'complex', 'multimodal'],
                     speed: 'medium',
                     cost: 'high',
                     inputPrice: 15.00,
-                    outputPrice: 75.00,
-                    contextWindow: 200000,
+                    outputPrice: 60.00,
+                    contextWindow: 128000,
                     recommended: ['structure', 'products', 'validation'],
-                    description: 'Most capable Anthropic model with vision'
+                    description: 'Latest GPT-4.1 with enhanced vision capabilities'
                 },
                 {
-                    id: 'claude-sonnet-4',
-                    provider: 'Anthropic',
-                    family: 'Claude 4',
-                    name: 'Claude 4 Sonnet',
-                    capabilities: ['vision', 'reasoning', 'balanced'],
-                    speed: 'fast',
-                    cost: 'medium',
-                    inputPrice: 3.00,
-                    outputPrice: 15.00,
-                    contextWindow: 200000,
-                    recommended: ['products', 'details'],
-                    description: 'Balanced performance and cost with vision'
-                },
-                {
-                    id: 'claude-3-7-sonnet',
-                    provider: 'Anthropic',
-                    family: 'Claude 3.7',
-                    name: 'Claude 3.7 Sonnet',
+                    id: 'gpt-4.1-mini',
+                    provider: 'OpenAI',
+                    family: 'GPT-4.1',
+                    name: 'GPT-4.1 mini',
                     capabilities: ['vision', 'fast', 'efficient'],
                     speed: 'fast',
                     cost: 'low',
-                    inputPrice: 1.00,
-                    outputPrice: 5.00,
-                    contextWindow: 200000,
+                    inputPrice: 0.30,
+                    outputPrice: 1.20,
+                    contextWindow: 128000,
                     recommended: ['details', 'validation'],
-                    description: 'Fast and efficient with vision capabilities'
+                    description: 'Smaller, faster GPT-4.1 with vision'
                 },
-                
-                // OpenAI models
+                {
+                    id: 'gpt-4.1-nano',
+                    provider: 'OpenAI',
+                    family: 'GPT-4.1',
+                    name: 'GPT-4.1 nano',
+                    capabilities: ['vision', 'ultra-fast'],
+                    speed: 'very-fast',
+                    cost: 'very-low',
+                    inputPrice: 0.10,
+                    outputPrice: 0.40,
+                    contextWindow: 64000,
+                    recommended: ['details'],
+                    description: 'Ultra-light GPT-4.1 for rapid processing'
+                },
                 {
                     id: 'gpt-4o',
                     provider: 'OpenAI',
@@ -1093,7 +1125,7 @@
                     outputPrice: 15.00,
                     contextWindow: 128000,
                     recommended: ['products', 'structure'],
-                    description: 'Optimized GPT-4 with vision, faster and cheaper'
+                    description: 'Optimized GPT-4 with vision'
                 },
                 {
                     id: 'gpt-4o-mini',
@@ -1110,76 +1142,134 @@
                     description: 'Small, fast, and affordable with vision'
                 },
                 {
-                    id: 'gpt-4-turbo',
+                    id: 'o3',
                     provider: 'OpenAI',
-                    family: 'GPT-4',
-                    name: 'GPT-4 Turbo',
-                    capabilities: ['vision', 'reasoning'],
-                    speed: 'medium',
-                    cost: 'high',
-                    inputPrice: 10.00,
-                    outputPrice: 30.00,
+                    family: 'o-series',
+                    name: 'o3',
+                    capabilities: ['reasoning', 'complex', 'analysis'],
+                    speed: 'slow',
+                    cost: 'very-high',
+                    inputPrice: 25.00,
+                    outputPrice: 100.00,
                     contextWindow: 128000,
                     recommended: ['validation'],
-                    description: 'GPT-4 Turbo with vision capabilities'
+                    description: 'Advanced reasoning model'
                 },
                 {
-                    id: 'gpt-3.5-turbo',
+                    id: 'o4-mini',
                     provider: 'OpenAI',
-                    family: 'GPT-3.5',
-                    name: 'GPT-3.5 Turbo',
-                    capabilities: ['fast', 'basic'],
-                    speed: 'very-fast',
-                    cost: 'very-low',
-                    inputPrice: 0.50,
-                    outputPrice: 1.50,
-                    contextWindow: 16384,
-                    recommended: ['details'],
-                    description: 'Legacy model, no vision support'
+                    family: 'o-series',
+                    name: 'o4 Mini',
+                    capabilities: ['reasoning', 'fast'],
+                    speed: 'fast',
+                    cost: 'medium',
+                    inputPrice: 3.00,
+                    outputPrice: 12.00,
+                    contextWindow: 128000,
+                    recommended: ['validation', 'details'],
+                    description: 'Efficient reasoning model'
+                },
+                
+                // Anthropic models
+                {
+                    id: 'claude-3-5-sonnet-v2',
+                    provider: 'Anthropic',
+                    family: 'Claude 3.5',
+                    name: 'Claude 3.5 Sonnet v2',
+                    capabilities: ['vision', 'reasoning', 'multimodal'],
+                    speed: 'fast',
+                    cost: 'medium',
+                    inputPrice: 3.00,
+                    outputPrice: 15.00,
+                    contextWindow: 200000,
+                    recommended: ['products', 'structure'],
+                    description: 'Latest Claude 3.5 Sonnet revision'
+                },
+                {
+                    id: 'claude-3-7-sonnet',
+                    provider: 'Anthropic',
+                    family: 'Claude 3.7',
+                    name: 'Claude 3.7 Sonnet',
+                    capabilities: ['vision', 'fast', 'efficient'],
+                    speed: 'fast',
+                    cost: 'low',
+                    inputPrice: 1.00,
+                    outputPrice: 5.00,
+                    contextWindow: 200000,
+                    recommended: ['details', 'validation'],
+                    description: 'Fast and efficient with vision'
+                },
+                {
+                    id: 'claude-4-sonnet',
+                    provider: 'Anthropic',
+                    family: 'Claude 4',
+                    name: 'Claude 4 Sonnet',
+                    capabilities: ['vision', 'reasoning', 'balanced'],
+                    speed: 'fast',
+                    cost: 'medium',
+                    inputPrice: 3.00,
+                    outputPrice: 15.00,
+                    contextWindow: 200000,
+                    recommended: ['products', 'details'],
+                    description: 'Balanced Claude 4 model'
+                },
+                {
+                    id: 'claude-4-opus',
+                    provider: 'Anthropic',
+                    family: 'Claude 4',
+                    name: 'Claude 4 Opus',
+                    capabilities: ['vision', 'reasoning', 'complex', 'multimodal'],
+                    speed: 'medium',
+                    cost: 'high',
+                    inputPrice: 15.00,
+                    outputPrice: 75.00,
+                    contextWindow: 200000,
+                    recommended: ['structure', 'products', 'validation'],
+                    description: 'Most capable Anthropic model'
                 },
                 
                 // Google models
                 {
-                    id: 'gemini-1.5-pro',
+                    id: 'gemini-2.5-flash',
                     provider: 'Google',
-                    family: 'Gemini 1.5',
-                    name: 'Gemini 1.5 Pro',
-                    capabilities: ['vision', 'multimodal', 'long-context'],
-                    speed: 'medium',
-                    cost: 'low',
-                    inputPrice: 3.50,
-                    outputPrice: 10.50,
-                    contextWindow: 1000000,
-                    recommended: ['products', 'structure'],
-                    description: 'Massive context window, great for vision'
-                },
-                {
-                    id: 'gemini-1.5-flash',
-                    provider: 'Google',
-                    family: 'Gemini 1.5',
-                    name: 'Gemini 1.5 Flash',
-                    capabilities: ['vision', 'fast'],
+                    family: 'Gemini 2.5',
+                    name: 'Gemini 2.5 Flash',
+                    capabilities: ['vision', 'fast', 'multimodal'],
                     speed: 'very-fast',
                     cost: 'very-low',
-                    inputPrice: 0.35,
-                    outputPrice: 1.05,
+                    inputPrice: 0.075,
+                    outputPrice: 0.30,
                     contextWindow: 1000000,
                     recommended: ['details'],
-                    description: 'Fast and efficient multimodal model'
+                    description: 'Ultra-fast multimodal processing'
                 },
                 {
-                    id: 'gemini-1.0-pro',
+                    id: 'gemini-2.5-flash-thinking',
                     provider: 'Google',
-                    family: 'Gemini 1.0',
-                    name: 'Gemini 1.0 Pro',
-                    capabilities: ['reasoning'],
+                    family: 'Gemini 2.5',
+                    name: 'Gemini 2.5 Flash Thinking',
+                    capabilities: ['vision', 'reasoning', 'fast'],
                     speed: 'fast',
-                    cost: 'very-low',
-                    inputPrice: 0.50,
-                    outputPrice: 1.50,
-                    contextWindow: 32000,
-                    recommended: ['validation'],
-                    description: 'Text-only, no vision support'
+                    cost: 'low',
+                    inputPrice: 0.20,
+                    outputPrice: 0.80,
+                    contextWindow: 1000000,
+                    recommended: ['validation', 'details'],
+                    description: 'Flash with enhanced reasoning'
+                },
+                {
+                    id: 'gemini-2.5-pro',
+                    provider: 'Google',
+                    family: 'Gemini 2.5',
+                    name: 'Gemini 2.5 Pro',
+                    capabilities: ['vision', 'multimodal', 'long-context', 'complex'],
+                    speed: 'medium',
+                    cost: 'medium',
+                    inputPrice: 1.25,
+                    outputPrice: 5.00,
+                    contextWindow: 2000000,
+                    recommended: ['products', 'structure', 'validation'],
+                    description: 'Advanced Gemini with 2M context'
                 }
             ];
             
@@ -1360,7 +1450,7 @@
         const ExtractionConfigPage = () => {
             const [activeStage, setActiveStage] = useState('structure');
             const [selectedSystem, setSelectedSystem] = useState('custom_consensus');
-            const [maxBudget, setMaxBudget] = useState(1.50);
+            const [maxBudget, setMaxBudget] = useState(2.00); // £2.00 GBP recommended
             const [promptText, setPromptText] = useState('');
             const [selectedPrompt, setSelectedPrompt] = useState(null);
             const [availablePrompts, setAvailablePrompts] = useState([]);
@@ -1379,11 +1469,17 @@
             const [savedStages, setSavedStages] = useState(new Set());
             const [configPreview, setConfigPreview] = useState(null);
             const [saveMessage, setSaveMessage] = useState(null);
+            const [modelCreativity, setModelCreativity] = useState(0.7);
+            const [orchestratorModel, setOrchestratorModel] = useState('claude-4-opus');
+            const [orchestratorPrompt, setOrchestratorPrompt] = useState('');
             
             const updateConfigPreview = () => {
                 const preview = {
                     system: selectedSystem,
                     max_budget: maxBudget,
+                    temperature: modelCreativity,
+                    orchestrator_model: orchestratorModel,
+                    orchestrator_prompt: orchestratorPrompt,
                     stages: {}
                 };
                 
@@ -1433,6 +1529,9 @@
                             // Apply configuration
                             if (config.system) setSelectedSystem(config.system);
                             if (config.max_budget) setMaxBudget(config.max_budget);
+                            if (config.temperature !== undefined) setModelCreativity(config.temperature);
+                            if (config.orchestrator_model) setOrchestratorModel(config.orchestrator_model);
+                            if (config.orchestrator_prompt) setOrchestratorPrompt(config.orchestrator_prompt);
                             if (config.stages) setStageConfigs(config.stages);
                             if (config.stage_order) {
                                 const restoredStages = config.stage_order.map(stageId => ({
@@ -1669,6 +1768,9 @@
                     description: configDescription,
                     system: selectedSystem,
                     max_budget: maxBudget,
+                    temperature: modelCreativity,
+                    orchestrator_model: orchestratorModel,
+                    orchestrator_prompt: orchestratorPrompt,
                     stages: {},
                     stage_order: stages.map(s => s.id), // Save the current order of stages
                     created_at: new Date().toISOString()
@@ -1787,6 +1889,9 @@
                         // Apply configuration settings
                         setSelectedSystem(fullConfig.system);
                         setMaxBudget(fullConfig.max_budget);
+                        if (fullConfig.temperature !== undefined) setModelCreativity(fullConfig.temperature);
+                        if (fullConfig.orchestrator_model) setOrchestratorModel(fullConfig.orchestrator_model);
+                        if (fullConfig.orchestrator_prompt) setOrchestratorPrompt(fullConfig.orchestrator_prompt);
                         
                         // Restore stage order if available
                         if (fullConfig.stage_order) {
@@ -1925,23 +2030,40 @@
                     </div>
                     
                     <div className="card">
-                        <div className="card-header">Budget</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <label>Max spend per image: $</label>
-                            <input
-                                type="number"
-                                value={maxBudget}
-                                onChange={(e) => setMaxBudget(parseFloat(e.target.value))}
-                                step="0.10"
-                                min="0.50"
-                                max="10.00"
-                                style={{
-                                    width: '100px',
-                                    padding: '6px 10px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '4px'
-                                }}
-                            />
+                        <div className="card-header">Budget Control</div>
+                        <div style={{ marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <label>Max spend per image: £</label>
+                                <input
+                                    type="number"
+                                    value={maxBudget}
+                                    onChange={(e) => setMaxBudget(parseFloat(e.target.value))}
+                                    step="0.10"
+                                    min="0.50"
+                                    max="10.00"
+                                    style={{
+                                        width: '100px',
+                                        padding: '6px 10px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '4px',
+                                        fontWeight: '500'
+                                    }}
+                                />
+                                <span style={{ fontSize: '13px', color: '#64748b' }}>GBP</span>
+                            </div>
+                            <div style={{ marginTop: '12px', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                                <strong>How budget works:</strong>
+                                <ul style={{ marginTop: '8px', marginLeft: '20px' }}>
+                                    <li>Extraction stops immediately when budget is exceeded</li>
+                                    <li>Typically completes 2-4 iterations within £2.00</li>
+                                    <li>Higher budgets allow more refinement iterations</li>
+                                    <li>Actual cost depends on image complexity and model selection</li>
+                                </ul>
+                                <div style={{ marginTop: '8px', padding: '8px', background: '#f0f9ff', borderRadius: '4px' }}>
+                                    <strong>💡 Recommendation:</strong> £2.00 provides good balance of quality and cost. 
+                                    Simple shelves may only use £0.50-£1.00, while complex displays might use the full budget.
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -2153,6 +2275,115 @@
                                     }}
                                     stageType={activeStage}
                                 />
+                                
+                                {/* Model Creativity Slider */}
+                                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                                    <label style={{ display: 'block', marginBottom: '12px', fontWeight: 500 }}>
+                                        Model Creativity (Temperature): {modelCreativity.toFixed(1)}
+                                    </label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <span style={{ fontSize: '12px', color: '#64748b' }}>Precise</span>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.1"
+                                            value={modelCreativity}
+                                            onChange={(e) => setModelCreativity(parseFloat(e.target.value))}
+                                            style={{
+                                                flex: 1,
+                                                height: '6px',
+                                                background: '#e2e8f0',
+                                                borderRadius: '3px',
+                                                outline: 'none',
+                                                cursor: 'pointer'
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '12px', color: '#64748b' }}>Creative</span>
+                                    </div>
+                                    <div style={{ 
+                                        marginTop: '8px', 
+                                        fontSize: '12px', 
+                                        color: '#64748b',
+                                        textAlign: 'center'
+                                    }}>
+                                        {modelCreativity < 0.3 && 'Very deterministic and focused'}
+                                        {modelCreativity >= 0.3 && modelCreativity < 0.7 && 'Balanced between accuracy and variation'}
+                                        {modelCreativity >= 0.7 && 'More creative and exploratory'}
+                                    </div>
+                                </div>
+                                
+                                {/* Orchestrator Model Selection */}
+                                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                        Orchestrator Model (Manages the extraction process):
+                                    </label>
+                                    <select
+                                        value={orchestratorModel}
+                                        onChange={(e) => setOrchestratorModel(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '6px',
+                                            background: 'white',
+                                            fontSize: '14px'
+                                        }}
+                                    >
+                                        <optgroup label="High Performance">
+                                            <option value="claude-4-opus">Claude 4 Opus (Recommended)</option>
+                                            <option value="gpt-4.1">GPT-4.1</option>
+                                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                        </optgroup>
+                                        <optgroup label="Balanced">
+                                            <option value="claude-4-sonnet">Claude 4 Sonnet</option>
+                                            <option value="claude-3-5-sonnet-v2">Claude 3.5 Sonnet v2</option>
+                                            <option value="gpt-4o">GPT-4o</option>
+                                        </optgroup>
+                                        <optgroup label="Cost Effective">
+                                            <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
+                                            <option value="gpt-4o-mini">GPT-4o mini</option>
+                                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                        </optgroup>
+                                    </select>
+                                    <div style={{ 
+                                        marginTop: '8px', 
+                                        fontSize: '12px', 
+                                        color: '#64748b'
+                                    }}>
+                                        The orchestrator coordinates all stages, manages iterations, and ensures quality
+                                    </div>
+                                    
+                                    {/* Orchestrator Prompt */}
+                                    <div style={{ marginTop: '16px' }}>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+                                            Orchestrator Instructions (Optional):
+                                        </label>
+                                        <textarea
+                                            placeholder="Provide specific instructions for how the orchestrator should manage the extraction process. For example: prioritize accuracy over speed, focus on specific product attributes, handle edge cases, etc."
+                                            value={orchestratorPrompt}
+                                            onChange={(e) => setOrchestratorPrompt(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                minHeight: '100px',
+                                                padding: '12px',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '6px',
+                                                fontFamily: 'inherit',
+                                                fontSize: '13px',
+                                                resize: 'vertical',
+                                                background: 'white'
+                                            }}
+                                        />
+                                        <div style={{ 
+                                            marginTop: '4px', 
+                                            fontSize: '11px', 
+                                            color: '#94a3b8'
+                                        }}>
+                                            These instructions guide the orchestrator's decision-making throughout the extraction
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2185,7 +2416,9 @@
                             <div className="card-header">Configuration Preview</div>
                             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
                                 <div><strong>System:</strong> {configPreview.system}</div>
-                                <div><strong>Max Budget:</strong> ${configPreview.max_budget}</div>
+                                <div><strong>Max Budget:</strong> £{configPreview.max_budget} GBP</div>
+                                <div><strong>Temperature:</strong> {configPreview.temperature}</div>
+                                <div><strong>Orchestrator:</strong> {configPreview.orchestrator_model}</div>
                                 <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
                                 {Object.entries(configPreview.stages).map(([stageId, config]) => (
                                     <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>

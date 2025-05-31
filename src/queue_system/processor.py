@@ -115,11 +115,20 @@ class AIExtractionQueueProcessor:
             
             # Use the master orchestrator for real processing
             from ..orchestrator.master_orchestrator import MasterOrchestrator
-            orchestrator = MasterOrchestrator(self.config)
+            orchestrator = MasterOrchestrator(self.config, queue_item_id=queue_id)
             
             # Process with master orchestrator using upload_id
             upload_id = queue_item['upload_id']
-            result = await orchestrator.achieve_target_accuracy(upload_id)
+            # Get configuration from queue item
+            configuration = queue_item.get('model_config', {})
+            system = queue_item.get('current_extraction_system', 'custom_consensus')
+            
+            result = await orchestrator.achieve_target_accuracy(
+                upload_id=upload_id,
+                queue_item_id=queue_id,
+                system=system,
+                configuration=configuration
+            )
             
             processing_duration = time.time() - start_time
             

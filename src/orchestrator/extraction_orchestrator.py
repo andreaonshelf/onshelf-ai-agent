@@ -23,17 +23,34 @@ from ..utils import logger
 class ExtractionOrchestrator:
     """Orchestrates extraction with cumulative learning between agents"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         self.config = config
+        self.queue_item_id = queue_item_id
         self.structure_agent = StructureAnalysisAgent(config)
         
-        # Initialize real extraction engine
+        # Initialize model configuration defaults
+        self.model_config = {}
+        self.temperature = 0.7
+        self.orchestrator_model = 'claude-4-opus'
+        self.orchestrator_prompt = ''
+        self.stage_models = {}
+        
+        # Load model configuration if queue item provided
+        if queue_item_id:
+            self._load_model_config()
+        
+        # Initialize real extraction engine with temperature
         from ..extraction.engine import ModularExtractionEngine
-        self.extraction_engine = ModularExtractionEngine(config)
+        self.extraction_engine = ModularExtractionEngine(config, temperature=self.temperature)
+        
+        # Pass queue context to engine if available
+        if queue_item_id:
+            self.extraction_engine.queue_item_id = queue_item_id
         
         logger.info(
             "Extraction Orchestrator initialized with real extraction engine",
-            component="extraction_orchestrator"
+            component="extraction_orchestrator",
+            has_model_config=bool(self.model_config)
         )
     
     async def extract_with_cumulative_learning(self, 
@@ -42,7 +59,8 @@ class ExtractionOrchestrator:
                                              previous_attempts: List[ExtractionResult] = None,
                                              focus_areas: List[Dict] = None,
                                              locked_positions: List[Dict] = None,
-                                             agent_id: str = None) -> ExtractionResult:
+                                             agent_id: str = None,
+                                             extraction_run_id: str = None) -> ExtractionResult:
         """Execute extraction with cumulative learning from previous attempts"""
         
         logger.info(
@@ -52,6 +70,10 @@ class ExtractionOrchestrator:
             iteration=iteration,
             has_previous=previous_attempts is not None
         )
+        
+        # Pass extraction run ID to engine if provided
+        if extraction_run_id and hasattr(self.extraction_engine, 'extraction_run_id'):
+            self.extraction_engine.extraction_run_id = extraction_run_id
         
         # Phase 0: Structure analysis (only on first iteration)
         if iteration == 1:
@@ -153,7 +175,7 @@ class ExtractionOrchestrator:
         prompt = self._build_cumulative_prompt(agent_number, context)
         
         # Select appropriate model for agent
-        model = self._select_model_for_agent(agent_number, context)
+        model = self._select_model_for_agent(agent_number, context, stage="products")
         
         logger.info(
             f"Executing Agent {agent_number} with {model}",
@@ -307,8 +329,71 @@ class ExtractionOrchestrator:
         
         return "\n".join(result) if result else "Stable confidence across positions"
     
-    def _select_model_for_agent(self, agent_number: int, context: CumulativeExtractionContext) -> AIModelType:
-        """Select appropriate model based on agent number and context"""
+    def _load_model_config(self):
+        """Load model configuration from queue item"""
+        try:
+            from supabase import create_client
+            import os
+            
+            supabase = create_client(
+                os.getenv("SUPABASE_URL"),
+                os.getenv("SUPABASE_KEY")
+            )
+            
+            result = supabase.table("ai_extraction_queue").select("model_config").eq("id", self.queue_item_id).single().execute()
+            
+            if result.data and result.data.get("model_config"):
+                self.model_config = result.data["model_config"]
+                self.temperature = self.model_config.get("temperature", 0.7)
+                self.orchestrator_model = self.model_config.get("orchestrator_model", "claude-4-opus")
+                self.orchestrator_prompt = self.model_config.get("orchestrator_prompt", "")
+                self.stage_models = self.model_config.get("stage_models", {})
+                
+                logger.info(
+                    "Loaded model configuration from queue item",
+                    component="extraction_orchestrator",
+                    queue_item_id=self.queue_item_id,
+                    temperature=self.temperature,
+                    orchestrator_model=self.orchestrator_model
+                )
+        except Exception as e:
+            logger.error(f"Failed to load model config: {e}", component="extraction_orchestrator")
+    
+    def _select_model_for_agent(self, agent_number: int, context: CumulativeExtractionContext, stage: str = "products") -> AIModelType:
+        """Select appropriate model based on configuration or defaults"""
+        
+        # Check if we have configured models for this stage
+        if stage in self.stage_models and self.stage_models[stage]:
+            models = self.stage_models[stage]
+            # Rotate through configured models for different agents
+            model_id = models[(agent_number - 1) % len(models)]
+            
+            # Map frontend model IDs to AIModelType enum
+            model_mapping = {
+                # OpenAI models
+                "gpt-4.1": AIModelType.GPT4O_LATEST,
+                "gpt-4.1-mini": AIModelType.GPT4O_LATEST,
+                "gpt-4.1-nano": AIModelType.GPT4O_LATEST,
+                "gpt-4o": AIModelType.GPT4O_LATEST,
+                "gpt-4o-mini": AIModelType.GPT4O_LATEST,
+                "o3": AIModelType.GPT4O_LATEST,
+                "o4-mini": AIModelType.GPT4O_LATEST,
+                
+                # Anthropic models
+                "claude-3-5-sonnet-v2": AIModelType.CLAUDE_3_SONNET,
+                "claude-3-7-sonnet": AIModelType.CLAUDE_3_SONNET,
+                "claude-4-sonnet": AIModelType.CLAUDE_3_SONNET,
+                "claude-4-opus": AIModelType.CLAUDE_3_SONNET,
+                
+                # Google models
+                "gemini-2.5-flash": AIModelType.GEMINI_PRO,
+                "gemini-2.5-flash-thinking": AIModelType.GEMINI_PRO,
+                "gemini-2.5-pro": AIModelType.GEMINI_PRO,
+            }
+            
+            return model_mapping.get(model_id, AIModelType.GPT4O_LATEST)
+        
+        # Fallback to default behavior
         if agent_number == 1:
             return AIModelType.GPT4O_LATEST  # Fast initial extraction
         elif agent_number == 2:
@@ -364,13 +449,37 @@ class ExtractionOrchestrator:
             
             try:
                 # Execute extraction for this shelf
-                shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
-                    primary_model=model,
-                    prompt=shelf_prompt,
-                    images={"main": image},
-                    output_schema="List[ProductExtraction]",
-                    agent_id=f"{agent_id}_shelf_{shelf_num}"
-                )
+                # If we have a configured model from stage_models, use it
+                if context.structure and hasattr(self, 'stage_models') and 'products' in self.stage_models:
+                    models = self.stage_models['products']
+                    if models:
+                        # Select model based on agent number
+                        model_id = models[(agent_number - 1) % len(models)]
+                        shelf_result, api_cost = await self.extraction_engine.execute_with_model_id(
+                            model_id=model_id,
+                            prompt=shelf_prompt,
+                            images={"main": image},
+                            output_schema="List[ProductExtraction]",
+                            agent_id=f"{agent_id}_shelf_{shelf_num}"
+                        )
+                    else:
+                        # Fallback to default model
+                        shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
+                            primary_model=model,
+                            prompt=shelf_prompt,
+                            images={"main": image},
+                            output_schema="List[ProductExtraction]",
+                            agent_id=f"{agent_id}_shelf_{shelf_num}"
+                        )
+                else:
+                    # Use default fallback
+                    shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
+                        primary_model=model,
+                        prompt=shelf_prompt,
+                        images={"main": image},
+                        output_schema="List[ProductExtraction]",
+                        agent_id=f"{agent_id}_shelf_{shelf_num}"
+                    )
                 
                 # Convert and add products from this shelf
                 shelf_products = self._convert_extraction_result(shelf_result, model)

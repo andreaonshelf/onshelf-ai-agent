@@ -178,13 +178,15 @@ async def get_queue_item_image(item_id: int):
 
 @router.post("/process/{item_id}")
 async def start_processing(item_id: int, request_data: Dict[str, Any]):
-    """Start processing a queue item with selected systems"""
+    """Start processing a queue item with selected systems and model configuration"""
     
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
-        systems = request_data.get('systems', [])
+        # Extract system selection (backwards compatible)
+        system = request_data.get('system', 'custom_consensus')
+        systems = request_data.get('systems', [system])
         if not systems:
             raise HTTPException(status_code=400, detail="At least one system must be selected")
         
@@ -198,6 +200,15 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
         import uuid
         comparison_group_id = str(uuid.uuid4())
         
+        # Extract model configuration
+        model_config = {
+            "temperature": request_data.get('temperature', 0.7),
+            "orchestrator_model": request_data.get('orchestrator_model', 'claude-4-opus'),
+            "orchestrator_prompt": request_data.get('orchestrator_prompt', ''),
+            "stage_models": request_data.get('stage_models', {}),
+            "max_budget": request_data.get('max_budget', 1.50)
+        }
+        
         # Update queue item
         update_data = {
             "status": "processing",
@@ -205,7 +216,8 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             "comparison_group_id": comparison_group_id,
             "current_extraction_system": systems[0],  # Start with first system
             "started_at": datetime.utcnow().isoformat(),
-            "processing_attempts": 1
+            "processing_attempts": 1,
+            "model_config": model_config  # Store model configuration
         }
         
         result = supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()

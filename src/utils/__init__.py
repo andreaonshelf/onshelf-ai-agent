@@ -7,6 +7,7 @@ from .error_handling import (
     RetryConfig, with_retry, GracefulDegradation
 )
 from .image_coordinator import MultiImageCoordinator, ImageType, ImageClassifier
+from .model_usage_tracker import ModelUsageTracker, get_model_usage_tracker
 
 __all__ = [
     "logger",
@@ -21,7 +22,9 @@ __all__ = [
     "GracefulDegradation",
     "MultiImageCoordinator",
     "ImageType",
-    "ImageClassifier"
+    "ImageClassifier",
+    "ModelUsageTracker",
+    "get_model_usage_tracker"
 ]
 
 # This package can be extended with utility functions as needed 
