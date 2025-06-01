@@ -88,6 +88,10 @@ app.include_router(iteration_router)
 from src.api.field_definitions import router as field_definitions_router
 app.include_router(field_definitions_router)
 
+# Include extraction configuration API
+from src.api.extraction_config import router as extraction_config_router
+app.include_router(extraction_config_router)
+
 # Initialize mock iteration data on startup
 @app.on_event("startup")
 async def initialize_mock_data():
@@ -13939,6 +13943,20 @@ Format the response as JSON with keys:
     </html>
     """
 
+@app.get("/react", response_class=HTMLResponse)
+async def react_dashboard():
+    """React dashboard - UI separated version"""
+    try:
+        with open("new_dashboard_ui_separated.html", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        # Fallback to 6AM version if new one doesn't exist
+        try:
+            with open("new_dashboard_6am.html", "r") as f:
+                return f.read()
+        except FileNotFoundError:
+            return "Dashboard file not found. Please check new_dashboard_ui_separated.html exists."
+
 @app.get("/test", response_class=HTMLResponse)
 async def test_page():
     """Simple test page"""
@@ -13976,7 +13994,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8130,
         reload=True,
         log_level="info"
     )

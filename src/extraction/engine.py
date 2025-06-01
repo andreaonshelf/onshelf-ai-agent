@@ -593,28 +593,32 @@ class ModularExtractionEngine:
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=4000,
                     messages=messages,
-                    response_model=ShelfStructure
+                    response_model=ShelfStructure,
+                    temperature=self.config.model_temperature
                 )
             elif output_schema == "List[ProductExtraction]":
                 response = self.anthropic_client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=6000,
                     messages=messages,
-                    response_model=List[ProductExtraction]
+                    response_model=List[ProductExtraction],
+                    temperature=self.config.model_temperature
                 )
             elif output_schema == "CompleteShelfExtraction":
                 response = self.anthropic_client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=8000,
                     messages=messages,
-                    response_model=CompleteShelfExtraction
+                    response_model=CompleteShelfExtraction,
+                    temperature=self.config.model_temperature
                 )
             else:
                 # Generic text response
                 response = self.anthropic_client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=4000,
-                    messages=messages
+                    messages=messages,
+                    temperature=self.config.model_temperature
                 )
             
             # Estimate API cost (Claude 3 Sonnet pricing)
@@ -686,21 +690,24 @@ class ModularExtractionEngine:
                     model="gpt-4o-2024-11-20",
                     messages=messages,
                     response_model=List[ProductExtraction],
-                    max_tokens=6000
+                    max_tokens=6000,
+                    temperature=self.config.model_temperature
                 )
             elif output_schema == "CompleteShelfExtraction":
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4o-2024-11-20",
                     messages=messages,
                     response_model=CompleteShelfExtraction,
-                    max_tokens=8000
+                    max_tokens=8000,
+                    temperature=self.config.model_temperature
                 )
             else:
                 # Generic response
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4o-2024-11-20",
                     messages=messages,
-                    max_tokens=4000
+                    max_tokens=4000,
+                    temperature=self.config.model_temperature
                 )
             
             # Estimate API cost

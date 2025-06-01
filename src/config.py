@@ -37,6 +37,7 @@ class SystemConfig:
     # Agent parameters
     max_iterations: int = 5
     target_accuracy: float = 0.7  # Temporarily lowered for debugging
+    model_temperature: float = 0.1  # Low temperature for consistent, deterministic outputs
     confidence_thresholds: Dict[str, float] = field(default_factory=lambda: {
         'auto_approve': 0.95,
         'needs_review': 0.85,

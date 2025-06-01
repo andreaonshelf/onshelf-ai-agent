@@ -700,6 +700,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -743,6 +744,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=1500,
                 messages=[
                     {
@@ -896,6 +898,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
             
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -938,6 +941,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
             
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=2000,
                 messages=[
                     {
@@ -1182,6 +1186,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -1220,6 +1225,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=1500,
                 messages=[
                     {
@@ -1289,6 +1295,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
             
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -1333,6 +1340,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
             
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=2000,
                 messages=[
                     {
@@ -1509,6 +1517,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -1550,6 +1559,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=1500,
                 messages=[
                     {
@@ -1622,6 +1632,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['gpt4o'].chat.completions.acreate(
                 model="gpt-4o",
+                temperature=self.config.model_temperature,
                 messages=[
                     {
                         "role": "user",
@@ -1663,6 +1674,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
         try:
             response = await self.model_clients['claude'].messages.acreate(
                 model="claude-3-sonnet-20240229",
+                temperature=self.config.model_temperature,
                 max_tokens=1500,
                 messages=[
                     {

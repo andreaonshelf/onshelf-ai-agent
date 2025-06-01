@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI - Dashboard</title>
+    
+    <!-- React from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .nav-bar {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .nav-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+        
+        .main-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .section-header {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1e293b;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1e293b;
+        }
+        
+        .button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #1e293b;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .button:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+        }
+        
+        .button-primary {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .button-primary:hover {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script>
+        const { useState, useEffect, useRef, useCallback } = React;
+        const { render } = ReactDOM;
+        
+        // Main App Component
+        function App() {
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [success, setSuccess] = useState(null);
+            
+            // Stage configurations
+            const [stageConfigs, setStageConfigs] = useState({
+                products: {
+                    prompt: '',
+                    fields: [],
+                    models: ['gpt-4o']
+                }
+            });
+            
+            // Pipeline configuration (separate from stages)
+            const [pipelineConfig, setPipelineConfig] = useState({
+                temperature: 0.1,
+                orchestrator: 'standard',
+                comparison: 'visual'
+            });
+            
+            // Prompt library state
+            const [showPromptLibrary, setShowPromptLibrary] = useState(false);
+            const [libraryPrompts, setLibraryPrompts] = useState([]);
+            
+            // Load prompt library
+            const loadPromptLibrary = async () => {
+                try {
+                    const response = await fetch('/api/prompts/list/extraction');
+                    const data = await response.json();
+                    if (data.success) {
+                        setLibraryPrompts(data.prompts);
+                    }
+                } catch (err) {
+                    console.error('Failed to load prompt library:', err);
+                }
+            };
+            
+            // Save to prompt library
+            const saveToPromptLibrary = async (name, description) => {
+                try {
+                    const response = await fetch('/api/prompts/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            description,
+                            prompt_content: stageConfigs.products.prompt,
+                            field_definitions: stageConfigs.products.fields,
+                            prompt_type: 'extraction',
+                            tags: ['user-created', 'products']
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        setSuccess('Prompt saved to library successfully!');
+                        await loadPromptLibrary();
+                    }
+                } catch (err) {
+                    setError('Failed to save prompt: ' + err.message);
+                }
+            };
+            
+            // Load from prompt library
+            const loadFromPromptLibrary = async (promptId) => {
+                try {
+                    const response = await fetch(`/api/prompts/get/${promptId}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        setStageConfigs(prev => ({
+                            ...prev,
+                            products: {
+                                ...prev.products,
+                                prompt: data.prompt.prompt_content,
+                                fields: data.prompt.field_definitions
+                            }
+                        }));
+                        setShowPromptLibrary(false);
+                        setSuccess('Prompt loaded successfully!');
+                    }
+                } catch (err) {
+                    setError('Failed to load prompt: ' + err.message);
+                }
+            };
+            
+            useEffect(() => {
+                loadPromptLibrary();
+            }, []);
+            
+            return React.createElement('div', null,
+                // Navigation
+                React.createElement('div', { className: 'nav-bar' },
+                    React.createElement('div', { className: 'nav-logo' }, 'OnShelf AI')
+                ),
+                
+                // Main container
+                React.createElement('div', { className: 'main-container' },
+                    React.createElement('h1', { className: 'section-header' }, 'Unified Extraction Dashboard'),
+                    
+                    // Success/Error messages
+                    success && React.createElement('div', { className: 'success' }, success),
+                    error && React.createElement('div', { className: 'error' }, error),
+                    
+                    // Stage Configuration Card
+                    React.createElement('div', { className: 'card' },
+                        React.createElement('div', { className: 'card-header' }, 'Stage Configuration'),
+                        React.createElement('div', { style: { marginBottom: '16px' } },
+                            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Extraction Prompt'),
+                            React.createElement('textarea', {
+                                value: stageConfigs.products.prompt,
+                                onChange: (e) => setStageConfigs(prev => ({
+                                    ...prev,
+                                    products: { ...prev.products, prompt: e.target.value }
+                                })),
+                                style: {
+                                    width: '100%',
+                                    minHeight: '120px',
+                                    padding: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    fontFamily: 'monospace',
+                                    fontSize: '13px'
+                                },
+                                placeholder: 'Enter your extraction prompt...'
+                            })
+                        ),
+                        
+                        // Prompt Library Buttons
+                        React.createElement('div', { style: { display: 'flex', gap: '12px', marginTop: '12px' } },
+                            React.createElement('button', {
+                                className: 'button',
+                                onClick: () => setShowPromptLibrary(true)
+                            }, 'Load from Library'),
+                            React.createElement('button', {
+                                className: 'button button-primary',
+                                onClick: () => {
+                                    const name = prompt('Enter prompt name:');
+                                    const description = prompt('Enter prompt description:');
+                                    if (name) saveToPromptLibrary(name, description);
+                                }
+                            }, 'Save to Library')
+                        )
+                    ),
+                    
+                    // Pipeline Configuration Card
+                    React.createElement('div', { className: 'card' },
+                        React.createElement('div', { className: 'card-header' }, 'Pipeline Configuration'),
+                        React.createElement('div', { style: { marginBottom: '16px' } },
+                            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 
+                                `Temperature: ${pipelineConfig.temperature}`
+                            ),
+                            React.createElement('input', {
+                                type: 'range',
+                                min: '0',
+                                max: '1',
+                                step: '0.1',
+                                value: pipelineConfig.temperature,
+                                onChange: (e) => setPipelineConfig(prev => ({
+                                    ...prev,
+                                    temperature: parseFloat(e.target.value)
+                                })),
+                                style: { width: '100%' }
+                            })
+                        )
+                    ),
+                    
+                    // Prompt Library Modal
+                    showPromptLibrary && React.createElement('div', {
+                        style: {
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000
+                        }
+                    },
+                        React.createElement('div', {
+                            style: {
+                                background: 'white',
+                                borderRadius: '8px',
+                                padding: '24px',
+                                maxWidth: '600px',
+                                width: '90%',
+                                maxHeight: '80vh',
+                                overflow: 'auto'
+                            }
+                        },
+                            React.createElement('h2', { style: { marginBottom: '16px' } }, 'Prompt Library'),
+                            React.createElement('div', { style: { marginBottom: '16px' } },
+                                libraryPrompts.map(prompt =>
+                                    React.createElement('div', {
+                                        key: prompt.prompt_id,
+                                        style: {
+                                            padding: '12px',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '6px',
+                                            marginBottom: '8px',
+                                            cursor: 'pointer'
+                                        },
+                                        onClick: () => loadFromPromptLibrary(prompt.prompt_id)
+                                    },
+                                        React.createElement('div', { style: { fontWeight: '600' } }, prompt.name),
+                                        React.createElement('div', { style: { fontSize: '13px', color: '#64748b' } }, prompt.description)
+                                    )
+                                )
+                            ),
+                            React.createElement('button', {
+                                className: 'button',
+                                onClick: () => setShowPromptLibrary(false)
+                            }, 'Close')
+                        )
+                    )
+                )
+            );
+        }
+        
+        // Render the app
+        render(React.createElement(App), document.getElementById('root'));
+    </script>
+</body>
+</html>

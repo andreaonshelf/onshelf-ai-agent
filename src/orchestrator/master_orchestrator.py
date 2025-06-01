@@ -8,6 +8,8 @@ import time
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 from ..config import SystemConfig
 from .extraction_orchestrator import ExtractionOrchestrator
@@ -20,6 +22,7 @@ from ..models.shelf_structure import ShelfStructure
 from ..utils import logger
 from .models import MasterResult
 from ..extraction.state_tracker import get_state_tracker, ExtractionStage, ExtractionStatus
+from ..planogram.models import VisualPlanogram
 
 
 class MasterOrchestrator:
@@ -150,13 +153,32 @@ class MasterOrchestrator:
                         stage=ExtractionStage.VALIDATION
                     )
             
-                # Step 3: AI comparison analysis
+                # Step 3: Render planogram to PNG for visual comparison
                 validation_start = time.time()
-                comparison_result = await self.comparison_agent.compare_image_vs_planogram(
-                    original_image=images['enhanced'],
-                    planogram=planogram_result.planogram,
-                    structure_context=structure_context
+                planogram_png = await self._render_planogram_to_png(
+                    planogram_result.planogram,
+                    extraction_result
                 )
+                
+                # Step 3b: AI comparison analysis with rendered image (skip if no PNG)
+                if planogram_png:
+                    comparison_result = await self.comparison_agent.compare_image_vs_planogram(
+                        original_image=images['enhanced'],
+                        planogram=planogram_result.planogram,
+                        planogram_image=planogram_png,
+                        structure_context=structure_context,
+                        model=configuration.get('comparison_model', 'gpt-4-vision-preview') if configuration else 'gpt-4-vision-preview'
+                    )
+                else:
+                    # Skip comparison entirely if no PNG - no API call
+                    logger.warning("Skipping visual comparison - no planogram PNG available")
+                    comparison_result = ImageComparison(
+                        matches=[],
+                        mismatches=[],
+                        missing_products=[],
+                        extra_products=[],
+                        overall_similarity=0.0  # Unknown accuracy
+                    )
             
                 # Step 4: Calculate accuracy and analyze failures
                 accuracy_analysis = self.feedback_manager.analyze_accuracy_with_failure_areas(
@@ -482,4 +504,34 @@ class MasterOrchestrator:
                 'progression_analysis': comparison_set.progression_analysis
             }
         
-        return {'master_result': result} 
+        return {'master_result': result}
+    
+    async def _render_planogram_to_png(self, planogram: VisualPlanogram, extraction_result: ExtractionResult) -> bytes:
+        """Render planogram to PNG image for visual comparison"""
+        try:
+            # Prepare data in the format expected by the rendering function
+            extraction_data = {
+                "extraction_result": {
+                    "products": [p.model_dump() if hasattr(p, 'model_dump') else p.dict() for p in extraction_result.products]
+                },
+                "accuracy": planogram.accuracy_score
+            }
+            
+            # Import the rendering function from planogram_renderer
+            from ..api.planogram_renderer import generate_png_from_real_data
+            
+            # Generate PNG with product view (most detailed)
+            png_bytes = generate_png_from_real_data(extraction_data, "product_view")
+            
+            logger.info(
+                "Successfully rendered planogram to PNG for visual comparison",
+                component="master_orchestrator",
+                png_size_bytes=len(png_bytes)
+            )
+            
+            return png_bytes
+            
+        except Exception as e:
+            logger.error(f"Failed to render planogram to PNG: {e}", component="master_orchestrator")
+            # Return empty bytes if rendering fails
+            return b"" 

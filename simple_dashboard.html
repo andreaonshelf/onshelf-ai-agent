@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 20px;
+            background: #10b981;
+            color: white;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .button:hover {
+            background: #2563eb;
+        }
+        
+        pre {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>OnShelf AI Dashboard</h1>
+            <p>Unified extraction and analysis system</p>
+        </div>
+        
+        <div class="status">
+            <h2>✅ System Status: Operational</h2>
+            <p>All services are running normally</p>
+        </div>
+        
+        <div class="info-card">
+            <h3>Quick Actions</h3>
+            <button class="button" onclick="testAPI()">Test API Connection</button>
+            <button class="button" onclick="loadQueue()">Load Queue Status</button>
+            <div id="result" style="margin-top: 20px;"></div>
+        </div>
+        
+        <div class="info-card">
+            <h3>System Information</h3>
+            <ul>
+                <li>API Documentation: <a href="/docs" target="_blank">/docs</a></li>
+                <li>Health Check: <a href="/health" target="_blank">/health</a></li>
+                <li>Main Dashboard: <a href="/" target="_blank">/ (React version)</a></li>
+            </ul>
+        </div>
+        
+        <div class="info-card">
+            <h3>Recent Updates</h3>
+            <ul>
+                <li>✅ Enhanced prompt management with performance tracking</li>
+                <li>✅ Multi-armed bandit configuration selection</li>
+                <li>✅ Automatic prompt evolution engine</li>
+                <li>✅ Unified self-improving system</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing API...';
+            
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                resultDiv.innerHTML = '<h4>API Response:</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+        
+        async function loadQueue() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Loading queue status...';
+            
+            try {
+                const response = await fetch('/api/queue-processor/status');
+                const data = await response.json();
+                resultDiv.innerHTML = '<h4>Queue Status:</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

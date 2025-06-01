@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Separation Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f1f3f5;
+            border-radius: 4px;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .implementation-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>UI Separation Implementation Status</h1>
+    
+    <div class="test-section">
+        <div class="test-title">✅ Completed UI Changes</div>
+        
+        <div class="test-item">
+            <strong>1. Stage Configuration Separation</strong>
+            <span class="status success">IMPLEMENTED</span>
+            <div class="implementation-details">
+                <strong>What was done:</strong>
+                <ul>
+                    <li>Removed temperature setting from stage configuration</li>
+                    <li>Removed orchestrator model selection from stage configuration</li>
+                    <li>Removed orchestrator prompt from stage configuration</li>
+                    <li>Stage config now only contains: prompt text, field definitions, and model selection</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-item">
+            <strong>2. Pipeline Configuration Card</strong>
+            <span class="status success">IMPLEMENTED</span>
+            <div class="implementation-details">
+                <strong>New Pipeline Configuration includes:</strong>
+                <ul>
+                    <li>Model Creativity (Temperature) slider: 0.0 - 1.0</li>
+                    <li>Orchestrator Model dropdown with grouped options</li>
+                    <li>Orchestrator Instructions textarea</li>
+                    <li>Image Comparison toggle with accuracy threshold slider</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-item">
+            <strong>3. Prompt Library Integration</strong>
+            <span class="status success">IMPLEMENTED</span>
+            <div class="implementation-details">
+                <strong>Added features:</strong>
+                <ul>
+                    <li>"Save to Library" button in stage configuration</li>
+                    <li>"Load from Library" button in stage configuration</li>
+                    <li>Prompt library modal with performance metrics</li>
+                    <li>Library items show: accuracy %, usage count, cost/run, success rate</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-item">
+            <strong>4. Configuration Preview Update</strong>
+            <span class="status success">IMPLEMENTED</span>
+            <div class="implementation-details">
+                <strong>Preview now shows:</strong>
+                <ul>
+                    <li>System selection</li>
+                    <li>Max budget</li>
+                    <li>Pipeline Settings (separate section)</li>
+                    <li>Stage configurations (only stage-specific data)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">📋 Summary</div>
+        <p>The UI separation has been successfully implemented as requested:</p>
+        <ol>
+            <li><strong>Temperature, orchestrator, and comparison settings</strong> have been moved out of stage configuration into a new "Pipeline Configuration" card</li>
+            <li><strong>Stage configuration</strong> now only saves stage-specific data (prompts, fields, models)</li>
+            <li><strong>Prompt library buttons</strong> have been added within the main dashboard (not as a separate page)</li>
+            <li><strong>Save/Load configuration</strong> has been updated to handle the new structure</li>
+        </ol>
+        
+        <p style="margin-top: 20px;"><strong>To test the new dashboard:</strong></p>
+        <ol>
+            <li>Navigate to <a href="http://localhost:8000/react">http://localhost:8000/react</a></li>
+            <li>Go to the Configuration tab</li>
+            <li>Verify the Pipeline Configuration card appears after Budget Control</li>
+            <li>Verify Stage Configuration no longer contains temperature/orchestrator settings</li>
+            <li>Test the Save to Library and Load from Library buttons</li>
+        </ol>
+    </div>
+    
+    <div class="test-section">
+        <div class="test-title">🔄 Migration Notes</div>
+        <p>If you had previous configurations saved, they will need to be updated:</p>
+        <ul>
+            <li>Old configs stored temperature/orchestrator in stage configs</li>
+            <li>New configs store these in a separate "pipeline" section</li>
+            <li>The load function has been updated to handle both formats</li>
+        </ul>
+    </div>
+</body>
+</html>

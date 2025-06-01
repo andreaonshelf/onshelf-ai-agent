@@ -124,6 +124,10 @@ async def get_queue_items(
                     upload_data = upload_result.data[0]
                     item['uploads'] = upload_data
                     
+                    # Flatten category at top level for frontend
+                    if upload_data.get('category'):
+                        item['category'] = upload_data['category']
+                    
                     # If there's a collection_id, get store info
                     if upload_data.get('collection_id'):
                         collection_result = supabase.table("collections").select(
@@ -141,7 +145,14 @@ async def get_queue_items(
                                 ).eq("store_id", collection_data['store_id']).execute()
                                 
                                 if store_result.data and len(store_result.data) > 0:
-                                    item['uploads']['collections']['stores'] = store_result.data[0]
+                                    store_info = store_result.data[0]
+                                    item['uploads']['collections']['stores'] = store_info
+                                    
+                                    # Flatten store name at top level for frontend
+                                    store_name = store_info.get('retailer_name', '')
+                                    if store_info.get('location_city'):
+                                        store_name += f" - {store_info['location_city']}"
+                                    item['store_name'] = store_name
             except Exception as e:
                 logger.warning(f"Failed to enrich item {item['id']} with upload data: {e}")
                 # Continue processing other items
@@ -200,28 +211,40 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
+        # Handle both old and new request formats
         systems = request_data.get('systems', [])
-        if not systems:
-            raise HTTPException(status_code=400, detail="At least one system must be selected")
+        system = request_data.get('system', 'custom_consensus')
         
-        # Validate systems
-        valid_systems = ['custom_consensus', 'langgraph', 'hybrid']
-        invalid_systems = [s for s in systems if s not in valid_systems]
-        if invalid_systems:
-            raise HTTPException(status_code=400, detail=f"Invalid systems: {invalid_systems}")
+        # If no systems array provided, use the single system
+        if not systems and system:
+            systems = [system]
+        
+        # Extract configuration data
+        extraction_config = {
+            "system": system,
+            "max_budget": request_data.get('max_budget', 2.0),
+            "temperature": request_data.get('temperature', 0.1),
+            "orchestrators": request_data.get('orchestrators', {
+                "master": { "model": "claude-4-opus", "prompt": "" },
+                "extraction": { "model": "claude-4-sonnet", "prompt": "" },
+                "planogram": { "model": "gpt-4o-mini", "prompt": "" }
+            }),
+            "stage_models": request_data.get('stage_models', {})
+        }
         
         # Generate comparison group ID
         import uuid
         comparison_group_id = str(uuid.uuid4())
         
-        # Update queue item
+        # Update queue item with extraction config
         update_data = {
             "status": "processing",
             "selected_systems": systems,
             "comparison_group_id": comparison_group_id,
-            "current_extraction_system": systems[0],  # Start with first system
+            "current_extraction_system": system,
             "started_at": datetime.utcnow().isoformat(),
-            "processing_attempts": 1
+            "processing_attempts": 1,
+            "extraction_config": extraction_config  # Store the full config
         }
         
         result = supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
@@ -230,9 +253,10 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             raise HTTPException(status_code=404, detail="Queue item not found")
         
         logger.info(
-            f"Started processing for item {item_id} with systems {systems}",
+            f"Started processing for item {item_id} with system {system}",
             component="queue_api",
-            comparison_group_id=comparison_group_id
+            comparison_group_id=comparison_group_id,
+            extraction_config=extraction_config
         )
         
         # TODO: Trigger actual processing pipeline here
@@ -243,6 +267,7 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             "item_id": item_id,
             "comparison_group_id": comparison_group_id,
             "systems": systems,
+            "extraction_config": extraction_config,
             "message": "Processing started successfully"
         }
         

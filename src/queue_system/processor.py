@@ -119,7 +119,18 @@ class AIExtractionQueueProcessor:
             
             # Process with master orchestrator using upload_id
             upload_id = queue_item['upload_id']
-            result = await orchestrator.achieve_target_accuracy(upload_id)
+            
+            # Extract configuration from queue item
+            extraction_config = queue_item.get('extraction_config', {})
+            system = extraction_config.get('system', 'custom_consensus')
+            
+            # Pass configuration to orchestrator
+            result = await orchestrator.achieve_target_accuracy(
+                upload_id, 
+                queue_item_id=queue_id,
+                system=system,
+                configuration=extraction_config
+            )
             
             processing_duration = time.time() - start_time
             

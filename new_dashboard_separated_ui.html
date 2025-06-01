@@ -1,0 +1,2218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.5;
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+            color: white;
+            padding: 24px 32px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: white;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .tab:hover {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        
+        .tab.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1e293b;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+        
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+        
+        .queue-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .queue-table th {
+            text-align: left;
+            font-weight: 600;
+            padding: 12px;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 14px;
+            color: #475569;
+        }
+        
+        .queue-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .queue-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-processing {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .queue-filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .filter-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #475569;
+        }
+        
+        .filter-group select {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #64748b;
+            padding: 4px;
+        }
+        
+        .stage-tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .stage-tab.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .stage-content {
+            margin-top: 20px;
+        }
+        
+        .prompt-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        
+        .field-editor {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .field-row {
+            display: grid;
+            grid-template-columns: 150px 120px 1fr 100px 80px;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .field-row input, .field-row select {
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .results-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .image-container {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            position: relative;
+        }
+        
+        .image-container img {
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+        }
+        
+        .accuracy-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #16a34a;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        
+        .products-table th {
+            text-align: left;
+            font-weight: 600;
+            padding: 12px;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 14px;
+            color: #475569;
+        }
+        
+        .products-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+        
+        .correct-icon {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        
+        .incorrect-icon {
+            color: #dc2626;
+            font-weight: 600;
+        }
+        
+        .iteration-timeline {
+            margin-top: 20px;
+        }
+        
+        .iteration-item {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .iteration-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .iteration-number {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .iteration-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .system-selection {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .radio-option:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+        }
+        
+        .radio-option input[type="radio"] {
+            margin-right: 12px;
+            margin-top: 2px;
+        }
+        
+        .radio-option input[type="radio"]:checked + div {
+            color: #3b82f6;
+        }
+        
+        .prompt-selector {
+            margin-bottom: 20px;
+        }
+        
+        .prompt-dropdown {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s;
+        }
+        
+        .prompt-dropdown:hover {
+            border-color: #cbd5e1;
+        }
+        
+        .prompt-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-top: 4px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .prompt-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .prompt-option:hover {
+            background: #f8fafc;
+        }
+        
+        .prompt-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .field-list {
+            margin-top: 20px;
+        }
+        
+        .nested-field {
+            margin-left: 24px;
+            padding-left: 16px;
+            border-left: 2px solid #e2e8f0;
+        }
+        
+        .mode-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-button {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mode-button:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+        }
+        
+        .mode-button.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            color: #3b82f6;
+        }
+        
+        .mode-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .mode-description {
+            font-size: 13px;
+            color: #64748b;
+        }
+        
+        /* Add animation for tab transitions */
+        .tab-content {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 12px;
+            }
+            
+            .results-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .field-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+        
+        /* Drag and drop styles */
+        .dragging {
+            opacity: 0.5;
+        }
+        
+        .drag-over {
+            background: #eff6ff;
+            border-color: #3b82f6;
+        }
+        
+        /* Prompt library modal styles */
+        .prompt-library-grid {
+            display: grid;
+            gap: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .prompt-library-item {
+            padding: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .prompt-library-item:hover {
+            border-color: #3b82f6;
+            background: #f8fafc;
+        }
+        
+        .prompt-library-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .prompt-library-title {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .prompt-library-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .prompt-library-content {
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.5;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .prompt-performance-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .performance-high {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .performance-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .performance-low {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+        
+        // API Base URL
+        const API_BASE = '/api';
+        
+        // Field Editor Component (recursive for nested fields)
+        const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, fieldTypes, path = [] }) => {
+            return (
+                <div className="field-editor">
+                    {fields.map((field, index) => (
+                        <div key={index} className={path.length > 0 ? 'nested-field' : ''}>
+                            <div className="field-row">
+                                <input
+                                    type="text"
+                                    placeholder="Field name"
+                                    value={field.name}
+                                    onChange={(e) => onFieldUpdate([...path, index], { name: e.target.value })}
+                                />
+                                <select
+                                    value={field.type}
+                                    onChange={(e) => onFieldUpdate([...path, index], { type: e.target.value })}
+                                >
+                                    {fieldTypes.map(type => (
+                                        <option key={type.value} value={type.value}>{type.label}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="text"
+                                    placeholder="Description"
+                                    value={field.description}
+                                    onChange={(e) => onFieldUpdate([...path, index], { description: e.target.value })}
+                                />
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={field.required}
+                                        onChange={(e) => onFieldUpdate([...path, index], { required: e.target.checked })}
+                                    />
+                                    Required
+                                </label>
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={() => onFieldDelete([...path, index])}
+                                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                            
+                            {/* List item type selector */}
+                            {field.type === 'list' && (
+                                <div style={{ marginTop: '8px', marginLeft: '20px' }}>
+                                    <label style={{ fontSize: '13px', color: '#64748b' }}>
+                                        List contains: 
+                                        <select
+                                            value={field.list_item_type || 'string'}
+                                            onChange={(e) => onFieldUpdate([...path, index], { list_item_type: e.target.value })}
+                                            style={{ marginLeft: '8px', padding: '4px 8px', fontSize: '13px' }}
+                                        >
+                                            {fieldTypes.map(type => (
+                                                <option key={type.value} value={type.value}>{type.label}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
+                            )}
+                            
+                            {/* Nested fields for objects and lists with object items */}
+                            {(field.type === 'object' || (field.type === 'list' && field.list_item_type === 'object')) && (
+                                <div style={{ marginTop: '12px', marginLeft: '20px' }}>
+                                    <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px', color: '#64748b' }}>
+                                        {field.type === 'object' ? 'Object fields:' : 'List item fields:'}
+                                    </div>
+                                    {field.nested_fields && field.nested_fields.length > 0 && (
+                                        <FieldEditor
+                                            fields={field.nested_fields}
+                                            onFieldUpdate={onFieldUpdate}
+                                            onFieldDelete={onFieldDelete}
+                                            onAddNestedField={onAddNestedField}
+                                            fieldTypes={fieldTypes}
+                                            path={[...path, index, 'nested_fields']}
+                                        />
+                                    )}
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={() => onAddNestedField([...path, index])}
+                                        style={{ fontSize: '12px', padding: '4px 10px', marginTop: '8px' }}
+                                    >
+                                        + Add nested field
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+        
+        // Model Selector Component with detailed model information
+        const ModelSelector = ({ selectedModels = [], onChange, stageType }) => {
+            const models = [
+                // Anthropic Models
+                {
+                    id: 'claude-4-opus',
+                    name: 'Claude 4 Opus',
+                    provider: 'Anthropic',
+                    description: 'Most capable model, best for complex reasoning',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 680000,
+                    inputPrice: 5.00,
+                    outputPrice: 15.00,
+                    recommended: ['structure', 'validation'],
+                    speed: 'medium',
+                    cost: 'high'
+                },
+                {
+                    id: 'claude-4-sonnet',
+                    name: 'Claude 4 Sonnet',
+                    provider: 'Anthropic',
+                    description: 'Balanced performance and cost',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 680000,
+                    inputPrice: 3.00,
+                    outputPrice: 9.00,
+                    recommended: ['products', 'details'],
+                    speed: 'fast',
+                    cost: 'medium'
+                },
+                {
+                    id: 'claude-3-5-sonnet-v2',
+                    name: 'Claude 3.5 Sonnet v2',
+                    provider: 'Anthropic',
+                    description: 'Fast and efficient for most tasks',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 200000,
+                    inputPrice: 3.00,
+                    outputPrice: 15.00,
+                    recommended: ['products', 'details'],
+                    speed: 'fast',
+                    cost: 'medium'
+                },
+                {
+                    id: 'claude-3-7-sonnet',
+                    name: 'Claude 3.7 Sonnet',
+                    provider: 'Anthropic',
+                    description: 'Latest sonnet model with improved accuracy',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 200000,
+                    inputPrice: 2.50,
+                    outputPrice: 12.00,
+                    recommended: ['products', 'details', 'structure'],
+                    speed: 'fast',
+                    cost: 'medium'
+                },
+                
+                // OpenAI Models  
+                {
+                    id: 'gpt-4.1',
+                    name: 'GPT-4.1',
+                    provider: 'OpenAI',
+                    description: 'Latest GPT-4 with enhanced capabilities',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 128000,
+                    inputPrice: 10.00,
+                    outputPrice: 30.00,
+                    recommended: ['structure', 'validation'],
+                    speed: 'slow',
+                    cost: 'very-high'
+                },
+                {
+                    id: 'gpt-4o',
+                    name: 'GPT-4o',
+                    provider: 'OpenAI',
+                    description: 'Optimized GPT-4 for production use',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 128000,
+                    inputPrice: 5.00,
+                    outputPrice: 15.00,
+                    recommended: ['products', 'structure'],
+                    speed: 'medium',
+                    cost: 'high'
+                },
+                {
+                    id: 'gpt-4o-mini',
+                    name: 'GPT-4o mini',
+                    provider: 'OpenAI',
+                    description: 'Smaller, faster GPT-4 variant',
+                    capabilities: ['vision', 'text'],
+                    contextWindow: 128000,
+                    inputPrice: 0.15,
+                    outputPrice: 0.60,
+                    recommended: ['details'],
+                    speed: 'very-fast',
+                    cost: 'low'
+                },
+                
+                // Google Models
+                {
+                    id: 'gemini-2.5-pro',
+                    name: 'Gemini 2.5 Pro',
+                    provider: 'Google',
+                    description: 'Advanced multimodal capabilities',
+                    capabilities: ['vision', 'text', 'analysis'],
+                    contextWindow: 2097000,
+                    inputPrice: 3.50,
+                    outputPrice: 14.00,
+                    recommended: ['structure', 'products'],
+                    speed: 'medium',
+                    cost: 'medium'
+                },
+                {
+                    id: 'gemini-2.5-flash',
+                    name: 'Gemini 2.5 Flash',
+                    provider: 'Google',
+                    description: 'Fast and cost-effective',
+                    capabilities: ['vision', 'text'],
+                    contextWindow: 1048000,
+                    inputPrice: 0.075,
+                    outputPrice: 0.30,
+                    recommended: ['details', 'products'],
+                    speed: 'very-fast',
+                    cost: 'very-low'
+                }
+            ];
+            
+            const modelsByProvider = models.reduce((acc, model) => {
+                if (!acc[model.provider]) acc[model.provider] = [];
+                acc[model.provider].push(model);
+                return acc;
+            }, {});
+            
+            const isSelected = (modelId) => selectedModels.includes(modelId);
+            
+            const toggleModel = (modelId) => {
+                if (isSelected(modelId)) {
+                    onChange(selectedModels.filter(id => id !== modelId));
+                } else {
+                    onChange([...selectedModels, modelId]);
+                }
+            };
+            
+            const getCostIndicator = (cost) => {
+                switch(cost) {
+                    case 'very-low': return '💰';
+                    case 'low': return '💰💰';
+                    case 'medium': return '💰💰💰';
+                    case 'high': return '💰💰💰💰';
+                    case 'very-high': return '💰💰💰💰💰';
+                    default: return '?';
+                }
+            };
+            
+            const getSpeedIndicator = (speed) => {
+                switch(speed) {
+                    case 'very-fast': return '⚡⚡⚡';
+                    case 'fast': return '⚡⚡';
+                    case 'medium': return '⚡';
+                    case 'slow': return '🐌';
+                    default: return '?';
+                }
+            };
+            
+            return (
+                <div style={{ 
+                    background: '#f8fafc', 
+                    padding: '16px', 
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0'
+                }}>
+                    {/* Quick select buttons */}
+                    <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.recommended.includes(stageType)).map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Recommended for {stageType}
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.capabilities.includes('vision')).map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            All Vision Models
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange(models.filter(m => m.cost === 'low' || m.cost === 'very-low').map(m => m.id))}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Budget Models
+                        </button>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => onChange([])}
+                            style={{ fontSize: '13px', padding: '6px 12px' }}
+                        >
+                            Clear All
+                        </button>
+                    </div>
+                    
+                    {/* Model selection grid */}
+                    {Object.entries(modelsByProvider).map(([provider, providerModels]) => (
+                        <div key={provider} style={{ marginBottom: '20px' }}>
+                            <h4 style={{ 
+                                fontSize: '14px', 
+                                fontWeight: 600, 
+                                marginBottom: '12px',
+                                color: '#475569'
+                            }}>
+                                {provider}
+                            </h4>
+                            
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                                {providerModels.map(model => (
+                                    <label
+                                        key={model.id}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: '12px',
+                                            background: isSelected(model.id) ? '#dbeafe' : 'white',
+                                            border: `2px solid ${isSelected(model.id) ? '#3b82f6' : '#e2e8f0'}`,
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected(model.id)}
+                                            onChange={() => toggleModel(model.id)}
+                                            style={{ marginRight: '12px' }}
+                                        />
+                                        
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                marginBottom: '4px'
+                                            }}>
+                                                <span style={{ fontWeight: 500 }}>{model.name}</span>
+                                                <div style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
+                                                    <span title="Speed">{getSpeedIndicator(model.speed)}</span>
+                                                    <span title="Cost">{getCostIndicator(model.cost)}</span>
+                                                    {model.capabilities.includes('vision') && 
+                                                        <span title="Vision capable">👁️</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                {model.description}
+                                            </div>
+                                            
+                                            <div style={{ 
+                                                fontSize: '11px', 
+                                                color: '#94a3b8',
+                                                marginTop: '4px'
+                                            }}>
+                                                ${model.inputPrice}/${model.outputPrice} per 1M tokens • 
+                                                {Math.floor(model.contextWindow/1000)}k context
+                                            </div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {/* Selected models summary */}
+                    {selectedModels.length > 0 && (
+                        <div style={{ 
+                            marginTop: '16px', 
+                            padding: '12px',
+                            background: '#f0f9ff',
+                            borderRadius: '6px',
+                            fontSize: '13px'
+                        }}>
+                            <strong>Selected {selectedModels.length} model{selectedModels.length !== 1 ? 's' : ''}:</strong>
+                            <div style={{ marginTop: '4px' }}>
+                                {selectedModels.map(id => {
+                                    const model = models.find(m => m.id === id);
+                                    return model ? `${model.name} ` : '';
+                                }).join('• ')}
+                            </div>
+                            {selectedModels.length > 1 && (
+                                <div style={{ marginTop: '4px', color: '#3b82f6' }}>
+                                    Models will vote on extraction results
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        // Extraction Config Page Component with UI Separation
+        const ExtractionConfigPage = () => {
+            const [activeStage, setActiveStage] = useState('structure');
+            const [selectedSystem, setSelectedSystem] = useState('custom_consensus');
+            const [maxBudget, setMaxBudget] = useState(2.00);
+            const [promptText, setPromptText] = useState('');
+            const [selectedPrompt, setSelectedPrompt] = useState(null);
+            const [availablePrompts, setAvailablePrompts] = useState([]);
+            const [showPromptDropdown, setShowPromptDropdown] = useState(false);
+            const [fields, setFields] = useState([]);
+            const [schemaValidation, setSchemaValidation] = useState(null);
+            const [stages, setStages] = useState([
+                { id: 'structure', label: 'Structure Analysis', removable: true },
+                { id: 'products', label: 'Product Extraction', removable: false },
+                { id: 'details', label: 'Detail Analysis', removable: true }
+            ]);
+            const [stageConfigs, setStageConfigs] = useState({});
+            const [draggedStage, setDraggedStage] = useState(null);
+            const [dragOverIndex, setDragOverIndex] = useState(null);
+            const [savedStages, setSavedStages] = useState(new Set());
+            const [configPreview, setConfigPreview] = useState(null);
+            const [saveMessage, setSaveMessage] = useState(null);
+            
+            // Pipeline Configuration (separated from stage config)
+            const [modelCreativity, setModelCreativity] = useState(0.7);
+            const [orchestratorModel, setOrchestratorModel] = useState('claude-4-opus');
+            const [orchestratorPrompt, setOrchestratorPrompt] = useState('');
+            const [enableComparison, setEnableComparison] = useState(true);
+            const [comparisonThreshold, setComparisonThreshold] = useState(0.85);
+            
+            // Prompt Library Modal
+            const [showPromptLibrary, setShowPromptLibrary] = useState(false);
+            const [libraryPrompts, setLibraryPrompts] = useState([]);
+            
+            const systems = [
+                { 
+                    id: 'custom_consensus', 
+                    label: 'Custom Consensus (Recommended)',
+                    description: 'Multiple models vote on best results with customizable agents'
+                },
+                { 
+                    id: 'langgraph_consensus', 
+                    label: 'LangGraph Consensus',
+                    description: 'Advanced graph-based consensus with state management'
+                },
+                { 
+                    id: 'hybrid_consensus', 
+                    label: 'Hybrid System',
+                    description: 'Combines multiple approaches with memory and learning'
+                }
+            ];
+            
+            const fieldTypes = [
+                { value: 'string', label: 'Text (string)' },
+                { value: 'integer', label: 'Number (integer)' },
+                { value: 'float', label: 'Decimal (float)' },
+                { value: 'boolean', label: 'Yes/No (boolean)' },
+                { value: 'list', label: 'List (array)' },
+                { value: 'object', label: 'Object (nested)' }
+            ];
+            
+            const updateConfigPreview = () => {
+                const preview = {
+                    system: selectedSystem,
+                    max_budget: maxBudget,
+                    // Pipeline settings (NOT in stage config)
+                    pipeline: {
+                        temperature: modelCreativity,
+                        orchestrator_model: orchestratorModel,
+                        orchestrator_prompt: orchestratorPrompt,
+                        enable_comparison: enableComparison,
+                        comparison_threshold: comparisonThreshold
+                    },
+                    stages: {}
+                };
+                
+                // Add only stage-specific configurations
+                stages.forEach(stage => {
+                    if (stageConfigs[stage.id]) {
+                        preview.stages[stage.id] = {
+                            prompt_id: stageConfigs[stage.id].prompt_id,
+                            prompt_text: stageConfigs[stage.id].prompt_text,
+                            fields: stageConfigs[stage.id].fields,
+                            models: stageConfigs[stage.id].models
+                        };
+                    }
+                });
+                
+                setConfigPreview(preview);
+            };
+            
+            useEffect(() => {
+                fetchAvailablePrompts();
+                loadExampleSchema();
+                
+                if (stageConfigs[activeStage]) {
+                    const config = stageConfigs[activeStage];
+                    setPromptText(config.prompt_text || '');
+                    setSelectedPrompt(config.prompt);
+                    setFields(config.fields || []);
+                }
+            }, [activeStage]);
+            
+            useEffect(() => {
+                updateConfigPreview();
+            }, [selectedSystem, maxBudget, stageConfigs, stages, modelCreativity, orchestratorModel, orchestratorPrompt, enableComparison, comparisonThreshold]);
+            
+            const fetchAvailablePrompts = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/prompts/by-stage/${activeStage}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setAvailablePrompts(data.prompts || []);
+                    } else {
+                        loadPromptExamples();
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch prompts:', error);
+                    loadPromptExamples();
+                }
+            };
+            
+            const loadPromptExamples = () => {
+                setAvailablePrompts([]);
+            };
+            
+            const loadExampleSchema = async () => {
+                if (activeStage === 'products') {
+                    setFields([{
+                        name: 'products',
+                        type: 'list',
+                        description: 'List of all products found on the shelf',
+                        required: true,
+                        list_item_type: 'object',
+                        nested_fields: [
+                            { name: 'name', type: 'string', description: 'Product name as shown on packaging', required: true },
+                            { name: 'brand', type: 'string', description: 'Brand name', required: true },
+                            { name: 'price', type: 'float', description: 'Price if visible', required: false },
+                            { name: 'shelf_number', type: 'integer', description: 'Shelf number from top', required: true },
+                            { name: 'position', type: 'integer', description: 'Position from left', required: true },
+                            { name: 'facings', type: 'integer', description: 'Number of identical products side by side', required: true }
+                        ]
+                    }]);
+                } else if (activeStage === 'structure') {
+                    setFields([{
+                        name: 'shelf_structure',
+                        type: 'object',
+                        description: 'Physical structure of the shelf',
+                        required: true,
+                        nested_fields: [
+                            { name: 'total_shelves', type: 'integer', description: 'Total number of shelves', required: true },
+                            { name: 'shelf_type', type: 'string', description: 'Type of fixture (gondola, wall, cooler)', required: true },
+                            { name: 'width_estimate', type: 'float', description: 'Estimated width in feet', required: false },
+                            { name: 'height_estimate', type: 'float', description: 'Estimated height in feet', required: false }
+                        ]
+                    }]);
+                } else {
+                    setFields([]);
+                }
+            };
+            
+            const handlePromptSelect = (prompt) => {
+                setSelectedPrompt(prompt);
+                setPromptText(prompt.content);
+                setShowPromptDropdown(false);
+            };
+            
+            const handleSaveToLibrary = async () => {
+                if (!promptText || fields.length === 0) {
+                    alert('Please enter a prompt and define fields before saving');
+                    return;
+                }
+                
+                const promptName = window.prompt('Enter a name for this prompt:');
+                if (!promptName) return;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/prompts/save`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: promptName,
+                            prompt_type: activeStage,
+                            content: promptText,
+                            field_definitions: fields,
+                            model_type: 'universal',
+                            is_active: true
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        alert('Prompt saved to library successfully!');
+                        fetchAvailablePrompts();
+                    } else {
+                        alert('Failed to save prompt');
+                    }
+                } catch (error) {
+                    console.error('Error saving prompt:', error);
+                    alert('Failed to save prompt');
+                }
+            };
+            
+            const handleLoadFromLibrary = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/prompts/list/${activeStage}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setLibraryPrompts(data.prompts || []);
+                        setShowPromptLibrary(true);
+                    }
+                } catch (error) {
+                    console.error('Error loading prompts:', error);
+                }
+            };
+            
+            const handleLibraryPromptSelect = (prompt) => {
+                setSelectedPrompt(prompt);
+                setPromptText(prompt.content);
+                setFields(prompt.field_definitions || []);
+                setShowPromptLibrary(false);
+            };
+            
+            const handleAddField = () => {
+                const newField = {
+                    name: 'new_field',
+                    type: 'string',
+                    description: 'Field description',
+                    required: true,
+                    nested_fields: []
+                };
+                setFields([...fields, newField]);
+            };
+            
+            const handleAddNestedField = (path) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields));
+                
+                let targetField = updatedFields;
+                for (let i = 0; i < path.length - 1; i++) {
+                    targetField = targetField[path[i]].nested_fields;
+                }
+                targetField = targetField[path[path.length - 1]];
+                
+                if (!targetField.nested_fields) {
+                    targetField.nested_fields = [];
+                }
+                
+                targetField.nested_fields.push({
+                    name: `field_${targetField.nested_fields.length + 1}`,
+                    type: 'string',
+                    description: '',
+                    required: true,
+                    nested_fields: []
+                });
+                
+                setFields(updatedFields);
+            };
+            
+            const handleFieldUpdate = (path, updates) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields));
+                
+                let targetArray = updatedFields;
+                for (let i = 0; i < path.length - 1; i++) {
+                    targetArray = targetArray[path[i]].nested_fields;
+                }
+                
+                const fieldIndex = path[path.length - 1];
+                targetArray[fieldIndex] = {
+                    ...targetArray[fieldIndex],
+                    ...updates
+                };
+                
+                setFields(updatedFields);
+            };
+            
+            const handleDeleteField = (path) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields));
+                
+                let targetArray = updatedFields;
+                for (let i = 0; i < path.length - 1; i++) {
+                    targetArray = targetArray[path[i]].nested_fields;
+                }
+                
+                const fieldIndex = path[path.length - 1];
+                targetArray.splice(fieldIndex, 1);
+                
+                setFields(updatedFields);
+            };
+            
+            const validateSchema = async () => {
+                const schemaDefinition = {
+                    name: `${activeStage}_extraction`,
+                    description: `Schema for ${activeStage} extraction`,
+                    fields: fields,
+                    version: '1.0'
+                };
+                
+                try {
+                    const response = await fetch(`${API_BASE}/field-definitions/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(schemaDefinition)
+                    });
+                    
+                    const result = await response.json();
+                    setSchemaValidation(result);
+                } catch (error) {
+                    console.error('Schema validation failed:', error);
+                    setSchemaValidation({ validation_result: 'Error', errors: ['Failed to validate schema'] });
+                }
+            };
+            
+            const handleSaveStage = () => {
+                if (!promptText || fields.length === 0) {
+                    setSaveMessage({ type: 'error', text: 'Please provide prompt and fields' });
+                    return;
+                }
+                
+                const config = {
+                    prompt: selectedPrompt,
+                    prompt_id: selectedPrompt?.id,
+                    prompt_text: promptText,
+                    fields: fields,
+                    models: stageConfigs[activeStage]?.models || []
+                };
+                
+                setStageConfigs({
+                    ...stageConfigs,
+                    [activeStage]: config
+                });
+                
+                setSavedStages(new Set([...savedStages, activeStage]));
+                setSaveMessage({ type: 'success', text: 'Stage configuration saved!' });
+                
+                setTimeout(() => setSaveMessage(null), 3000);
+            };
+            
+            const handleSaveConfiguration = async () => {
+                const configData = {
+                    system: selectedSystem,
+                    max_budget: maxBudget,
+                    pipeline: {
+                        temperature: modelCreativity,
+                        orchestrator_model: orchestratorModel,
+                        orchestrator_prompt: orchestratorPrompt,
+                        enable_comparison: enableComparison,
+                        comparison_threshold: comparisonThreshold
+                    },
+                    stages: stageConfigs,
+                    stage_order: stages.map(s => s.id)
+                };
+                
+                localStorage.setItem('lastUsedConfig', JSON.stringify(configData));
+                alert('Configuration saved successfully!');
+            };
+            
+            const handleLoadConfiguration = () => {
+                const lastUsedConfig = localStorage.getItem('lastUsedConfig');
+                if (lastUsedConfig) {
+                    try {
+                        const config = JSON.parse(lastUsedConfig);
+                        
+                        if (config.system) setSelectedSystem(config.system);
+                        if (config.max_budget) setMaxBudget(config.max_budget);
+                        
+                        // Load pipeline settings
+                        if (config.pipeline) {
+                            if (config.pipeline.temperature !== undefined) setModelCreativity(config.pipeline.temperature);
+                            if (config.pipeline.orchestrator_model) setOrchestratorModel(config.pipeline.orchestrator_model);
+                            if (config.pipeline.orchestrator_prompt) setOrchestratorPrompt(config.pipeline.orchestrator_prompt);
+                            if (config.pipeline.enable_comparison !== undefined) setEnableComparison(config.pipeline.enable_comparison);
+                            if (config.pipeline.comparison_threshold !== undefined) setComparisonThreshold(config.pipeline.comparison_threshold);
+                        }
+                        
+                        if (config.stages) setStageConfigs(config.stages);
+                        if (config.stage_order) {
+                            const restoredStages = config.stage_order.map(stageId => ({
+                                id: stageId,
+                                label: stageId.charAt(0).toUpperCase() + stageId.slice(1),
+                                removable: stageId !== 'products'
+                            }));
+                            setStages(restoredStages);
+                        }
+                        
+                        alert('Configuration loaded successfully!');
+                    } catch (error) {
+                        console.error('Failed to load configuration:', error);
+                        alert('Failed to load configuration');
+                    }
+                } else {
+                    alert('No saved configuration found');
+                }
+            };
+            
+            const handleAddStage = () => {
+                const stageName = window.prompt('Enter stage name:');
+                if (stageName) {
+                    const stageId = stageName.toLowerCase().replace(/\s+/g, '_');
+                    setStages([...stages, {
+                        id: stageId,
+                        label: stageName,
+                        removable: true
+                    }]);
+                }
+            };
+            
+            const handleRemoveStage = (stageId) => {
+                setStages(stages.filter(s => s.id !== stageId));
+                const newConfigs = { ...stageConfigs };
+                delete newConfigs[stageId];
+                setStageConfigs(newConfigs);
+                if (activeStage === stageId) {
+                    setActiveStage(stages[0].id);
+                }
+            };
+            
+            const handleDragStart = (e, index) => {
+                setDraggedStage(index);
+            };
+            
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                setDragOverIndex(index);
+            };
+            
+            const handleDragLeave = () => {
+                setDragOverIndex(null);
+            };
+            
+            const handleDrop = (e, dropIndex) => {
+                e.preventDefault();
+                if (draggedStage === null) return;
+                
+                const draggedItem = stages[draggedStage];
+                const newStages = stages.filter((_, index) => index !== draggedStage);
+                newStages.splice(dropIndex, 0, draggedItem);
+                
+                setStages(newStages);
+                setDraggedStage(null);
+                setDragOverIndex(null);
+            };
+            
+            const handleDragEnd = () => {
+                setDraggedStage(null);
+                setDragOverIndex(null);
+            };
+            
+            return (
+                <div className="config-page">
+                    <div className="card">
+                        <div className="card-header">System Selection</div>
+                        <div className="system-selection">
+                            {systems.map(system => (
+                                <label key={system.id} className="radio-option">
+                                    <input
+                                        type="radio"
+                                        name="system"
+                                        value={system.id}
+                                        checked={selectedSystem === system.id}
+                                        onChange={(e) => setSelectedSystem(e.target.value)}
+                                    />
+                                    <div>
+                                        <div style={{ fontWeight: 500 }}>{system.label}</div>
+                                        <div style={{ fontSize: '13px', color: '#64748b' }}>{system.description}</div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="card">
+                        <div className="card-header">Budget Control</div>
+                        <div style={{ marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <label>Max spend per image: £</label>
+                                <input
+                                    type="number"
+                                    value={maxBudget}
+                                    onChange={(e) => setMaxBudget(parseFloat(e.target.value))}
+                                    step="0.10"
+                                    min="0.50"
+                                    max="10.00"
+                                    style={{
+                                        width: '100px',
+                                        padding: '6px 10px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '4px',
+                                        fontWeight: '500'
+                                    }}
+                                />
+                                <span style={{ fontSize: '13px', color: '#64748b' }}>GBP</span>
+                            </div>
+                            <div style={{ marginTop: '12px', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                                <strong>How budget works:</strong>
+                                <ul style={{ marginTop: '8px', marginLeft: '20px' }}>
+                                    <li>Extraction stops immediately when budget is exceeded</li>
+                                    <li>Typically completes 2-4 iterations within £2.00</li>
+                                    <li>Higher budgets allow more refinement iterations</li>
+                                    <li>Actual cost depends on image complexity and model selection</li>
+                                </ul>
+                                <div style={{ marginTop: '8px', padding: '8px', background: '#f0f9ff', borderRadius: '4px' }}>
+                                    <strong>💡 Recommendation:</strong> £2.00 provides good balance of quality and cost. 
+                                    Simple shelves may only use £0.50-£1.00, while complex displays might use the full budget.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Pipeline Configuration Card (NEW - separated from stage config) */}
+                    <div className="card">
+                        <div className="card-header">Pipeline Configuration</div>
+                        
+                        {/* Model Creativity Slider */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '12px', fontWeight: 500 }}>
+                                Model Creativity (Temperature): {modelCreativity.toFixed(1)}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Precise</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value={modelCreativity}
+                                    onChange={(e) => setModelCreativity(parseFloat(e.target.value))}
+                                    style={{
+                                        flex: 1,
+                                        height: '6px',
+                                        background: '#e2e8f0',
+                                        borderRadius: '3px',
+                                        outline: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                />
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Creative</span>
+                            </div>
+                            <div style={{ 
+                                marginTop: '8px', 
+                                fontSize: '12px', 
+                                color: '#64748b',
+                                textAlign: 'center'
+                            }}>
+                                {modelCreativity < 0.3 && 'Very deterministic and focused'}
+                                {modelCreativity >= 0.3 && modelCreativity < 0.7 && 'Balanced between accuracy and variation'}
+                                {modelCreativity >= 0.7 && 'More creative and exploratory'}
+                            </div>
+                        </div>
+                        
+                        {/* Orchestrator Model Selection */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                Orchestrator Model (Manages the extraction process):
+                            </label>
+                            <select
+                                value={orchestratorModel}
+                                onChange={(e) => setOrchestratorModel(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    background: 'white',
+                                    fontSize: '14px'
+                                }}
+                            >
+                                <optgroup label="High Performance">
+                                    <option value="claude-4-opus">Claude 4 Opus (Recommended)</option>
+                                    <option value="gpt-4.1">GPT-4.1</option>
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                </optgroup>
+                                <optgroup label="Balanced">
+                                    <option value="claude-4-sonnet">Claude 4 Sonnet</option>
+                                    <option value="claude-3-5-sonnet-v2">Claude 3.5 Sonnet v2</option>
+                                    <option value="gpt-4o">GPT-4o</option>
+                                </optgroup>
+                                <optgroup label="Cost Effective">
+                                    <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
+                                    <option value="gpt-4o-mini">GPT-4o mini</option>
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                </optgroup>
+                            </select>
+                            <div style={{ 
+                                marginTop: '8px', 
+                                fontSize: '12px', 
+                                color: '#64748b'
+                            }}>
+                                The orchestrator coordinates all stages, manages iterations, and ensures quality
+                            </div>
+                        </div>
+                        
+                        {/* Orchestrator Prompt */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+                                Orchestrator Instructions (Optional):
+                            </label>
+                            <textarea
+                                placeholder="Provide specific instructions for how the orchestrator should manage the extraction process..."
+                                value={orchestratorPrompt}
+                                onChange={(e) => setOrchestratorPrompt(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    minHeight: '100px',
+                                    padding: '12px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    fontFamily: 'inherit',
+                                    fontSize: '13px',
+                                    resize: 'vertical',
+                                    background: 'white'
+                                }}
+                            />
+                            <div style={{ 
+                                marginTop: '4px', 
+                                fontSize: '11px', 
+                                color: '#94a3b8'
+                            }}>
+                                These instructions guide the orchestrator's decision-making throughout the extraction
+                            </div>
+                        </div>
+                        
+                        {/* Comparison Settings */}
+                        <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={enableComparison}
+                                    onChange={(e) => setEnableComparison(e.target.checked)}
+                                />
+                                <span style={{ fontWeight: 500 }}>Enable Image Comparison</span>
+                            </label>
+                            
+                            {enableComparison && (
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+                                        Accuracy Threshold: {(comparisonThreshold * 100).toFixed(0)}%
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="1.0"
+                                        step="0.05"
+                                        value={comparisonThreshold}
+                                        onChange={(e) => setComparisonThreshold(parseFloat(e.target.value))}
+                                        style={{
+                                            width: '100%',
+                                            height: '6px',
+                                            background: '#e2e8f0',
+                                            borderRadius: '3px',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <div style={{ 
+                                        marginTop: '8px', 
+                                        fontSize: '12px', 
+                                        color: '#64748b'
+                                    }}>
+                                        Stop iterations when accuracy reaches this threshold
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Stage Configuration Card (now only contains stage-specific settings) */}
+                    <div className="card">
+                        <div className="card-header">Stage Configuration</div>
+                        
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center' }}>
+                            {stages.map((stage, index) => (
+                                <div 
+                                    key={stage.id} 
+                                    style={{ 
+                                        position: 'relative', 
+                                        display: 'inline-block',
+                                        opacity: draggedStage === index ? '0.5' : '1',
+                                        transform: dragOverIndex === index ? 'translateX(5px)' : 'translateX(0)',
+                                        transition: 'transform 0.2s'
+                                    }}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragOver={(e) => handleDragOver(e, index)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDrop(e, index)}
+                                    onDragEnd={handleDragEnd}
+                                >
+                                    <div
+                                        className={`stage-tab ${activeStage === stage.id ? 'active' : ''}`}
+                                        onClick={() => setActiveStage(stage.id)}
+                                        style={{ 
+                                            paddingRight: stage.removable ? '30px' : '16px',
+                                            cursor: 'move',
+                                            userSelect: 'none',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <span style={{ marginRight: '6px', opacity: '0.5', fontSize: '12px' }}>⋮⋮</span>
+                                        {stage.label}
+                                        {savedStages.has(stage.id) && (
+                                            <span style={{
+                                                position: 'absolute',
+                                                top: '-6px',
+                                                right: stage.removable ? '28px' : '8px',
+                                                background: '#16a34a',
+                                                color: 'white',
+                                                borderRadius: '50%',
+                                                width: '16px',
+                                                height: '16px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold'
+                                            }}>✓</span>
+                                        )}
+                                    </div>
+                                    {stage.removable && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`Remove stage "${stage.label}"?`)) {
+                                                    handleRemoveStage(stage.id);
+                                                }
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                right: '4px',
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                background: '#94a3b8',
+                                                border: 'none',
+                                                color: 'white',
+                                                cursor: 'pointer',
+                                                padding: '2px 6px',
+                                                fontSize: '14px',
+                                                borderRadius: '3px',
+                                                lineHeight: '1',
+                                                fontWeight: 'bold',
+                                                height: '20px',
+                                                width: '20px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: '0.7',
+                                                transition: 'opacity 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.opacity = '1'}
+                                            onMouseLeave={(e) => e.target.style.opacity = '0.7'}
+                                            title="Remove stage"
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleAddStage}
+                                style={{ padding: '6px 12px', fontSize: '13px' }}
+                            >
+                                + Add Stage
+                            </button>
+                        </div>
+                        
+                        <div className="stage-content">
+                            <div className="prompt-selector">
+                                <div 
+                                    className="prompt-dropdown"
+                                    onClick={() => setShowPromptDropdown(!showPromptDropdown)}
+                                >
+                                    <span>
+                                        {selectedPrompt 
+                                            ? `${selectedPrompt.name} | ${selectedPrompt.accuracy}% | ${selectedPrompt.uses} uses`
+                                            : 'Select a prompt'
+                                        }
+                                    </span>
+                                    <span>▼</span>
+                                </div>
+                                
+                                {showPromptDropdown && (
+                                    <div className="prompt-dropdown-menu">
+                                        {availablePrompts.map(prompt => (
+                                            <div
+                                                key={prompt.id}
+                                                className="prompt-option"
+                                                onClick={() => handlePromptSelect(prompt)}
+                                            >
+                                                <div>{prompt.icon} {prompt.name}</div>
+                                                <div className="prompt-stats">
+                                                    <span>{prompt.accuracy}% accuracy</span>
+                                                    <span>{prompt.uses} uses</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div className="prompt-option" style={{ borderTop: '1px solid #e2e8f0' }}>
+                                            + Create New Prompt
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="prompt-editor">
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                    Prompt Text:
+                                </label>
+                                <textarea
+                                    className="prompt-textarea"
+                                    value={promptText}
+                                    onChange={(e) => setPromptText(e.target.value)}
+                                    placeholder="Enter your prompt here..."
+                                />
+                                
+                                {/* Prompt Library Buttons */}
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                    <button 
+                                        className="btn btn-secondary"
+                                        onClick={handleSaveToLibrary}
+                                        style={{ fontSize: '13px', padding: '6px 12px' }}
+                                    >
+                                        💾 Save to Library
+                                    </button>
+                                    <button 
+                                        className="btn btn-secondary"
+                                        onClick={handleLoadFromLibrary}
+                                        style={{ fontSize: '13px', padding: '6px 12px' }}
+                                    >
+                                        📚 Load from Library
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {activeStage !== 'validation' ? (
+                                <div className="field-list">
+                                    <div style={{ fontWeight: 500, marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span>Fields to Extract:</span>
+                                        {schemaValidation && (
+                                            <span style={{ fontSize: '13px', color: schemaValidation.validation_result === 'Valid' ? '#16a34a' : '#dc2626' }}>
+                                                {schemaValidation.validation_result}
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    <FieldEditor 
+                                        fields={fields}
+                                        onFieldUpdate={handleFieldUpdate}
+                                        onFieldDelete={handleDeleteField}
+                                        onAddNestedField={handleAddNestedField}
+                                        fieldTypes={fieldTypes}
+                                        path={[]}
+                                    />
+                                    
+                                    <div style={{ marginTop: '12px' }}>
+                                        <button className="btn btn-secondary" onClick={handleAddField}>
+                                            + Add Field
+                                        </button>
+                                        <button 
+                                            className="btn btn-secondary" 
+                                            style={{ marginLeft: '8px' }}
+                                            onClick={validateSchema}
+                                        >
+                                            Validate Schema
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '6px', textAlign: 'center', color: '#64748b' }}>
+                                    <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>Validation Stage</div>
+                                    <div>This stage validates the extracted data quality and accuracy.</div>
+                                    <div style={{ marginTop: '8px', fontSize: '13px' }}>No fields to configure - validation uses the combined output from previous stages.</div>
+                                </div>
+                            )}
+                            
+                            <div style={{ marginTop: '20px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                    Models for {activeStage}:
+                                </label>
+                                <ModelSelector 
+                                    selectedModels={stageConfigs[activeStage]?.models || []}
+                                    onChange={(models) => {
+                                        const updatedConfig = {
+                                            ...stageConfigs[activeStage],
+                                            models: models
+                                        };
+                                        setStageConfigs({
+                                            ...stageConfigs,
+                                            [activeStage]: updatedConfig
+                                        });
+                                    }}
+                                    stageType={activeStage}
+                                />
+                            </div>
+                            
+                            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveStage}
+                                    style={{ 
+                                        background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
+                                    }}
+                                >
+                                    {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
+                                </button>
+                                
+                                {saveMessage && (
+                                    <div style={{ 
+                                        fontSize: '14px', 
+                                        color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
+                                        fontWeight: 500
+                                    }}>
+                                        {saveMessage.text}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Configuration Preview */}
+                    {configPreview && Object.keys(configPreview.stages).length > 0 && (
+                        <div className="card" style={{ marginTop: '20px' }}>
+                            <div className="card-header">Configuration Preview</div>
+                            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
+                                <div><strong>System:</strong> {configPreview.system}</div>
+                                <div><strong>Max Budget:</strong> £{configPreview.max_budget} GBP</div>
+                                
+                                <div style={{ marginTop: '12px' }}><strong>Pipeline Settings:</strong></div>
+                                <div style={{ marginLeft: '20px' }}>
+                                    - Temperature: {configPreview.pipeline.temperature}<br/>
+                                    - Orchestrator: {configPreview.pipeline.orchestrator_model}<br/>
+                                    - Comparison: {configPreview.pipeline.enable_comparison ? 'Enabled' : 'Disabled'}
+                                    {configPreview.pipeline.enable_comparison && ` (${(configPreview.pipeline.comparison_threshold * 100).toFixed(0)}% threshold)`}
+                                </div>
+                                
+                                <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
+                                {Object.entries(configPreview.stages).map(([stageId, config]) => (
+                                    <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>
+                                        <div style={{ fontWeight: 600 }}>• {stages.find(s => s.id === stageId)?.label || stageId}:</div>
+                                        <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
+                                            - Prompt: {config.prompt_id ? `ID ${config.prompt_id}` : 'Custom'}<br/>
+                                            - Fields: {config.fields?.length || 0} defined<br/>
+                                            - Models: {config.models && config.models.length > 0 
+                                                ? `${config.models.length} selected${config.models.length > 1 ? ' (voting)' : ''}` 
+                                                : 'None selected'}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                        <button 
+                            className="btn btn-primary" 
+                            onClick={handleSaveConfiguration}
+                            disabled={Object.keys(stageConfigs).length === 0}
+                        >
+                            Save Full Configuration
+                        </button>
+                        <button 
+                            className="btn btn-secondary"
+                            onClick={handleLoadConfiguration}
+                        >
+                            Load Previous Config
+                        </button>
+                    </div>
+                    
+                    {/* Prompt Library Modal */}
+                    {showPromptLibrary && (
+                        <div className="modal-backdrop" onClick={() => setShowPromptLibrary(false)}>
+                            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                                <div className="modal-header">
+                                    <span>Prompt Library - {activeStage}</span>
+                                    <button className="modal-close" onClick={() => setShowPromptLibrary(false)}>×</button>
+                                </div>
+                                
+                                <div className="prompt-library-grid">
+                                    {libraryPrompts.length === 0 ? (
+                                        <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                            No prompts found for {activeStage} stage
+                                        </div>
+                                    ) : (
+                                        libraryPrompts.map(prompt => (
+                                            <div 
+                                                key={prompt.id}
+                                                className="prompt-library-item"
+                                                onClick={() => handleLibraryPromptSelect(prompt)}
+                                            >
+                                                <div className="prompt-library-header">
+                                                    <div className="prompt-library-title">{prompt.name}</div>
+                                                    <span className={`prompt-performance-badge ${
+                                                        prompt.performance_score >= 0.8 ? 'performance-high' :
+                                                        prompt.performance_score >= 0.6 ? 'performance-medium' :
+                                                        'performance-low'
+                                                    }`}>
+                                                        {(prompt.performance_score * 100).toFixed(0)}%
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="prompt-library-meta">
+                                                    <span>📊 {prompt.usage_count || 0} uses</span>
+                                                    <span>💰 ${prompt.avg_cost?.toFixed(2) || '0.00'}/run</span>
+                                                    <span>🎯 {(prompt.success_rate * 100).toFixed(0)}% success</span>
+                                                </div>
+                                                
+                                                <div className="prompt-library-content">
+                                                    {prompt.content}
+                                                </div>
+                                                
+                                                {prompt.field_definitions && prompt.field_definitions.length > 0 && (
+                                                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                                                        Fields: {prompt.field_definitions.map(f => f.name).join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        // Continue with other components (ResultsPage, AnalyticsPage, etc.) - unchanged from original...
+        
+        // Main Dashboard Component
+        const Dashboard = () => {
+            const [activeTab, setActiveTab] = useState('queue');
+            
+            const renderContent = () => {
+                switch(activeTab) {
+                    case 'queue':
+                        return <div>Queue Management (placeholder)</div>;
+                    case 'results':
+                        return <div>Results View (placeholder)</div>;
+                    case 'config':
+                        return <ExtractionConfigPage />;
+                    case 'analytics':
+                        return <div>Analytics (placeholder)</div>;
+                    case 'fields':
+                        return <div>Field Definitions (placeholder)</div>;
+                    default:
+                        return <div>Select a tab</div>;
+                }
+            };
+            
+            return (
+                <div className="dashboard">
+                    <div className="header">
+                        <h1>OnShelf AI Dashboard</h1>
+                        <p>Intelligent Retail Shelf Analysis</p>
+                    </div>
+                    
+                    <div className="tabs">
+                        <button 
+                            className={`tab ${activeTab === 'queue' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('queue')}
+                        >
+                            📋 Queue
+                        </button>
+                        <button 
+                            className={`tab ${activeTab === 'results' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('results')}
+                        >
+                            📊 Results
+                        </button>
+                        <button 
+                            className={`tab ${activeTab === 'config' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('config')}
+                        >
+                            ⚙️ Configuration
+                        </button>
+                        <button 
+                            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('analytics')}
+                        >
+                            📈 Analytics
+                        </button>
+                        <button 
+                            className={`tab ${activeTab === 'fields' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('fields')}
+                        >
+                            🔧 Field Definitions
+                        </button>
+                    </div>
+                    
+                    <div className="tab-content">
+                        {renderContent()}
+                    </div>
+                </div>
+            );
+        };
+        
+        // Render the app
+        ReactDOM.render(<Dashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
