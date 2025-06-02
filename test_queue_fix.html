@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Queue Fix</title>
+</head>
+<body>
+    <h1>Testing Queue Rendering</h1>
+    <button onclick="testQueueRender()">Test Queue Render</button>
+    <div id="output"></div>
+    <div id="queueGrid" style="border: 1px solid black; min-height: 200px; padding: 10px; margin: 20px;"></div>
+    
+    <script>
+        const queueData = [
+            {id: 1, upload_id: "test-1", status: "pending", uploads: {category: "test", metadata: {retailer: "Test Store"}}},
+            {id: 2, upload_id: "test-2", status: "processing", uploads: {category: "test", metadata: {retailer: "Test Store 2"}}}
+        ];
+        
+        function testQueueRender() {
+            const grid = document.getElementById('queueGrid');
+            
+            if (!grid) {
+                document.getElementById('output').textContent = 'ERROR: queueGrid not found!';
+                return;
+            }
+            
+            grid.innerHTML = `
+                <div style="background: #f0f0f0; padding: 10px; margin: 5px;">
+                    <h3>Queue Items: ${queueData.length}</h3>
+                    ${queueData.map(item => `
+                        <div style="border: 1px solid #ccc; padding: 5px; margin: 5px;">
+                            ID: ${item.id}, Upload: ${item.upload_id}, Status: ${item.status}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            document.getElementById('output').textContent = 'Rendered successfully!';
+        }
+    </script>
+</body>
+</html>

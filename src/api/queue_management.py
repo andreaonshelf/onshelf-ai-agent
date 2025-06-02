@@ -43,25 +43,13 @@ async def get_queue_items(
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
-        # Query ai_extraction_queue with proper prioritization
-        query = supabase.table("ai_extraction_queue").select("""
-            id,
-            upload_id,
-            ready_media_id,
-            enhanced_image_path,
-            status,
-            human_review_required,
-            final_accuracy,
-            selected_systems,
-            comparison_group_id,
-            current_extraction_system,
-            processing_attempts,
-            created_at,
-            started_at,
-            completed_at,
-            iterations_completed,
-            api_cost
-        """)
+        # Query ai_extraction_queue without joins first
+        query = supabase.table("ai_extraction_queue").select(
+            "id, upload_id, ready_media_id, enhanced_image_path, status, "
+            "human_review_required, final_accuracy, selected_systems, "
+            "comparison_group_id, current_extraction_system, processing_attempts, "
+            "created_at, started_at, completed_at, iterations_completed, api_cost"
+        )
         
         # Apply status filter
         if status:
@@ -108,27 +96,31 @@ async def get_queue_items(
             -(datetime.fromisoformat(x['created_at'].replace('Z', '+00:00')).timestamp())
         ))
         
-        # Enrich items with store/category data
+        # Enrich items with upload data
         for item in sorted_items:
             try:
+                # Initialize defaults
+                item['store_name'] = 'Unknown Store'
+                item['category'] = 'Unknown Category'
+                
                 # Skip if no upload_id
                 if not item.get('upload_id'):
                     continue
                     
                 # Get upload data with store info from metadata
                 upload_result = supabase.table("uploads").select(
-                    "category, created_at, collection_id, metadata"
+                    "category, created_at, metadata"
                 ).eq("id", item['upload_id']).execute()
                 
                 if upload_result.data and len(upload_result.data) > 0:
                     upload_data = upload_result.data[0]
-                    item['uploads'] = upload_data
                     
                     # Flatten category at top level for frontend
                     if upload_data.get('category'):
                         item['category'] = upload_data['category']
                     
-                    # If there's a collection_id, get store info
+                    # Try to get store info from collection_id first (more accurate)
+                    store_name_found = False
                     if upload_data.get('collection_id'):
                         collection_result = supabase.table("collections").select(
                             "store_id"
@@ -153,9 +145,19 @@ async def get_queue_items(
                                     if store_info.get('location_city'):
                                         store_name += f" - {store_info['location_city']}"
                                     item['store_name'] = store_name
+                                    store_name_found = True
+                    
+                    # Fallback to metadata if no store found from collection
+                    if not store_name_found:
+                        metadata = upload_data.get('metadata', {})
+                        if isinstance(metadata, dict):
+                            store_name = metadata.get('store_name', metadata.get('retailer', 'Unknown Store'))
+                        else:
+                            store_name = 'Unknown Store'
+                        item['store_name'] = store_name
             except Exception as e:
                 logger.warning(f"Failed to enrich item {item['id']} with upload data: {e}")
-                # Continue processing other items
+                # Continue processing other items - defaults already set
                 
         logger.info(f"Retrieved {len(sorted_items)} queue items", component="queue_api")
         
@@ -205,19 +207,23 @@ async def get_queue_item_image(item_id: int):
 
 @router.post("/process/{item_id}")
 async def start_processing(item_id: int, request_data: Dict[str, Any]):
-    """Start processing a queue item with selected systems"""
+    """Start processing a queue item with selected systems and model configuration"""
     
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
     
     try:
-        # Handle both old and new request formats
-        systems = request_data.get('systems', [])
+        # Handle both old and new request formats (backwards compatible)
         system = request_data.get('system', 'custom_consensus')
+        systems = request_data.get('systems', [])
         
         # If no systems array provided, use the single system
         if not systems and system:
             systems = [system]
+        
+        # Ensure we have at least one system
+        if not systems:
+            raise HTTPException(status_code=400, detail="At least one system must be selected")
         
         # Extract configuration data
         extraction_config = {
@@ -236,7 +242,35 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
         import uuid
         comparison_group_id = str(uuid.uuid4())
         
-        # Update queue item with extraction config
+        # Check if we have a complete configuration object
+        if 'configuration' in request_data:
+            # Use the complete configuration, ensuring temperature is 0.1
+            model_config = request_data['configuration']
+            if 'temperature' not in model_config:
+                model_config['temperature'] = 0.1
+        else:
+            # Build configuration from both approaches
+            model_config = {
+                "system": system,
+                "temperature": request_data.get('temperature', 0.1),  # Default to 0.1
+                "max_budget": request_data.get('max_budget', 2.0),
+                "orchestrator_model": request_data.get('orchestrator_model', 'claude-4-opus'),
+                "orchestrator_prompt": request_data.get('orchestrator_prompt', ''),
+                "orchestrators": request_data.get('orchestrators', {
+                    "master": { "model": "claude-4-opus", "prompt": "" },
+                    "extraction": { "model": "claude-4-sonnet", "prompt": "" },
+                    "planogram": { "model": "gpt-4o-mini", "prompt": "" }
+                }),
+                "stage_models": request_data.get('stage_models', {}),
+                "comparison_config": request_data.get('comparison_config', {
+                    "model": configuration.get('comparison_model', 'gpt-4-vision-preview') if 'configuration' in locals() else "gpt-4-vision-preview",
+                    "prompt": "",
+                    "use_visual_comparison": True,
+                    "abstraction_layers": []
+                })
+            }
+        
+        # Update queue item with both extraction_config and model_config for compatibility
         update_data = {
             "status": "processing",
             "selected_systems": systems,
@@ -244,7 +278,8 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             "current_extraction_system": system,
             "started_at": datetime.utcnow().isoformat(),
             "processing_attempts": 1,
-            "extraction_config": extraction_config  # Store the full config
+            "extraction_config": extraction_config,  # Keep for backward compatibility
+            "model_config": model_config  # Store full model configuration
         }
         
         result = supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
@@ -256,7 +291,8 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             f"Started processing for item {item_id} with system {system}",
             component="queue_api",
             comparison_group_id=comparison_group_id,
-            extraction_config=extraction_config
+            extraction_config=extraction_config,
+            model_config=model_config
         )
         
         # TODO: Trigger actual processing pipeline here
@@ -587,62 +623,6 @@ async def get_comparison_results(comparison_group_id: str):
         return {"results": [], "comparison_group_id": comparison_group_id}
 
 
-@router.post("/reset-fake-completed")
-async def reset_fake_completed_items():
-    """Reset items that are marked completed but have no extraction results"""
-    
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Database connection not available")
-    
-    try:
-        # Find items that are "completed" but have no real results
-        result = supabase.table("ai_extraction_queue").select("*").eq("status", "completed").execute()
-        
-        if not result.data:
-            return {"message": "No completed items found", "reset_count": 0}
-        
-        # Filter items that have null extraction results (fake completed)
-        fake_completed = [
-            item for item in result.data 
-            if not item.get('extraction_result') or not item.get('planogram_result')
-        ]
-        
-        if not fake_completed:
-            return {"message": "All completed items have valid results", "reset_count": 0}
-        
-        # Reset fake completed items to pending
-        reset_ids = [item['id'] for item in fake_completed]
-        
-        update_data = {
-            "status": "pending",
-            "extraction_result": None,
-            "planogram_result": None,
-            "final_accuracy": None,
-            "started_at": None,
-            "completed_at": None,
-            "error_message": None,
-            "iterations_completed": None,
-            "processing_duration_seconds": None,
-            "api_cost": None,
-            "human_review_required": False,
-            "escalation_reason": None
-        }
-        
-        # Update all fake completed items
-        for item_id in reset_ids:
-            supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
-        
-        logger.info(f"Reset {len(reset_ids)} fake completed items to pending", component="queue_api")
-        
-        return {
-            "message": f"Successfully reset {len(reset_ids)} items to pending status",
-            "reset_count": len(reset_ids),
-            "reset_ids": reset_ids
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to reset fake completed items: {e}", component="queue_api")
-        raise HTTPException(status_code=500, detail=f"Failed to reset items: {str(e)}")
 
 
 @router.get("/stores")
@@ -1462,6 +1442,85 @@ async def get_extraction_logs(
     except Exception as e:
         logger.error(f"Failed to get logs for item {item_id}: {e}", component="queue_api")
         raise HTTPException(status_code=500, detail=f"Failed to get logs: {str(e)}")
+
+
+@router.get("/results/{item_id}")
+async def get_queue_item_results(item_id: int):
+    """Get extraction and planogram results for a queue item"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get queue item with all result data
+        result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Queue item not found")
+        
+        item = result.data[0]
+        
+        # Get upload data to extract store name from metadata
+        upload_data = None
+        store_name = "Unknown Store"
+        category = "Unknown Category"
+        
+        if item.get('upload_id'):
+            upload_result = supabase.table("uploads").select(
+                "category, metadata, created_at"
+            ).eq("id", item['upload_id']).execute()
+            
+            if upload_result.data and len(upload_result.data) > 0:
+                upload_data = upload_result.data[0]
+                category = upload_data.get('category', 'Unknown Category')
+                
+                # Extract store name from metadata JSON field
+                metadata = upload_data.get('metadata', {})
+                if isinstance(metadata, dict):
+                    store_name = metadata.get('store_name', metadata.get('retailer', 'Unknown Store'))
+        
+        # Build the response matching what the Results page expects
+        response = {
+            "id": item["id"],
+            "upload_id": item.get("upload_id"),
+            "ready_media_id": item.get("ready_media_id"),
+            "enhanced_image_path": item.get("enhanced_image_path"),
+            "status": item.get("status"),
+            "store_name": store_name,
+            "category": category,
+            "created_at": item.get("created_at"),
+            "completed_at": item.get("completed_at"),
+            "processing_duration_seconds": item.get("processing_duration_seconds"),
+            "api_cost": item.get("api_cost"),
+            "iterations_completed": item.get("iterations_completed"),
+            "final_accuracy": item.get("final_accuracy"),
+            "human_review_required": item.get("human_review_required"),
+            "escalation_reason": item.get("escalation_reason"),
+            "selected_systems": item.get("selected_systems", []),
+            "current_extraction_system": item.get("current_extraction_system"),
+            "comparison_group_id": item.get("comparison_group_id"),
+            
+            # The main results data
+            "extraction_result": item.get("extraction_result"),
+            "planogram_result": item.get("planogram_result"),
+            
+            # Additional metadata
+            "error_message": item.get("error_message"),
+            "processing_attempts": item.get("processing_attempts", 0),
+            "upload_created_at": upload_data.get("created_at") if upload_data else None
+        }
+        
+        logger.info(f"Retrieved results for queue item {item_id}", component="queue_api", 
+                   status=item.get("status"), has_extraction=bool(item.get("extraction_result")), 
+                   has_planogram=bool(item.get("planogram_result")))
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get results for item {item_id}: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to get results: {str(e)}")
 
 
 @router.post("/batch-configure-enhanced")

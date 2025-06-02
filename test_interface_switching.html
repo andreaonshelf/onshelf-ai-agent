@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Interface Switching</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #ddd;
+        }
+        .success {
+            border-color: #4CAF50;
+            background: #e8f5e9;
+        }
+        .error {
+            border-color: #f44336;
+            background: #ffebee;
+        }
+        .info {
+            border-color: #2196F3;
+            background: #e3f2fd;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>OnShelf Interface Switching Test</h1>
+        
+        <div class="status">
+            <h3>Test Controls</h3>
+            <button onclick="testInterface('extractions')">Test Extractions</button>
+            <button onclick="testInterface('pipeline')">Test Pipeline Studio</button>
+            <button onclick="testInterface('prompts')">Test Prompt Lab</button>
+            <button onclick="testInterface('analytics')">Test Analytics</button>
+            <button onclick="testInterface('settings')">Test Settings</button>
+            <button onclick="runAllTests()">Run All Tests</button>
+        </div>
+        
+        <div id="results"></div>
+        
+        <h3>Live Preview</h3>
+        <iframe id="appFrame" src="http://localhost:8000"></iframe>
+    </div>
+
+    <script>
+        const results = document.getElementById('results');
+        const appFrame = document.getElementById('appFrame');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        async function testInterface(mode) {
+            log(`Testing ${mode} interface...`, 'info');
+            
+            // For cross-origin safety, let's use a different approach
+            // Open in a new window instead of trying to access iframe content
+            const testUrl = `http://localhost:8000#test-${mode}`;
+            log(`Opening ${mode} interface in main window...`, 'info');
+            
+            // Navigate the iframe to the mode
+            appFrame.src = testUrl;
+            
+            // Wait for navigation
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Visual verification message
+            log(`Please visually verify that the ${mode} interface is displayed correctly`, 'info');
+            
+            // List expected unique elements
+            const expectedContent = {
+                'extractions': ['Extraction Queue panel on left', 'Results panel on right', 'Queue statistics'],
+                'pipeline': ['System Configuration tab', 'Three system cards (Custom/LangGraph/Hybrid)', 'Model pipeline checkboxes'],
+                'prompts': ['Three columns (Structure/Products/Details)', 'Prompt editors', 'JSON structure editors'],
+                'analytics': ['Metrics cards showing totals', 'Time range selector', 'Charts area'],
+                'settings': ['Settings tabs', 'General settings form', 'API configuration']
+            };
+            
+            if (expectedContent[mode]) {
+                log(`Expected content for ${mode}:`, 'info');
+                expectedContent[mode].forEach(item => {
+                    log(`  • ${item}`, 'info');
+                });
+            }
+        }
+        
+        function checkUniqueContent(mode, element) {
+            const uniqueContent = {
+                'extractions': ['Extraction Queue', 'queue-panel', 'results-panel'],
+                'pipeline': ['Pipeline Configuration', 'system-config', 'Live Monitoring'],
+                'prompts': ['Prompt Library', 'prompt-editor', 'Model Configuration'],
+                'analytics': ['Analytics Dashboard', 'metrics-grid', 'chart-container'],
+                'settings': ['General Settings', 'api-settings', 'Model Configurations']
+            };
+            
+            const expectedContent = uniqueContent[mode] || [];
+            let foundCount = 0;
+            
+            for (const content of expectedContent) {
+                if (element.innerHTML.includes(content) || element.querySelector(`#${content}`) || element.querySelector(`.${content}`)) {
+                    foundCount++;
+                }
+            }
+            
+            if (foundCount > 0) {
+                log(`✓ Found ${foundCount}/${expectedContent.length} unique elements for ${mode}`, 'success');
+            } else {
+                log(`✗ No unique content found for ${mode}`, 'error');
+            }
+        }
+        
+        async function runAllTests() {
+            log('Starting comprehensive interface tests...', 'info');
+            results.innerHTML = '';
+            
+            const modes = ['extractions', 'pipeline', 'prompts', 'analytics', 'settings'];
+            
+            for (const mode of modes) {
+                await testInterface(mode);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            log('All tests completed!', 'info');
+        }
+        
+        // Initial load test
+        window.onload = () => {
+            log('Page loaded. Ready for testing.', 'info');
+            
+            // Check if iframe loaded
+            appFrame.onload = () => {
+                log('Application loaded in iframe', 'success');
+                
+                // Automatically run a quick test
+                setTimeout(() => {
+                    log('Running initial interface check...', 'info');
+                    testInterface('extractions');
+                }, 1000);
+            };
+        };
+    </script>
+</body>
+</html>

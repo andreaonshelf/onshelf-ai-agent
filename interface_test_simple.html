@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OnShelf Interface Test - Simple</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #1e293b;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .test-btn {
+            padding: 20px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            text-decoration: none;
+            color: #1e293b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .test-btn:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .icon {
+            font-size: 32px;
+        }
+        .btn-title {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .btn-desc {
+            font-size: 14px;
+            color: #64748b;
+        }
+        .instructions {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .instructions h2 {
+            margin: 0 0 10px 0;
+            color: #92400e;
+            font-size: 18px;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 5px 0;
+            color: #78350f;
+        }
+        .checklist {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .checklist h3 {
+            margin: 0 0 15px 0;
+            color: #1e293b;
+        }
+        .checklist-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8fafc;
+            border-radius: 4px;
+            border-left: 4px solid #e2e8f0;
+        }
+        .checklist-item strong {
+            color: #0c4a6e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OnShelf Planogram Extractor - Interface Test</h1>
+        
+        <div class="instructions">
+            <h2>📋 Testing Instructions</h2>
+            <ol>
+                <li>Click each button below to open that interface in a new tab</li>
+                <li>Verify that each interface shows its unique content</li>
+                <li>Check that navigation buttons switch interfaces correctly</li>
+                <li>Use the checklist below to verify each interface</li>
+            </ol>
+        </div>
+        
+        <div class="test-grid">
+            <a href="http://localhost:8000#extractions" target="_blank" class="test-btn">
+                <span class="icon">📋</span>
+                <span class="btn-title">Extractions</span>
+                <span class="btn-desc">Queue Management</span>
+            </a>
+            
+            <a href="http://localhost:8000#pipeline" target="_blank" class="test-btn">
+                <span class="icon">🔧</span>
+                <span class="btn-title">Pipeline Studio</span>
+                <span class="btn-desc">System Configuration</span>
+            </a>
+            
+            <a href="http://localhost:8000#prompts" target="_blank" class="test-btn">
+                <span class="icon">🧪</span>
+                <span class="btn-title">Prompt Lab</span>
+                <span class="btn-desc">Prompt Design</span>
+            </a>
+            
+            <a href="http://localhost:8000#analytics" target="_blank" class="test-btn">
+                <span class="icon">📊</span>
+                <span class="btn-title">Analytics</span>
+                <span class="btn-desc">Performance Metrics</span>
+            </a>
+            
+            <a href="http://localhost:8000#settings" target="_blank" class="test-btn">
+                <span class="icon">⚙️</span>
+                <span class="btn-title">Settings</span>
+                <span class="btn-desc">Configuration</span>
+            </a>
+        </div>
+        
+        <div class="checklist">
+            <h3>✅ Verification Checklist</h3>
+            
+            <div class="checklist-item">
+                <strong>Extractions Interface:</strong>
+                <ul>
+                    <li>Left sidebar shows "Prompt Management Central"</li>
+                    <li>Main area has split view: Queue List (left) + Results (right)</li>
+                    <li>Queue shows items with status badges</li>
+                    <li>Results panel shows "Select an extraction to view results"</li>
+                </ul>
+            </div>
+            
+            <div class="checklist-item">
+                <strong>Pipeline Studio:</strong>
+                <ul>
+                    <li>No sidebar (full width)</li>
+                    <li>Three tabs: System Configuration, Live Monitoring, System Comparison</li>
+                    <li>System cards for Custom Consensus, LangGraph, Hybrid</li>
+                    <li>Configuration parameters on the right</li>
+                </ul>
+            </div>
+            
+            <div class="checklist-item">
+                <strong>Prompt Lab:</strong>
+                <ul>
+                    <li>No sidebar (full width)</li>
+                    <li>Three columns: Structure Agent, Products Agent, Details Agent</li>
+                    <li>Each column has prompt editor textarea</li>
+                    <li>JSON structure and Pydantic model displays</li>
+                </ul>
+            </div>
+            
+            <div class="checklist-item">
+                <strong>Analytics Dashboard:</strong>
+                <ul>
+                    <li>No sidebar (full width)</li>
+                    <li>Four metric cards at top (Total, Success Rate, Time, Cost)</li>
+                    <li>Time range selector buttons</li>
+                    <li>Charts and performance sections below</li>
+                </ul>
+            </div>
+            
+            <div class="checklist-item">
+                <strong>Settings:</strong>
+                <ul>
+                    <li>No sidebar (full width)</li>
+                    <li>Tab navigation: General, API Keys, AI Models, etc.</li>
+                    <li>Form fields for configuration</li>
+                    <li>Save buttons at bottom of sections</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #e0f2fe; border-radius: 8px; text-align: center;">
+            <h3 style="margin: 0 0 10px 0; color: #0c4a6e;">🔍 Visual Test</h3>
+            <p style="margin: 0; color: #075985;">
+                After clicking each button, the interface should change completely.<br>
+                Each interface has a distinct layout and content as described in the checklist.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        // Add event listener to detect when returning to this page
+        window.addEventListener('focus', () => {
+            console.log('Test page regained focus');
+        });
+        
+        // Log which interface was clicked
+        document.querySelectorAll('.test-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const interface = btn.querySelector('.btn-title').textContent;
+                console.log(`Opening ${interface} interface...`);
+            });
+        });
+    </script>
+</body>
+</html>

@@ -23,19 +23,24 @@ from ..utils import logger
 from .models import MasterResult
 from ..extraction.state_tracker import get_state_tracker, ExtractionStage, ExtractionStatus
 from ..planogram.models import VisualPlanogram
+from .monitoring_hooks import monitoring_hooks
+from .smart_iteration_manager import SmartIterationManager
 
 
 class MasterOrchestrator:
     """Top-level orchestrator managing extraction + planogram + feedback loops"""
     
-    def __init__(self, config: SystemConfig, supabase_client=None):
+    def __init__(self, config: SystemConfig, supabase_client=None, queue_item_id: Optional[int] = None):
         self.config = config
-        self.extraction_orchestrator = ExtractionOrchestrator(config)
+        self.queue_item_id = queue_item_id
+        # Don't initialize extraction orchestrator here - do it per run
+        self.extraction_orchestrator = None
         self.planogram_orchestrator = PlanogramOrchestrator(config)
         self.feedback_manager = CumulativeFeedbackManager()
         self.comparison_agent = ImageComparisonAgent(config)
         self.human_evaluation = HumanEvaluationSystem(config)
         self.state_tracker = get_state_tracker(supabase_client)
+        self.smart_iteration_manager = SmartIterationManager()
         
         logger.info(
             "Master Orchestrator initialized",
@@ -76,9 +81,32 @@ class MasterOrchestrator:
                 system=system,
                 configuration=configuration or {}
             )
+            
+            # Initialize monitoring
+            await monitoring_hooks.update_extraction_stage(
+                queue_item_id, 
+                "Initializing",
+                {"message": "Starting extraction pipeline"}
+            )
         
         # Get images
         images = await self._get_images(upload_id)
+        
+        # Initialize extraction orchestrator with queue item ID and configuration
+        from .extraction_orchestrator import ExtractionOrchestrator
+        self.extraction_orchestrator = ExtractionOrchestrator(self.config, queue_item_id=queue_item_id)
+        
+        # Load configuration into orchestrator
+        if configuration:
+            self.extraction_orchestrator.model_config = configuration
+            self.extraction_orchestrator.temperature = configuration.get('temperature', 0.7)
+            self.extraction_orchestrator.orchestrator_model = configuration.get('orchestrator_model', 'claude-4-opus')
+            self.extraction_orchestrator.orchestrator_prompt = configuration.get('orchestrator_prompt', '')
+            self.extraction_orchestrator.stage_models = configuration.get('stage_models', {})
+            
+            # Reinitialize extraction engine with new temperature
+            from ..extraction.engine import ModularExtractionEngine
+            self.extraction_orchestrator.extraction_engine = ModularExtractionEngine(self.config, temperature=self.extraction_orchestrator.temperature)
         
         # Initialize tracking
         iteration_history = []
@@ -93,6 +121,25 @@ class MasterOrchestrator:
             'iterations': []
         }
         
+        # Log configuration usage
+        if configuration and queue_item_id:
+            from ..utils.model_usage_tracker import get_model_usage_tracker
+            tracker = get_model_usage_tracker()
+            
+            # Create configuration name from settings
+            config_name = f"{system}_{configuration.get('temperature', 0.7)}_{configuration.get('orchestrator_model', 'default')}"
+            
+            await tracker.log_configuration_usage(
+                configuration_name=config_name,
+                configuration_id=f"config_{queue_item_id}_{run_id}",
+                system=system,
+                orchestrator_model=configuration.get('orchestrator_model', 'claude-4-opus'),
+                orchestrator_prompt=configuration.get('orchestrator_prompt', ''),
+                temperature=configuration.get('temperature', 0.7),
+                max_budget=configuration.get('max_budget', 2.0),
+                stage_models=configuration.get('stage_models', {})
+            )
+        
         try:
             for iteration in range(1, max_iterations + 1):
                 logger.info(
@@ -102,11 +149,36 @@ class MasterOrchestrator:
                     current_accuracy=best_accuracy
                 )
                 
+                # Update monitoring for new iteration
+                if queue_item_id:
+                    locked_items = []
+                    if iteration > 1 and iteration_history:
+                        # Get locked items from previous iteration
+                        last_analysis = iteration_history[-1].get('accuracy_analysis')
+                        if last_analysis and hasattr(last_analysis, 'high_confidence_positions'):
+                            locked_items = [
+                                f"Shelf {pos.section.horizontal} products" 
+                                for pos in last_analysis.high_confidence_positions[:3]
+                            ]
+                            if structure_context:
+                                locked_items.insert(0, f"Structure ({structure_context.shelf_count} shelves) ✓")
+                    
+                    await monitoring_hooks.update_iteration(queue_item_id, iteration, locked_items)
+                    await monitoring_hooks.update_processing_detail(
+                        queue_item_id,
+                        f"Starting iteration {iteration} - extracting shelf structure and products"
+                    )
+                
                 # Update state: Starting structure extraction
                 if queue_item_id:
-                        await self.state_tracker.update_stage(
-                            run_id=run_id,
-                            stage=ExtractionStage.STRUCTURE_EXTRACTION
+                    await self.state_tracker.update_stage(
+                        run_id=run_id,
+                        stage=ExtractionStage.STRUCTURE_EXTRACTION
+                    )
+                    await monitoring_hooks.update_extraction_stage(
+                        queue_item_id,
+                        "Structure Analysis",
+                        {"iteration": iteration}
                     )
                 
                 # Step 1: Extract with cumulative learning
@@ -117,7 +189,8 @@ class MasterOrchestrator:
                     previous_attempts=previous_attempts,
                     focus_areas=self._get_focus_areas_from_previous(iteration_history),
                     locked_positions=self._get_locked_positions_from_previous(iteration_history),
-                    agent_id=agent_id
+                    agent_id=agent_id,
+                    extraction_run_id=run_id
                 )
                 
                 # Record extraction metrics
@@ -138,11 +211,29 @@ class MasterOrchestrator:
                     structure_context = extraction_result.structure
             
                 # Step 2: Generate planogram
+                # Get abstraction level from comparison config or use default
+                comparison_config = configuration.get('comparison_config', {}) if configuration else {}
+                abstraction_level = "product_view"  # Default
+                
+                # If abstraction layers are specified, use the first enabled one
+                if comparison_config.get('abstraction_layers'):
+                    enabled_layers = [layer for layer in comparison_config['abstraction_layers'] if layer.get('enabled', True)]
+                    if enabled_layers:
+                        # Map layer ID to abstraction level
+                        layer_mapping = {
+                            'brand': 'brand_view',
+                            'product': 'product_view',
+                            'confidence': 'product_view',  # Use product view with confidence coloring
+                            'price_range': 'product_view',  # Use product view with price info
+                            'category': 'product_view'  # Use product view with category grouping
+                        }
+                        abstraction_level = layer_mapping.get(enabled_layers[0]['id'], 'product_view')
+                
                 planogram_result = await self.planogram_orchestrator.generate_for_agent_iteration(
                     agent_number=iteration,
                     extraction_result=extraction_result,
                     structure_context=structure_context,
-                    abstraction_level="product_view",
+                    abstraction_level=abstraction_level,
                     original_image=images['enhanced']
                 )
             
@@ -153,8 +244,13 @@ class MasterOrchestrator:
                         stage=ExtractionStage.VALIDATION
                     )
             
-                # Step 3: Render planogram to PNG for visual comparison
+                # Step 3: Visual comparison with planogram
                 validation_start = time.time()
+                
+                # Get comparison config from configuration
+                comparison_config = configuration.get('comparison_config', {}) if configuration else {}
+                
+                # Always render planogram to PNG for our visual comparison approach
                 planogram_png = await self._render_planogram_to_png(
                     planogram_result.planogram,
                     extraction_result
@@ -162,12 +258,18 @@ class MasterOrchestrator:
                 
                 # Step 3b: AI comparison analysis with rendered image (skip if no PNG)
                 if planogram_png:
+                    # Use model from comparison config or fall back to configuration/default
+                    comparison_model = (
+                        comparison_config.get('model') or 
+                        configuration.get('comparison_model', 'gpt-4-vision-preview') if configuration else 'gpt-4-vision-preview'
+                    )
+                    
                     comparison_result = await self.comparison_agent.compare_image_vs_planogram(
                         original_image=images['enhanced'],
                         planogram=planogram_result.planogram,
-                        planogram_image=planogram_png,
                         structure_context=structure_context,
-                        model=configuration.get('comparison_model', 'gpt-4-vision-preview') if configuration else 'gpt-4-vision-preview'
+                        planogram_image=planogram_png,
+                        model=comparison_model
                     )
                 else:
                     # Skip comparison entirely if no PNG - no API call
@@ -233,12 +335,36 @@ class MasterOrchestrator:
                     "failure_areas": [area.model_dump() if hasattr(area, 'model_dump') else area.dict() for area in accuracy_analysis.failure_areas] if accuracy_analysis.failure_areas else []
                 })
             
+                # Step 6: Use smart iteration manager to analyze results
+                extraction_focus = self.smart_iteration_manager.analyze_iteration_results(
+                    iteration=iteration,
+                    extraction_result=extraction_result,
+                    accuracy_analysis=accuracy_analysis,
+                    structure=structure_context
+                )
+                
+                # Update monitoring with smart iteration details
+                if queue_item_id:
+                    locked_items_desc = [
+                        f"{lock.product_data.get('name', 'Product')} (Shelf {lock.shelf})"
+                        for lock in list(self.smart_iteration_manager.locked_positions.values())[:5]
+                    ]
+                    if len(self.smart_iteration_manager.locked_positions) > 5:
+                        locked_items_desc.append(f"... and {len(self.smart_iteration_manager.locked_positions) - 5} more")
+                    
+                    await monitoring_hooks.update_monitor(queue_item_id, {
+                        "locked_count": len(self.smart_iteration_manager.locked_positions),
+                        "locked_items": locked_items_desc,
+                        "reextract_shelves": list(extraction_focus.shelves_to_reextract),
+                        "issues_found": list(extraction_focus.specific_issues.keys())
+                    })
+                
                 # Update best result
                 if current_accuracy > best_accuracy:
                     best_accuracy = current_accuracy
                     best_planogram = planogram_result
             
-                # Step 6: Check if target achieved
+                # Step 7: Check if target achieved
                 if current_accuracy >= target_accuracy:
                     logger.info(
                         f"Target accuracy {target_accuracy:.1%} achieved!",
@@ -308,6 +434,21 @@ class MasterOrchestrator:
                     "total_cost": total_cost
                 }
             )
+            
+            # Update configuration stats
+            if configuration:
+                from ..utils.model_usage_tracker import get_model_usage_tracker
+                tracker = get_model_usage_tracker()
+                
+                config_name = f"{system}_{configuration.get('temperature', 0.7)}_{configuration.get('orchestrator_model', 'default')}"
+                
+                await tracker.update_configuration_stats(
+                    configuration_name=config_name,
+                    accuracy=best_accuracy,
+                    cost=total_cost,
+                    duration_seconds=int(total_duration),
+                    success=best_accuracy >= target_accuracy
+                )
         
         # Create final result
         result = MasterResult(
@@ -403,54 +544,49 @@ class MasterOrchestrator:
             raise Exception(f"No image data found for upload {upload_id}: {e}")
     
     def _get_focus_areas_from_previous(self, iteration_history: List[Dict]) -> List[Dict]:
-        """Extract focus areas from previous iteration failures"""
-        if not iteration_history:
+        """Extract focus areas from smart iteration manager"""
+        if not self.smart_iteration_manager.extraction_history:
             return []
-            
-        last_iteration = iteration_history[-1]
-        accuracy_analysis = last_iteration.get('accuracy_analysis')
         
-        if not accuracy_analysis:
+        # Get the latest extraction focus
+        latest_history = self.smart_iteration_manager.extraction_history[-1]
+        extraction_focus = latest_history.get('focus')
+        
+        if not extraction_focus:
             return []
         
         focus_areas = []
         
-        # Convert failure areas to focus list
-        for shelf_num, shelf_failures in accuracy_analysis.failure_areas.items():
-            for position_num, failure_info in shelf_failures.items():
-                if failure_info.confidence < 0.75:
-                    focus_areas.append({
-                        "shelf": shelf_num,
-                        "position": position_num,
-                        "failure_type": failure_info.error_type,
-                        "confidence": failure_info.confidence,
-                        "enhancement": failure_info.enhancement_strategy
-                    })
+        # Convert smart iteration focus to focus areas format
+        for issue_type, issue_list in extraction_focus.specific_issues.items():
+            for issue in issue_list:
+                focus_areas.append({
+                    "shelf": issue['shelf'],
+                    "position": issue.get('position'),
+                    "failure_type": issue_type,
+                    "enhancement": extraction_focus.enhancement_strategies.get(issue_type, ""),
+                    "details": issue.get('details', {})
+                })
         
         return focus_areas
     
     def _get_locked_positions_from_previous(self, iteration_history: List[Dict]) -> List[Dict]:
-        """Get high-confidence positions that should not be re-extracted"""
-        if not iteration_history:
-            return []
-            
-        last_iteration = iteration_history[-1]
-        accuracy_analysis = last_iteration.get('accuracy_analysis')
-        
-        if not accuracy_analysis:
-            return []
-        
+        """Get locked positions from smart iteration manager"""
         locked_positions = []
         
-        # Convert high confidence positions to locked list
-        for position in accuracy_analysis.high_confidence_positions:
-            locked_positions.append({
-                "shelf": position.section.horizontal,
-                "position": position.position_on_shelf,
-                "data": position.data,
-                "confidence": position.confidence,
-                "instruction": "PRESERVE_EXACT - Do not re-extract this position"
-            })
+        # Get instructions from smart iteration manager
+        if self.smart_iteration_manager.extraction_history:
+            latest_focus = self.smart_iteration_manager.extraction_history[-1].get('focus')
+            instructions = self.smart_iteration_manager.get_extraction_instructions(latest_focus)
+            
+            # Convert to format expected by extraction orchestrator
+            for locked_pos in instructions.get('locked_positions', []):
+                locked_positions.append({
+                    "shelf": locked_pos['shelf'],
+                    "position": locked_pos['position'],
+                    "product_name": locked_pos['product_name'],
+                    "instruction": locked_pos['instruction']
+                })
         
         return locked_positions
     

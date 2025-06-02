@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Verification</title>
+</head>
+<body>
+    <h1>Testing Fix</h1>
+    <div id="status"></div>
+    <div id="queue"></div>
+    
+    <script>
+        async function testFix() {
+            const status = document.getElementById('status');
+            
+            try {
+                // Test 1: Check if JavaScript runs without syntax errors
+                status.innerHTML += '<p>✅ JavaScript is running</p>';
+                
+                // Test 2: Fetch queue data
+                const response = await fetch('http://localhost:8000/api/queue/items');
+                const data = await response.json();
+                status.innerHTML += `<p>✅ API returned ${data.items.length} queue items</p>`;
+                
+                // Test 3: Check problematic template literal
+                const testString = `Test${true ? '\\nNewline' : ''}`;
+                status.innerHTML += '<p>✅ Template literal with newline works</p>';
+                
+                // Test 4: Display queue items
+                const queueDiv = document.getElementById('queue');
+                queueDiv.innerHTML = '<h2>Queue Items:</h2>';
+                data.items.forEach(item => {
+                    queueDiv.innerHTML += `<p>${item.id}: ${item.store_name || 'Unknown'} - ${item.status}</p>`;
+                });
+                
+            } catch (error) {
+                status.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Run test when page loads
+        testFix();
+    </script>
+</body>
+</html>

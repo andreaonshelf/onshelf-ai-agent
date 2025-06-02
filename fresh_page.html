@@ -1,468 +1,4 @@
-"""
-OnShelf AI - Queue Review Dashboard
-Main FastAPI application with progressive debugging interface for reviewing extraction results
-"""
-
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-import os
-
-from src.config import SystemConfig
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="OnShelf AI - Queue Review Dashboard",
-    description="Review and analysis tool for extraction results with progressive disclosure",
-    version="2.0.0"
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include API routers
-from src.api.progressive_debugger import router as progressive_router
-app.include_router(progressive_router)
-
-# Include strategic interface
-from src.api.strategic_interface import router as strategic_router
-app.include_router(strategic_router)
-
-# Include planogram editor API
-from src.api.planogram_editor import router as planogram_editor_router
-app.include_router(planogram_editor_router)
-
-# Include real-time debugging interface
-from src.api.debug_interface import router as debug_router
-app.include_router(debug_router)
-
-# Include planogram rendering
-from src.api.planogram_renderer import router as planogram_router
-app.include_router(planogram_router)
-
-# Include queue management API
-from src.api.queue_management import router as queue_router
-app.include_router(queue_router)
-
-# Include queue processing API (new unified dashboard)
-from src.api.queue_processing import router as queue_processing_router
-app.include_router(queue_processing_router, prefix="/api/queue")
-
-# Include analytics API
-from src.api.analytics import router as analytics_router
-app.include_router(analytics_router)
-
-# Include extended analytics API (new unified dashboard)
-from src.api.analytics import analytics_extended_router
-app.include_router(analytics_extended_router, prefix="/api/analytics")
-
-# Include prompt management API
-from src.api.prompt_management import router as prompt_router
-app.include_router(prompt_router)
-
-# Include feedback API
-from src.api.feedback import router as feedback_router
-app.include_router(feedback_router)
-
-# Include prompt management API
-from src.api.prompt_management import router as prompt_router
-app.include_router(prompt_router)
-
-# Include feedback API
-from src.api.feedback import router as feedback_router
-app.include_router(feedback_router)
-
-# Include prompt management API
-from src.api.prompt_management import router as prompt_router
-app.include_router(prompt_router)
-
-# Include feedback API
-from src.api.feedback import router as feedback_router
-app.include_router(feedback_router)
-
-# Include iteration tracking API for debugging
-from src.api.iteration_tracking import router as iteration_router, iteration_storage
-app.include_router(iteration_router)
-
-# Include field definitions API
-from src.api.field_definitions import router as field_definitions_router
-app.include_router(field_definitions_router)
-
-<<<<<<< HEAD
-# Include extraction configuration API
-from src.api.extraction_config import router as extraction_config_router
-app.include_router(extraction_config_router)
-=======
-# Include field schema builder API
-from src.api.field_schema_builder import router as schema_builder_router
-app.include_router(schema_builder_router)
-
-# WebSocket support
-from src.websocket.manager import websocket_manager
-from fastapi import WebSocket, WebSocketDisconnect
-
-@app.websocket("/ws/extraction/{item_id}")
-async def websocket_endpoint(websocket: WebSocket, item_id: int):
-    """WebSocket endpoint for real-time extraction monitoring"""
-    await websocket_manager.connect(websocket, str(item_id))
-    try:
-        while True:
-            # Keep connection alive and wait for messages
-            data = await websocket.receive_text()
-            # Could handle client messages here if needed
-    except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket, str(item_id))
->>>>>>> origin/main
-
-# Initialize mock iteration data on startup
-@app.on_event("startup")
-async def initialize_mock_data():
-    """Initialize mock iteration data for testing the dashboard"""
-    try:
-        from datetime import datetime
-        
-        # Create REAL extraction data structure that matches actual AI agent output
-        # This mirrors exactly what ProductExtraction model returns
-        real_extraction_products = [
-            # Shelf 1 products - exactly as AI agents extract them
-            {
-                "section": {"horizontal": "1", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Coke Zero Sugar 330ml", "price": 1.29,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 1, "position_on_shelf": 1,
-                "any_text": "Zero Sugar 330ml", "color": "black and red", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 3,
-                "extraction_confidence": 0.94, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Sprite Zero 330ml", "price": 1.29,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 2,
-                "any_text": "Sprite Zero 330ml", "color": "green and white", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.89, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "PepsiCo", "name": "Pepsi Max Cherry 330ml", "price": 1.19,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 1, "position_on_shelf": 4,
-                "any_text": "Max Cherry 330ml", "color": "dark blue and red", "pack_size": None, "volume": "330ml",
-                "is_on_promo": True, "facings_total": 3,
-                "extraction_confidence": 0.92, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "PepsiCo", "name": "7UP Free 330ml", "price": 1.19,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 5,
-                "any_text": "7UP Free", "color": "green and white", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.86, "confidence_category": "high",
-                "validation_flags": ["product_name_unclear"], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            # Gap at position 6 - no product detected
-            {
-                "section": {"horizontal": "1", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Red Bull", "name": "Red Bull Energy Drink 250ml", "price": 1.89,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 1, "position_on_shelf": 7,
-                "any_text": "Energy Drink 250ml", "color": "blue and silver", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.96, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Right"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Monster Beverage", "name": "Monster Energy Original 500ml", "price": 2.15,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 8,
-                "any_text": "Monster Energy 500ml", "color": "green and black", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.91, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            
-            # Shelf 2 products
-            {
-                "section": {"horizontal": "2", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Evian", "name": "Natural Mineral Water 500ml", "price": 0.89,
-                "quantity": {"stack": 3, "columns": 2, "total_facings": 6},
-                "shelf_level": 2, "position_on_shelf": 1,
-                "any_text": "Natural Mineral Water 500ml", "color": "clear plastic", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 6,
-                "extraction_confidence": 0.97, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Smartwater 600ml", "price": 1.49,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 2, "position_on_shelf": 2,
-                "any_text": "smartwater 600ml", "color": "clear with white label", "pack_size": None, "volume": "600ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.88, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Innocent", "name": "Orange Juice Smooth 330ml", "price": 2.29,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 2, "position_on_shelf": 3,
-                "any_text": "Orange Juice Smooth 330ml", "color": "orange carton", "pack_size": None, "volume": "330ml",
-                "is_on_promo": True, "facings_total": 3,
-                "extraction_confidence": 0.93, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Innocent", "name": "Apple Juice 330ml", "price": 2.29,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 2, "position_on_shelf": 4,
-                "any_text": "Apple Juice", "color": "green carton", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.85, "confidence_category": "high",
-                "validation_flags": ["price_suspicious"], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Lipton", "name": "Ice Tea Lemon 500ml", "price": 1.59,
-                "quantity": {"stack": 2, "columns": 3, "total_facings": 6},
-                "shelf_level": 2, "position_on_shelf": 6,
-                "any_text": "Ice Tea Lemon 500ml", "color": "yellow plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 6,
-                "extraction_confidence": 0.94, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            
-            # Shelf 3 products
-            {
-                "section": {"horizontal": "3", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Starbucks", "name": "Frappuccino Vanilla 250ml", "price": 2.49,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 3, "position_on_shelf": 1,
-                "any_text": "Frappuccino Vanilla 250ml", "color": "beige bottle", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 3,
-                "extraction_confidence": 0.96, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Starbucks", "name": "Frappuccino Mocha 250ml", "price": 2.49,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 3, "position_on_shelf": 2,
-                "any_text": "Frappuccino Mocha", "color": "brown bottle", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.89, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Powerade", "name": "ION4 Blue 500ml", "price": 1.79,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 3, "position_on_shelf": 3,
-                "any_text": "ION4 Blue 500ml", "color": "blue plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.82, "confidence_category": "high",
-                "validation_flags": ["occlusion_detected"], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Gatorade", "name": "Orange Sports Drink 500ml", "price": 1.79,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 3, "position_on_shelf": 4,
-                "any_text": "Gatorade Orange", "color": "orange plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.78, "confidence_category": "medium",
-                "validation_flags": ["product_name_unclear", "position_uncertain"], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Rockstar", "name": "Energy Drink Original 500ml", "price": 1.99,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 3, "position_on_shelf": 5,
-                "any_text": "Rockstar Energy", "color": "black and gold can", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.87, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            }
-        ]
-
-        mock_data = {
-            'upload_id': 'demo_12345', 
-            'iterations': [
-                {
-                    "iteration": 1,
-                    "accuracy": 0.87,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": len(real_extraction_products),
-                        "products": real_extraction_products,
-                        "model_used": "claude-3-5-sonnet-20241022",
-                        "confidence": 0.87
-                    },
-                    "planogram_svg": None,  # Will be generated by SVG renderer
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 3
-                },
-                {
-                    "iteration": 2,
-                    "accuracy": 0.92,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": 3,
-                        "products": [
-                            {
-                                "brand": "Coca-Cola",
-                                "name": "Coke Zero 330ml",
-                                "price": 1.29,
-                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.95},
-                                "extraction_confidence": 0.95,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Pepsi",
-                                "name": "Pepsi Max 330ml",
-                                "price": 1.19,
-                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.88},
-                                "extraction_confidence": 0.88,
-                                "confidence_category": "high"
-                            },
-                            {
-                                "brand": "Red Bull",
-                                "name": "Energy Drink 250ml",
-                                "price": 1.89,
-                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.92},
-                                "extraction_confidence": 0.92,
-                                "confidence_category": "high"
-                            }
-                        ],
-                        "model_used": "claude-3-sonnet",
-                        "confidence": 0.92
-                    },
-                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 2 (Improved)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="2" rx="4"/><text x="60" y="130" font-size="12" fill="#1f2937">Coke Zero</text><text x="60" y="150" font-size="10" fill="#6b7280">£1.29 • 3 facings</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="190" y="130" font-size="12" fill="#1f2937">Pepsi Max</text><text x="190" y="150" font-size="10" fill="#6b7280">£1.19 • 2 facings</text><rect x="50" y="200" width="140" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="60" y="230" font-size="12" fill="#1f2937">Red Bull Energy</text><text x="60" y="250" font-size="10" fill="#6b7280">£1.89 • 4 facings</text></svg>',
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 1
-                },
-                {
-                    "iteration": 3,
-                    "accuracy": 0.97,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": 4,
-                        "products": [
-                            {
-                                "brand": "Coca-Cola",
-                                "name": "Coke Zero 330ml",
-                                "price": 1.29,
-                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.98},
-                                "extraction_confidence": 0.98,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Pepsi",
-                                "name": "Pepsi Max 330ml",
-                                "price": 1.19,
-                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.96},
-                                "extraction_confidence": 0.96,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Red Bull",
-                                "name": "Energy Drink 250ml",
-                                "price": 1.89,
-                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.97},
-                                "extraction_confidence": 0.97,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Monster",
-                                "name": "Monster Energy 500ml",
-                                "price": 2.15,
-                                "position": {"shelf_number": 2, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.94},
-                                "extraction_confidence": 0.94,
-                                "confidence_category": "very_high"
-                            }
-                        ],
-                        "model_used": "claude-3-sonnet",
-                        "confidence": 0.96
-                    },
-                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 3 (High Accuracy)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="125" font-size="11" font-weight="bold" fill="#1f2937">Coke Zero 330ml</text><text x="60" y="140" font-size="9" fill="#6b7280">Coca-Cola</text><text x="60" y="155" font-size="10" fill="#2563eb">£1.29</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="190" y="125" font-size="11" font-weight="bold" fill="#1f2937">Pepsi Max 330ml</text><text x="190" y="140" font-size="9" fill="#6b7280">Pepsi</text><text x="190" y="155" font-size="10" fill="#2563eb">£1.19</text><circle cx="270" cy="110" r="4" fill="#10b981"/><rect x="50" y="200" width="140" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="225" font-size="11" font-weight="bold" fill="#1f2937">Energy Drink 250ml</text><text x="60" y="240" font-size="9" fill="#6b7280">Red Bull</text><text x="60" y="255" font-size="10" fill="#2563eb">£1.89</text><circle cx="180" cy="210" r="4" fill="#10b981"/><rect x="200" y="200" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="210" y="225" font-size="11" font-weight="bold" fill="#1f2937">Monster Energy</text><text x="210" y="240" font-size="9" fill="#6b7280">Monster</text><text x="210" y="255" font-size="10" fill="#2563eb">£2.15</text><circle cx="310" cy="210" r="4" fill="#10b981"/></svg>',
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 0
-                }
-            ]
-        }
-        
-        # Store mock data for demo queue item
-        iteration_storage[12345] = mock_data
-        print(f"✅ Initialized mock iteration data with {len(mock_data['iterations'])} iterations")
-        
-    except Exception as e:
-        print(f"❌ Error initializing mock data: {e}")
-        # Create minimal fallback
-        iteration_storage[12345] = {
-            'upload_id': 'demo_12345',
-            'iterations': [{
-                "iteration": 1,
-                "accuracy": 0.8,
-                "timestamp": "2024-01-01T12:00:00",
-                "extraction_data": {"total_products": 1, "products": [], "model_used": "claude-3-sonnet", "confidence": 0.8},
-                "planogram_svg": '<svg width="800" height="600"><text x="20" y="30">Simple Demo SVG</text></svg>',
-                "structure": {"shelves": 3, "width": 2.5},
-                "failure_areas": 1
-            }]
-        }
-
-# Add endpoint to manually initialize mock data
-@app.get("/api/init-mock-data")
-async def init_mock_data():
-    """Manually initialize mock data"""
-    await initialize_mock_data()
-    return {"message": "Mock data initialized", "items": list(iteration_storage.keys())}
-
-# Serve static files (for the UI)
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Main dashboard interface with progressive disclosure"""
-    try:
-        # Serve the new unified dashboard
-        with open("new_dashboard.html", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback to embedded HTML if file not found
-        return """
+1
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -3488,20 +3024,6 @@ async def root():
                             Save as Default
                         </button>
                     </div>
-                    
-                    <!-- Prompt Management Section -->
-                    <div class="config-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
-                        <h4 style="margin: 0 0 10px 0; color: #1f2937;">📝 Prompt Management</h4>
-                        <button onclick="createNewPrompt()" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">
-                            ✨ Write New Prompt
-                        </button>
-                        <button onclick="openPromptLibrary()" class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;">
-                            📚 Browse Prompt Library
-                        </button>
-                        <button onclick="manageFieldDefinitions()" class="btn btn-secondary" style="width: 100%;">
-                            📋 Manage Field Definitions
-                        </button>
-                    </div>
                 </div>
                 
                 <!-- Image Selection Sidebar (Simple/Advanced Mode) -->
@@ -5110,7 +4632,7 @@ async def root():
                 
                 if (totalQueueElement) totalQueueElement.textContent = queueData.length;
                 if (selectedQueueElement) selectedQueueElement.textContent = promptManagementState.selectedQueueItems.length;
-                if (activeSystemElement) activeSystemElement.textContent = promptManagementState.selectedSystem.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                if (activeSystemElement) activeSystemElement.textContent = promptManagementState.selectedSystem.replace('_', ' ').replace(/\w/g, l => l.toUpperCase());
             }
             
             // Render queue error
@@ -8795,13 +8317,13 @@ async def root():
                     <div style="background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
                         <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                             <h3 style="margin: 0; color: #1f2937;">Full Prompt Content</h3>
-                            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                            <button onclick="this.closest('div[style*=\'position: fixed\']').remove()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
                         </div>
                         <div style="padding: 20px; overflow-y: auto; flex: 1;">
                             <pre style="background: #f8fafc; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 13px; line-height: 1.4; color: #374151; white-space: pre-wrap; margin: 0;">${escapeHtml(fullContent)}</pre>
                         </div>
                         <div style="padding: 20px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px;">
-                            <button onclick="copyToClipboard('${escapeHtml(fullContent).replace(/'/g, "\\'")}'); this.textContent='✅ Copied!'; setTimeout(() => this.textContent='📋 Copy Full Prompt', 2000)" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">📋 Copy Full Prompt</button>
+                            <button onclick="copyToClipboard('${escapeHtml(fullContent).replace(/'/g, "\'")}'); this.textContent='✅ Copied!'; setTimeout(() => this.textContent='📋 Copy Full Prompt', 2000)" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">📋 Copy Full Prompt</button>
                         </div>
                     </div>
                 `;
@@ -10672,8 +10194,6 @@ async def root():
             
             // Create New Prompt
             function createNewPrompt(extractionType) {
-                // If no extraction type specified, default to 'products'
-                extractionType = extractionType || 'products';
                 // Open the enhanced prompt engineering modal
                 openPromptEngineeringModal(extractionType);
             }
@@ -11248,7 +10768,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                     }
                 };
                 
-                return tips[goal]?.[extractionType] || '• Consider the specific requirements for your use case\\n• Test different approaches systematically\\n• Monitor performance metrics closely';
+                return tips[goal]?.[extractionType] || '• Consider the specific requirements for your use case\n• Test different approaches systematically\n• Monitor performance metrics closely';
             }
             
             // Test Prompt Configuration
@@ -11270,13 +10790,19 @@ ${getOptimizationTips(goal, extractionType)}`;
                     
                     const result = await response.json();
                     if (result.success) {
-                        alert(`✅ Test completed successfully!\n\nAccuracy: ${result.accuracy}%\nProcessing time: ${result.processing_time}ms\nToken usage: ${result.token_usage}`);
+                        alert(`✅ Test completed successfully!
+
+Accuracy: ${result.accuracy}%
+Processing time: ${result.processing_time}ms
+Token usage: ${result.token_usage}`);
                     } else {
                         throw new Error(result.message || 'Test failed');
                     }
                 } catch (error) {
                     console.error('Failed to test prompt configuration:', error);
-                    alert(`❌ Test failed: ${error.message}\n\nNote: This feature requires backend integration for live testing.`);
+                    alert(`❌ Test failed: ${error.message}
+
+Note: This feature requires backend integration for live testing.`);
                 }
             }
             
@@ -11660,7 +11186,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                         </div>
                         
                         <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                            <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
+                            <button onclick="this.closest('div[style*=\'position: fixed\']').remove()" style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; border-radius: 6px; cursor: pointer;">Cancel</button>
                             <button onclick="applyOverride(${itemId})" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Apply Override</button>
                         </div>
                     </div>
@@ -12281,7 +11807,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                                     
                                     <div style="margin-bottom: 15px;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 8px;">Base Prompt Context:</label>
-                                        <textarea id="basePromptContext" rows="4" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="Enter the base prompt template...">${existingPrompt?.prompt_content || existingPrompt?.content || 'Extract products from this retail shelf image.\\nFocus on accuracy and systematic extraction from left to right.\\nPay special attention to small products and edge cases.'}</textarea>
+                                        <textarea id="basePromptContext" rows="4" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="Enter the base prompt template...">${existingPrompt?.prompt_content || existingPrompt?.content || 'Extract products from this retail shelf image.\nFocus on accuracy and systematic extraction from left to right.\nPay special attention to small products and edge cases.'}</textarea>
                                     </div>
                                     
                                     <div style="margin-bottom: 20px;">
@@ -12474,24 +12000,24 @@ ${getOptimizationTips(goal, extractionType)}`;
                 document.getElementById('aiResults').style.display = 'flex';
                 
                 // Combined view - show complete Instructor configuration
-                let instructorConfig = '# INSTRUCTOR CONFIGURATION\\n';
-                instructorConfig += '# This exact configuration will be used for extraction\\n\\n';
-                instructorConfig += '## Prompt Template:\\n';
-                instructorConfig += '\\"\\"\\"\\n';
-                instructorConfig += (result.optimized_prompt || 'No prompt generated') + '\\n';
-                instructorConfig += '\\"\\"\\"\\n\\n';
-                instructorConfig += '## Pydantic Model:\\n';
-                instructorConfig += (result.pydantic_model_code || 'No model generated') + '\\n\\n';
-                instructorConfig += '## Usage:\\n';
-                instructorConfig += 'from models import ' + (result.model_class_name || 'ExtractionResult') + '\\n\\n';
-                instructorConfig += 'response = client.chat.completions.create(\\n';
-                instructorConfig += '    model="' + (result.recommended_model || 'gpt-4o') + '",\\n';
-                instructorConfig += '    messages=[{"role": "user", "content": prompt}],\\n';
-                instructorConfig += '    response_model=' + (result.model_class_name || 'ExtractionResult') + '\\n';
-                instructorConfig += ')\\n\\n';
-                instructorConfig += '## Metadata:\\n';
-                instructorConfig += '- Fields: ' + (result.instructor_config?.fields?.join(', ') || 'N/A') + '\\n';
-                instructorConfig += '- Optimized for: ' + (result.optimization_focus || 'General use') + '\\n';
+                let instructorConfig = '# INSTRUCTOR CONFIGURATION\n';
+                instructorConfig += '# This exact configuration will be used for extraction\n\n';
+                instructorConfig += '## Prompt Template:\n';
+                instructorConfig += '\"\"\"\n';
+                instructorConfig += (result.optimized_prompt || 'No prompt generated') + '\n';
+                instructorConfig += '\"\"\"\n\n';
+                instructorConfig += '## Pydantic Model:\n';
+                instructorConfig += (result.pydantic_model_code || 'No model generated') + '\n\n';
+                instructorConfig += '## Usage:\n';
+                instructorConfig += 'from models import ' + (result.model_class_name || 'ExtractionResult') + '\n\n';
+                instructorConfig += 'response = client.chat.completions.create(\n';
+                instructorConfig += '    model="' + (result.recommended_model || 'gpt-4o') + '",\n';
+                instructorConfig += '    messages=[{"role": "user", "content": prompt}],\n';
+                instructorConfig += '    response_model=' + (result.model_class_name || 'ExtractionResult') + '\n';
+                instructorConfig += ')\n\n';
+                instructorConfig += '## Metadata:\n';
+                instructorConfig += '- Fields: ' + (result.instructor_config?.fields?.join(', ') || 'N/A') + '\n';
+                instructorConfig += '- Optimized for: ' + (result.optimization_focus || 'General use') + '\n';
                 instructorConfig += '- Expected token usage: ~' + (result.estimated_tokens || 'Unknown');
                 
                 document.getElementById('finalConfigPreview').textContent = instructorConfig;
@@ -12727,7 +12253,8 @@ Format the response as JSON with keys:
                         const infoIcon = document.createElement('span');
                         infoIcon.innerHTML = ' ℹ️';
                         infoIcon.style.cursor = 'help';
-                        infoIcon.title = `${definition.definition}${definition.examples ? '\\nExamples: ' + definition.examples : ''}`;
+                        infoIcon.title = `${definition.definition}${definition.examples ? '
+Examples: ' + definition.examples : ''}`;
                         label.appendChild(infoIcon);
                     }
                 });
@@ -12807,68 +12334,10 @@ Format the response as JSON with keys:
                 if (!container) return;
                 
                 try {
-                    const response = await fetch('/field-definitions?organized=true');
+                    const response = await fetch('/field-definitions');
                     const data = await response.json();
                     
-                    if (data.categories && data.categories.length > 0) {
-                        container.innerHTML = `
-                            <div style="margin-bottom: 20px;">
-                                <button onclick="toggleAllCategories()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 10px;">
-                                    ↕️ Toggle All
-                                </button>
-                                <button onclick="showReorderInterface()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                    🔢 Reorder Fields
-                                </button>
-                            </div>
-                            ${data.categories.map(category => `
-                                <div class="field-category" style="margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                                    <div onclick="toggleCategory('${category.name}')" style="background: #f8fafc; padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                                        <h3 style="margin: 0; font-size: 16px; color: #1f2937;">
-                                            <span id="category-arrow-${category.name}" style="display: inline-block; transition: transform 0.2s;">▶</span>
-                                            ${category.name} (${category.fields.length})
-                                        </h3>
-                                        <button onclick="event.stopPropagation(); addFieldToCategory('${category.name}')" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                                            + Add Field
-                                        </button>
-                                    </div>
-                                    <div id="category-fields-${category.name}" style="display: none; padding: 15px;">
-                                        ${category.fields.map((def, index) => `
-                                            <div style="border: 1px solid #e5e7eb; padding: 12px; border-radius: 6px; margin-bottom: 10px; background: white;">
-                                                <div style="display: flex; justify-content: space-between; align-items: start;">
-                                                    <div style="flex: 1;">
-                                                        <h4 style="margin: 0 0 6px 0; color: #1f2937;">
-                                                            ${def.display_name} 
-                                                            <span style="font-size: 12px; color: #6b7280; font-weight: normal;">(${def.field_name})</span>
-                                                            ${def.is_required ? '<span style="color: #ef4444; font-size: 12px;">*</span>' : ''}
-                                                        </h4>
-                                                        <p style="margin: 0 0 6px 0; color: #4b5563; font-size: 14px;">${def.definition}</p>
-                                                        ${def.examples ? `<p style="margin: 0; font-size: 12px; color: #9ca3af;"><em>Examples: ${def.examples}</em></p>` : ''}
-                                                        <div style="margin-top: 6px; font-size: 11px; color: #9ca3af;">
-                                                            Type: ${def.data_type} | Order: ${def.sort_order || 999}
-                                                        </div>
-                                                    </div>
-                                                    <div style="display: flex; gap: 5px;">
-                                                        <button onclick="moveFieldUp('${def.field_name}', '${category.name}', ${index})" ${index === 0 ? 'disabled' : ''} style="padding: 4px 8px; background: ${index === 0 ? '#e5e7eb' : '#f3f4f6'}; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: ${index === 0 ? 'not-allowed' : 'pointer'};">
-                                                            ↑
-                                                        </button>
-                                                        <button onclick="moveFieldDown('${def.field_name}', '${category.name}', ${index})" ${index === category.fields.length - 1 ? 'disabled' : ''} style="padding: 4px 8px; background: ${index === category.fields.length - 1 ? '#e5e7eb' : '#f3f4f6'}; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: ${index === category.fields.length - 1 ? 'not-allowed' : 'pointer'};">
-                                                            ↓
-                                                        </button>
-                                                        <button onclick="editFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                                            ✏️
-                                                        </button>
-                                                        <button onclick="deleteFieldDefinition('${def.field_name}')" style="padding: 4px 8px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                                            🗑
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            `).join('')}`;
-                    } else if (data.definitions && data.definitions.length > 0) {
-                        // Fallback for non-organized view
+                    if (data.definitions && data.definitions.length > 0) {
                         container.innerHTML = data.definitions.map(def => `
                             <div style="border: 1px solid #e5e7eb; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
                                 <h4 style="margin: 0 0 8px 0;">${def.display_name} (${def.field_name})</h4>
@@ -12910,23 +12379,9 @@ Format the response as JSON with keys:
                             <label style="display: block; font-weight: 600; margin-bottom: 4px;">Definition:</label>
                             <textarea id="newDefinition" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;"></textarea>
                         </div>
-                        <div style="margin-bottom: 10px;">
+                        <div style="margin-bottom: 15px;">
                             <label style="display: block; font-weight: 600; margin-bottom: 4px;">Examples (optional):</label>
                             <textarea id="newExamples" rows="2" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;" placeholder="e.g., '3 facings means 3 identical products side by side'"></textarea>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Category:</label>
-                            <select id="newCategory" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
-                                <option value="Product Info">Product Info</option>
-                                <option value="Shelf Layout">Shelf Layout</option>
-                                <option value="Pricing">Pricing</option>
-                                <option value="Inventory">Inventory</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Sort Order:</label>
-                            <input type="number" id="newSortOrder" value="99" min="1" max="999" style="width: 100px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
                         </div>
                         <button onclick="saveNewFieldDefinition()" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                             Save
@@ -12949,8 +12404,6 @@ Format the response as JSON with keys:
                 const displayName = document.getElementById('newDisplayName').value.trim();
                 const definition = document.getElementById('newDefinition').value.trim();
                 const examples = document.getElementById('newExamples').value.trim();
-                const category = document.getElementById('newCategory').value;
-                const sortOrder = parseInt(document.getElementById('newSortOrder').value) || 99;
                 
                 if (!fieldName || !displayName || !definition) {
                     showNotification('Please fill in all required fields', 'error');
@@ -12965,9 +12418,7 @@ Format the response as JSON with keys:
                             field_name: fieldName,
                             display_name: displayName,
                             definition: definition,
-                            examples: examples || null,
-                            category: category,
-                            sort_order: sortOrder
+                            examples: examples || null
                         })
                     });
                     
@@ -13091,71 +12542,6 @@ Format the response as JSON with keys:
                 }
             }
             
-            // Toggle category visibility
-            function toggleCategory(categoryName) {
-                const fieldsDiv = document.getElementById(`category-fields-${categoryName}`);
-                const arrow = document.getElementById(`category-arrow-${categoryName}`);
-                
-                if (fieldsDiv.style.display === 'none') {
-                    fieldsDiv.style.display = 'block';
-                    arrow.style.transform = 'rotate(90deg)';
-                } else {
-                    fieldsDiv.style.display = 'none';
-                    arrow.style.transform = 'rotate(0deg)';
-                }
-            }
-            
-            // Toggle all categories
-            function toggleAllCategories() {
-                const categories = document.querySelectorAll('.field-category');
-                const firstFieldsDiv = document.querySelector('[id^="category-fields-"]');
-                const shouldOpen = firstFieldsDiv && firstFieldsDiv.style.display === 'none';
-                
-                categories.forEach(cat => {
-                    const categoryName = cat.querySelector('[id^="category-arrow-"]').id.replace('category-arrow-', '');
-                    const fieldsDiv = document.getElementById(`category-fields-${categoryName}`);
-                    const arrow = document.getElementById(`category-arrow-${categoryName}`);
-                    
-                    if (shouldOpen) {
-                        fieldsDiv.style.display = 'block';
-                        arrow.style.transform = 'rotate(90deg)';
-                    } else {
-                        fieldsDiv.style.display = 'none';
-                        arrow.style.transform = 'rotate(0deg)';
-                    }
-                });
-            }
-            
-            // Move field up in sort order
-            async function moveFieldUp(fieldName, categoryName, currentIndex) {
-                // TODO: Implement API call to update sort_order
-                showNotification('Reordering functionality coming soon!', 'info');
-            }
-            
-            // Move field down in sort order
-            async function moveFieldDown(fieldName, categoryName, currentIndex) {
-                // TODO: Implement API call to update sort_order
-                showNotification('Reordering functionality coming soon!', 'info');
-            }
-            
-            // Add field to specific category
-            function addFieldToCategory(categoryName) {
-                // Show the add form with pre-selected category
-                addFieldDefinition();
-                // Pre-select the category after form is rendered
-                setTimeout(() => {
-                    const categorySelect = document.getElementById('newCategory');
-                    if (categorySelect) {
-                        categorySelect.value = categoryName;
-                    }
-                }, 100);
-            }
-            
-            // Show reorder interface
-            function showReorderInterface() {
-                showNotification('Drag-and-drop reordering coming soon!', 'info');
-            }
-            
             // ========== Prompt Library Functions ==========
             
             // Open prompt library modal
@@ -13182,7 +12568,7 @@ Format the response as JSON with keys:
                         <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(to right, #f8fafc, #f3f4f6);">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <h2 style="margin: 0; color: #1f2937; font-size: 24px;">📚 Prompt Library</h2>
-                                <button onclick="document.getElementById(\'promptLibraryModal\').remove()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                                <button onclick="document.getElementById('promptLibraryModal').remove()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
                                     Close
                                 </button>
                             </div>
@@ -13428,10 +12814,10 @@ Format the response as JSON with keys:
                             </div>
                             
                             <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                                <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                <button onclick="this.closest('div[style*=\'position: fixed\']').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                     Close
                                 </button>
-                                <button onclick="usePromptAsTemplate('${promptId}'); this.closest('div[style*=\\'position: fixed\\']').remove()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                <button onclick="usePromptAsTemplate('${promptId}'); this.closest('div[style*=\'position: fixed\']').remove()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                     Use as Template
                                 </button>
                             </div>
@@ -13977,61 +13363,4 @@ Format the response as JSON with keys:
     </style>
     </body>
     </html>
-    """
-
-@app.get("/react", response_class=HTMLResponse)
-async def react_dashboard():
-    """React dashboard - UI separated version"""
-    try:
-        with open("new_dashboard_ui_separated.html", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback to 6AM version if new one doesn't exist
-        try:
-            with open("new_dashboard_6am.html", "r") as f:
-                return f.read()
-        except FileNotFoundError:
-            return "Dashboard file not found. Please check new_dashboard_ui_separated.html exists."
-
-@app.get("/test", response_class=HTMLResponse)
-async def test_page():
-    """Simple test page"""
-    with open("test_page.html", "r") as f:
-        return f.read()
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "version": "2.0.0",
-        "architecture": "queue_review_dashboard",
-        "features": [
-            "queue_management",
-            "multi_system_selection",
-            "progressive_disclosure",
-            "human_evaluation"
-        ]
-    }
-
-@app.get("/api/status")
-async def api_status():
-    """API status and capabilities"""
-    return {
-        "api_version": "2.0.0",
-        "interface_modes": ["queue", "simple", "comparison", "advanced"],
-        "extraction_systems": ["custom_consensus", "langgraph", "hybrid"],
-        "evaluation_system": "human_in_the_loop",
-        "database": "supabase_integration"
-    }
-
-if __name__ == "__main__":
-    config = SystemConfig()
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8130,
-        reload=True,
-        log_level="info"
-    )
-
+    

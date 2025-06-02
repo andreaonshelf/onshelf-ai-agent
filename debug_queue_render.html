@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Queue Render</title>
+    <style>
+        .queue-interface.active { display: block; }
+        .queue-interface { display: none; }
+        #queueGrid { border: 2px solid red; min-height: 100px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Queue Rendering</h1>
+    
+    <div id="queue-interface" class="queue-interface active">
+        <h2>Queue Interface (should be visible)</h2>
+        <div id="queueGrid" class="queue-grid">
+            <!-- Queue items should appear here -->
+        </div>
+    </div>
+    
+    <div id="debug"></div>
+    
+    <script>
+        let queueData = [];
+        const debug = document.getElementById('debug');
+        
+        async function loadQueue() {
+            try {
+                debug.innerHTML += '<p>Loading queue...</p>';
+                const response = await fetch('http://localhost:8000/api/queue/items');
+                const data = await response.json();
+                queueData = data.items || [];
+                debug.innerHTML += `<p>✅ Loaded ${queueData.length} items</p>`;
+                renderQueue();
+            } catch (error) {
+                debug.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        function renderQueue() {
+            debug.innerHTML += '<p>renderQueue called</p>';
+            const grid = document.getElementById('queueGrid');
+            
+            if (!grid) {
+                debug.innerHTML += '<p>❌ queueGrid not found!</p>';
+                return;
+            }
+            
+            debug.innerHTML += `<p>✅ queueGrid found, rendering ${queueData.length} items</p>`;
+            
+            if (queueData.length === 0) {
+                grid.innerHTML = '<p>No items in queue</p>';
+                return;
+            }
+            
+            grid.innerHTML = '<h3>Queue Items:</h3>';
+            queueData.forEach(item => {
+                grid.innerHTML += `<div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
+                    <p>ID: ${item.id}</p>
+                    <p>Store: ${item.store_name || 'Unknown'}</p>
+                    <p>Status: ${item.status}</p>
+                </div>`;
+            });
+            
+            debug.innerHTML += '<p>✅ Rendering complete</p>';
+        }
+        
+        // Check visibility
+        const queueInterface = document.getElementById('queue-interface');
+        const isVisible = window.getComputedStyle(queueInterface).display !== 'none';
+        debug.innerHTML += `<p>Queue interface visible: ${isVisible}</p>`;
+        
+        // Load queue
+        loadQueue();
+    </script>
+</body>
+</html>

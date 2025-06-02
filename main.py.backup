@@ -52,17 +52,9 @@ app.include_router(planogram_router)
 from src.api.queue_management import router as queue_router
 app.include_router(queue_router)
 
-# Include queue processing API (new unified dashboard)
-from src.api.queue_processing import router as queue_processing_router
-app.include_router(queue_processing_router, prefix="/api/queue")
-
 # Include analytics API
 from src.api.analytics import router as analytics_router
 app.include_router(analytics_router)
-
-# Include extended analytics API (new unified dashboard)
-from src.api.analytics import analytics_extended_router
-app.include_router(analytics_extended_router, prefix="/api/analytics")
 
 # Include prompt management API
 from src.api.prompt_management import router as prompt_router
@@ -96,46 +88,21 @@ app.include_router(iteration_router)
 from src.api.field_definitions import router as field_definitions_router
 app.include_router(field_definitions_router)
 
-<<<<<<< HEAD
-# Include extraction configuration API
-from src.api.extraction_config import router as extraction_config_router
-app.include_router(extraction_config_router)
-=======
-# Include field schema builder API
-from src.api.field_schema_builder import router as schema_builder_router
-app.include_router(schema_builder_router)
+# Include image analysis API
+from src.api.image_analysis import router as image_analysis_router
+app.include_router(image_analysis_router)
 
-# WebSocket support
-from src.websocket.manager import websocket_manager
-from fastapi import WebSocket, WebSocketDisconnect
-
-@app.websocket("/ws/extraction/{item_id}")
-async def websocket_endpoint(websocket: WebSocket, item_id: int):
-    """WebSocket endpoint for real-time extraction monitoring"""
-    await websocket_manager.connect(websocket, str(item_id))
-    try:
-        while True:
-            # Keep connection alive and wait for messages
-            data = await websocket.receive_text()
-            # Could handle client messages here if needed
-    except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket, str(item_id))
->>>>>>> origin/main
-
-# Initialize mock iteration data on startup
+# Initialize app on startup
 @app.on_event("startup")
-async def initialize_mock_data():
-    """Initialize mock iteration data for testing the dashboard"""
+async def initialize_app():
+    """Initialize application on startup"""
     try:
-        from datetime import datetime
-        
-        # Create REAL extraction data structure that matches actual AI agent output
-        # This mirrors exactly what ProductExtraction model returns
-        real_extraction_products = [
-            # Shelf 1 products - exactly as AI agents extract them
-            {
-                "section": {"horizontal": "1", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+        # Initialize any required services
+        print("✅ Application initialized successfully")
+    except Exception as e:
+        print(f"❌ Error initializing application: {e}")
+
+# API Endpoints
                 "brand": "Coca-Cola", "name": "Coke Zero Sugar 330ml", "price": 1.29,
                 "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
                 "shelf_level": 1, "position_on_shelf": 1,
@@ -316,8 +283,7 @@ async def initialize_mock_data():
             }
         ]
 
-        mock_data = {
-            'upload_id': 'demo_12345', 
+# Removed - real data will be loaded from database 
             'iterations': [
                 {
                     "iteration": 1,
@@ -456,19 +422,13 @@ if os.path.exists("static"):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Main dashboard interface with progressive disclosure"""
-    try:
-        # Serve the new unified dashboard
-        with open("new_dashboard.html", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback to embedded HTML if file not found
-        return """
+    return """
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>OnShelf AI - Extraction Dashboard</title>
+        <title>OnShelf Planogram Extractor</title>
         
         <!-- React and Dependencies -->
         <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -514,25 +474,6 @@ async def root():
                 overflow-y: auto;
             }
             
-            /* Right Sidebar - Prompt Management */
-            .right-sidebar {
-                width: 350px;
-                background: white;
-                border-left: 1px solid #e2e8f0;
-                display: flex;
-                flex-direction: column;
-                transition: all 0.3s ease;
-                z-index: 100;
-                position: relative;
-                flex-shrink: 0;
-                max-height: 100vh;
-                overflow-y: auto;
-            }
-            
-            .right-sidebar.collapsed {
-                transform: translateX(330px);
-                width: 20px;
-            }
             
             .left-sidebar.collapsed {
                 transform: translateX(-380px);
@@ -1176,15 +1117,15 @@ async def root():
                 position: relative;
             }
             
-            /* Queue Interface */
-            .queue-interface {
+            /* Extractions Interface */
+            .extractions-interface {
                 display: none;
                 padding: 30px;
                 height: 100%;
                 overflow-y: auto;
             }
             
-            .queue-interface.active {
+            .extractions-interface.active {
                 display: block;
             }
             
@@ -1220,7 +1161,7 @@ async def root():
                 margin-top: 5px;
             }
             
-            .queue-grid {
+            .extractions-grid {
                 margin-top: 20px;
             }
             
@@ -2526,7 +2467,7 @@ async def root():
                     grid-template-rows: 1fr 1fr;
                 }
                 
-                .queue-grid {
+                .extractions-grid {
                     grid-template-columns: 1fr;
                 }
                 
@@ -2678,6 +2619,278 @@ async def root():
                 grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
                 gap: 20px;
                 margin-bottom: 30px;
+            }
+            
+            /* Pipeline Studio Styles */
+            .pipeline-interface {
+                display: none;
+                padding: 30px;
+                height: 100%;
+                overflow-y: auto;
+            }
+            
+            .pipeline-interface.active {
+                display: block;
+            }
+            
+            .pipeline-container {
+                max-width: 1600px;
+                margin: 0 auto;
+            }
+            
+            .pipeline-header {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            
+            .pipeline-header h2 {
+                font-size: 32px;
+                margin-bottom: 10px;
+                color: #1e293b;
+            }
+            
+            .pipeline-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #e2e8f0;
+                padding-bottom: 10px;
+            }
+            
+            .pipeline-tab {
+                padding: 10px 20px;
+                background: transparent;
+                border: none;
+                font-size: 16px;
+                font-weight: 500;
+                color: #64748b;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                border-radius: 8px 8px 0 0;
+            }
+            
+            .pipeline-tab:hover {
+                background: #f1f5f9;
+                color: #3b82f6;
+            }
+            
+            .pipeline-tab.active {
+                background: #3b82f6;
+                color: white;
+            }
+            
+            .pipeline-tab-content {
+                display: none;
+            }
+            
+            .pipeline-tab-content.active {
+                display: block;
+            }
+            
+            .pipeline-builder-container {
+                display: grid;
+                grid-template-columns: 1fr 350px;
+                gap: 30px;
+            }
+            
+            .visual-pipeline-editor {
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            }
+            
+            .pipeline-canvas {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                overflow-x: auto;
+                padding: 20px;
+                background: #f8fafc;
+                border-radius: 8px;
+            }
+            
+            .pipeline-stage {
+                background: white;
+                border: 2px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 20px;
+                min-width: 200px;
+                transition: all 0.3s ease;
+            }
+            
+            .pipeline-stage:hover {
+                border-color: #3b82f6;
+                transform: translateY(-2px);
+                box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+            }
+            
+            .stage-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+            
+            .stage-icon {
+                font-size: 24px;
+            }
+            
+            .stage-header h4 {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 600;
+            }
+            
+            .pipeline-connection {
+                font-size: 24px;
+                color: #cbd5e1;
+            }
+            
+            .pipeline-config-panel {
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            }
+            
+            /* Prompt Lab Styles */
+            .prompts-interface {
+                display: none;
+                padding: 30px;
+                height: 100%;
+                overflow-y: auto;
+            }
+            
+            .prompts-interface.active {
+                display: block;
+            }
+            
+            .prompts-container {
+                max-width: 1600px;
+                margin: 0 auto;
+            }
+            
+            .prompts-header {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            
+            .prompts-header h2 {
+                font-size: 32px;
+                margin-bottom: 10px;
+                color: #1e293b;
+            }
+            
+            .prompt-lab-layout {
+                display: grid;
+                grid-template-rows: 1fr auto;
+                gap: 30px;
+            }
+            
+            .model-columns {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+            }
+            
+            .model-column {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            
+            .model-header {
+                background: #f8fafc;
+                padding: 15px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .model-header h3 {
+                margin: 0;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            
+            .prompt-section,
+            .extraction-structure-section,
+            .ai-format-section {
+                padding: 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            .prompt-section h4,
+            .extraction-structure-section h4,
+            .ai-format-section h4 {
+                margin: 0 0 10px 0;
+                font-size: 14px;
+                font-weight: 600;
+                color: #64748b;
+            }
+            
+            .prompt-editor {
+                width: 100%;
+                min-height: 150px;
+                padding: 10px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                font-family: monospace;
+                font-size: 13px;
+                resize: vertical;
+            }
+            
+            .structure-editor,
+            .ai-format-display {
+                background: #f8fafc;
+                padding: 15px;
+                border-radius: 6px;
+                overflow-x: auto;
+            }
+            
+            .structure-editor pre,
+            .ai-format-display pre {
+                margin: 0;
+                font-size: 12px;
+            }
+            
+            .structure-editor code,
+            .ai-format-display code {
+                font-family: 'Monaco', 'Consolas', monospace;
+            }
+            
+            .test-results-panel {
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            }
+            
+            /* Analytics & Settings Placeholders */
+            .analytics-interface,
+            .settings-interface {
+                display: none;
+                padding: 30px;
+                height: 100%;
+                overflow-y: auto;
+            }
+            
+            .analytics-interface.active,
+            .settings-interface.active {
+                display: block;
+            }
+            
+            .analytics-container,
+            .settings-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                padding: 40px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
             }
             
             /* Intelligence Panels */
@@ -3334,173 +3547,102 @@ async def root():
             <div class="left-sidebar" id="leftSidebar">
                 <button class="sidebar-toggle" onclick="toggleSidebar()">◀</button>
                 
-                <!-- Enhanced Prompt Management Sidebar (Queue Mode) -->
+                <!-- Consolidated Extraction Control Sidebar -->
                 <div id="promptManagementSidebar" class="prompt-management-sidebar">
                     <div class="sidebar-header">
-                        <h3>🔧 Extraction Configuration</h3>
+                        <h3>📋 EXTRACTION CONTROL</h3>
                         <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
-                            Configure extraction systems and prompts
+                            Selected: <span id="selectedCount" style="font-weight: 600;">0</span> of <span id="totalCount">0</span> items
                         </p>
                     </div>
                     
-                    <!-- System Selection Section -->
-                    <div class="config-group">
-                        <label>System Selection</label>
-                        <div class="radio-group">
-                            <label><input type="radio" name="system" value="custom_consensus" checked onclick="selectSystem('custom_consensus')"> Custom Consensus</label>
-                            <label><input type="radio" name="system" value="langgraph" onclick="selectSystem('langgraph')"> LangGraph</label>
-                            <label><input type="radio" name="system" value="hybrid" onclick="selectSystem('hybrid')"> Hybrid</label>
+                    <!-- Primary Actions -->
+                    <div class="config-group" style="padding: 15px 20px; border-bottom: 2px solid #e5e7eb;">
+                        <button onclick="processSelectedWithAI()" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+                            ▶️ Process Selected
+                        </button>
+                        <button onclick="quickProcessSelected()" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 13px; background: #10b981; color: white; border: none;">
+                            ⚡ Quick Process (Auto)
+                        </button>
+                        <button onclick="openPipelineStudio()" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 13px; margin-top: 8px;">
+                            🔧 Configure Pipeline...
+                        </button>
+                    </div>
+                    
+                    <!-- Live Status (Only shows when processing) -->
+                    <div id="liveStatusCard" class="config-group" style="display: none; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 15px; margin: 15px 20px;">
+                        <h4 style="margin: 0 0 10px 0; color: #0c4a6e; font-size: 14px;">📊 LIVE STATUS</h4>
+                        <div style="font-size: 13px; color: #075985; font-weight: 500;"><span id="liveItemName">Item #42: Tesco Birmingham</span></div>
+                        <div style="display: flex; align-items: center; gap: 5px; margin: 10px 0;">
+                            <span style="font-size: 20px;">⚬⚬⚬⚬⚬</span>
+                            <span style="font-size: 12px; color: #64748b;">Iteration <span id="currentIteration">2</span>/<span id="maxIterations">5</span></span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="font-size: 13px;">🎯 <span id="currentAccuracy">82%</span> → <span id="targetAccuracy">95%</span> target</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-bottom: 10px;">
+                            <span>⏱️ <span id="elapsedTime">1m 23s</span></span>
+                            <span>💰 <span id="currentCost">$2.34</span></span>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button onclick="viewLiveDetails()" class="btn btn-secondary" style="padding: 6px 10px; font-size: 11px;">View</button>
+                            <button onclick="pauseProcessing()" class="btn btn-secondary" style="padding: 6px 10px; font-size: 11px;">Pause</button>
+                            <button onclick="skipToReview()" class="btn btn-secondary" style="padding: 6px 10px; font-size: 11px;">Skip to Review</button>
                         </div>
                     </div>
                     
-                    <!-- Smart Recommendations -->
-                    <div class="smart-recommendations" id="smartRecommendations" style="display: none;">
-                        <h4>📊 Auto-Selection Logic</h4>
-                        <div class="recommendation-context">
-                            Based on:
-                            <ul>
-                                <li>Store: <span id="recStore">-</span></li>
-                                <li>Category: <span id="recCategory">-</span></li>
-                                <li>History: <span id="recHistory">-</span></li>
-                            </ul>
-                        </div>
-                        <div class="recommendation-choices">
-                            Auto would select:
-                            <div id="autoSelectChoices">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-                        <button onclick="useAutoSelection()" class="btn btn-primary">Use Auto-Selection</button>
-                        <button onclick="showCustomSelection()" class="btn btn-secondary">Customize</button>
+                    <div style="padding: 15px 20px; font-size: 13px; color: #64748b;">
+                        <label>System:</label>
+                        <select id="activeSystem" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;" onchange="updateActiveSystem()">
+                            <option value="custom_consensus">Custom Consensus</option>
+                            <option value="langgraph">LangGraph Workflow</option>
+                            <option value="hybrid">Hybrid Adaptive</option>
+                        </select>
                     </div>
                     
-                    <!-- Model Configuration (shown when customizing) -->
-                    <div class="config-group" id="modelConfig" style="display: none;">
-                        <label>Model Override (Optional)</label>
-                        <p style="font-size: 12px; color: #6b7280; margin: 5px 0 10px 0;">
-                            ⚡ The system automatically selects optimal models. Use these overrides only if you have specific requirements.
-                        </p>
-                        <div class="model-selectors">
-                            <div class="model-row">
-                                <span>Structure:</span>
-                                <select id="model-structure" onchange="updatePromptOptions('structure')">
-                                    <option value="">System Choice</option>
-                                    <option value="claude">Force Claude</option>
-                                    <option value="gpt4o">Force GPT-4o</option>
-                                    <option value="gemini">Force Gemini</option>
-                                </select>
-                            </div>
-                            <div class="model-row">
-                                <span>Products:</span>
-                                <select id="model-products" onchange="updatePromptOptions('products')">
-                                    <option value="">System Choice</option>
-                                    <option value="claude">Force Claude</option>
-                                    <option value="gpt4o">Force GPT-4o</option>
-                                    <option value="gemini">Force Gemini</option>
-                                </select>
-                            </div>
-                            <div class="model-row">
-                                <span>Details:</span>
-                                <select id="model-details" onchange="updatePromptOptions('details')">
-                                    <option value="">System Choice</option>
-                                    <option value="claude">Force Claude</option>
-                                    <option value="gpt4o">Force GPT-4o</option>
-                                    <option value="gemini">Force Gemini</option>
-                                </select>
-                            </div>
+                    <!-- Batch Actions -->
+                    <div class="config-group" style="padding: 15px 20px; border-bottom: 1px solid #e5e7eb;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #6b7280;">🛠️ BATCH ACTIONS</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <button onclick="applyConfigToSelected()" class="btn btn-secondary" style="padding: 8px; font-size: 12px;">
+                                Apply Config
+                            </button>
+                            <button onclick="resetSelectedItems()" class="btn btn-secondary" style="padding: 8px; font-size: 12px;">
+                                Reset Selected
+                            </button>
+                            <button onclick="clearCompleted()" class="btn btn-secondary" style="padding: 8px; font-size: 12px;">
+                                Clear Completed
+                            </button>
+                            <button onclick="resetAllFailedItems()" class="btn btn-warning" style="padding: 8px; font-size: 12px; background: #fbbf24; color: #92400e;">
+                                Reset Failed
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- Enhanced Prompt Selection -->
-                    <div class="config-group" id="promptSelection" style="display: none;">
-                        <label>Prompt Selection</label>
-                        
-                        <!-- For each extraction type -->
-                        <div class="prompt-selector-group">
-                            <div class="prompt-type-header">
-                                <span>Structure Analysis:</span>
-                                <button onclick="createNewPrompt('structure')" class="new-prompt-btn">✨ New</button>
-                            </div>
-                            <select id="prompt-structure" onchange="showPromptPreview('structure')">
-                                <option value="auto">🤖 Auto-select best</option>
-                                <!-- Populated with prompts showing performance -->
-                            </select>
+                    <!-- Queue Overview -->
+                    <div class="config-group" style="padding: 15px 20px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #6b7280;">📈 QUEUE OVERVIEW</h4>
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: 13px;">
+                            <span style="color: #f59e0b;">⏳ Pending:</span>
+                            <span style="font-weight: 600;" id="pendingCount">12</span>
                             
-                            <!-- Prompt Preview Panel -->
-                            <div id="preview-structure" class="prompt-preview-panel" style="display: none;">
-                                <div class="preview-header">
-                                    <span class="prompt-name">High Accuracy v2.1</span>
-                                    <span class="performance-badge">94% success</span>
-                                </div>
-                                <div class="preview-stats">
-                                    <span>📊 423 uses</span>
-                                    <span>⏱️ Last: 2 hours ago</span>
-                                    <span>💰 Avg cost: $0.12</span>
-                                </div>
-                                <div class="preview-content">
-                                    <pre class="prompt-snippet"><!-- First 150 chars --></pre>
-                                </div>
-                                <div class="preview-actions">
-                                    <button onclick="viewFullPrompt('structure')">View Full</button>
-                                    <button onclick="customizePrompt('structure')">Customize</button>
-                                    <button onclick="viewPerformance('structure')">Performance</button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="prompt-selector-group">
-                            <div class="prompt-type-header">
-                                <span>Product Extraction:</span>
-                                <button onclick="createNewPrompt('products')" class="new-prompt-btn">✨ New</button>
-                            </div>
-                            <select id="prompt-products" onchange="showPromptPreview('products')">
-                                <option value="auto">🤖 Auto-select best</option>
-                                <!-- Populated with prompts showing performance -->
-                            </select>
+                            <span style="color: #3b82f6;">🔄 Processing:</span>
+                            <span style="font-weight: 600;" id="processingCount">3</span>
                             
-                            <div id="preview-products" class="prompt-preview-panel" style="display: none;">
-                                <!-- Similar structure as structure preview -->
-                            </div>
-                        </div>
-                        
-                        <div class="prompt-selector-group">
-                            <div class="prompt-type-header">
-                                <span>Detail Enhancement:</span>
-                                <button onclick="createNewPrompt('details')" class="new-prompt-btn">✨ New</button>
-                            </div>
-                            <select id="prompt-details" onchange="showPromptPreview('details')">
-                                <option value="auto">🤖 Auto-select best</option>
-                                <!-- Populated with prompts showing performance -->
-                            </select>
+                            <span style="color: #10b981;">✅ Completed:</span>
+                            <span style="font-weight: 600;"><span id="completedCount">47</span> <span style="font-weight: 400; color: #6b7280;">(94% avg)</span></span>
                             
-                            <div id="preview-details" class="prompt-preview-panel" style="display: none;">
-                                <!-- Similar structure as structure preview -->
-                            </div>
+                            <span style="color: #ef4444;">❌ Failed:</span>
+                            <span style="font-weight: 600;" id="failedCount">2</span>
                         </div>
-                    </div>
-                    
-                    <!-- Apply Configuration -->
-                    <div class="config-actions">
-                        <button onclick="applyEnhancedConfigToSelected()" class="btn btn-primary">
-                            Apply to Selected Items
-                        </button>
-                        <button onclick="saveAsDefault()" class="btn btn-secondary">
-                            Save as Default
-                        </button>
-                    </div>
-                    
-                    <!-- Prompt Management Section -->
-                    <div class="config-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
-                        <h4 style="margin: 0 0 10px 0; color: #1f2937;">📝 Prompt Management</h4>
-                        <button onclick="createNewPrompt()" class="btn btn-primary" style="width: 100%; margin-bottom: 8px;">
-                            ✨ Write New Prompt
-                        </button>
-                        <button onclick="openPromptLibrary()" class="btn btn-secondary" style="width: 100%; margin-bottom: 8px;">
-                            📚 Browse Prompt Library
-                        </button>
-                        <button onclick="manageFieldDefinitions()" class="btn btn-secondary" style="width: 100%;">
-                            📋 Manage Field Definitions
-                        </button>
+                        <div style="display: flex; gap: 8px; margin-top: 15px;">
+                            <button onclick="loadQueue()" class="btn btn-secondary" style="flex: 1; padding: 8px; font-size: 12px;">
+                                🔄 Refresh
+                            </button>
+                            <button onclick="exportResults()" class="btn btn-secondary" style="flex: 1; padding: 8px; font-size: 12px;">
+                                📥 Export Results
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -3599,24 +3741,25 @@ async def root():
             <div class="main-content">
                 <!-- Header -->
                 <div class="header">
-                    <h1>🤖 OnShelf AI Dashboard</h1>
+                    <h1>📊 OnShelf Planogram Extractor</h1>
                     <div class="mode-selector">
-                        <button class="mode-btn active" onclick="switchMode('queue')">Queue</button>
-                        <button class="mode-btn" onclick="switchMode('simple')">Simple</button>
-                        <button class="mode-btn" onclick="switchMode('advanced')">Advanced</button>
-                        <button class="mode-btn" onclick="switchMode('intelligence')">Prompt Intelligence</button>
+                        <button class="mode-btn active" onclick="switchMode('extractions')">Extractions</button>
+                        <button class="mode-btn" onclick="switchMode('pipeline')">Pipeline Studio</button>
+                        <button class="mode-btn" onclick="switchMode('prompts')">Prompt Lab</button>
+                        <button class="mode-btn" onclick="switchMode('analytics')">Analytics</button>
+                        <button class="mode-btn" onclick="switchMode('settings')">Settings</button>
                     </div>
                 </div>
                 
                 <!-- Breadcrumb -->
                 <div class="breadcrumb">
-                    <span id="breadcrumb">Extraction Queue</span>
+                    <span id="breadcrumb">Active Extractions</span>
                 </div>
                 
                 <!-- Content Area -->
                 <div class="content-area">
-                    <!-- Queue Interface -->
-                    <div id="queue-interface" class="queue-interface active">
+                    <!-- Extractions Interface -->
+                    <div id="extractions-interface" class="extractions-interface active">
                         <div class="queue-stats">
                             <div class="stat-card review">
                                 <div class="stat-number" id="reviewCount">0</div>
@@ -3642,7 +3785,7 @@ async def root():
                         </div>
                         
                         
-                        <div id="queueGrid" class="queue-grid">
+                        <div id="extractionsGrid" class="extractions-grid">
                             <!-- Enhanced queue items will be loaded here -->
                         </div>
                     </div>
@@ -3753,7 +3896,7 @@ async def root():
                             <!-- Mode switching buttons -->
                             <div style="margin-top: 20px; display: flex; gap: 10px;">
                                 <button class="btn btn-secondary" onclick="switchMode('advanced')">Advanced Mode</button>
-                                <button class="btn btn-secondary" onclick="switchMode('queue')">Back to Queue</button>
+                                <button class="btn btn-secondary" onclick="switchMode('extractions')">Back to Extractions</button>
                             </div>
                         </div>
                     </div>
@@ -4472,56 +4615,423 @@ async def root():
                 </div>
             </div>
             
-            <!-- Right Sidebar - Additional Prompt Management -->
-            <div class="right-sidebar" id="rightSidebar">
-                <button class="sidebar-toggle" onclick="toggleRightSidebar()">◀</button>
-                <div class="sidebar-header">
-                    <h3>⚙️ Advanced Settings</h3>
-                    <p style="font-size: 12px; color: #64748b; margin-top: 5px;">
-                        Additional configuration options
+            <!-- Pipeline Studio Interface -->
+            <div id="pipeline-interface" class="pipeline-interface">
+                <div class="pipeline-container">
+                    <div class="pipeline-header">
+                        <h2>🔧 Pipeline Studio</h2>
+                        <p>Configure and visualize your extraction pipeline</p>
+                    </div>
+                    
+                    <!-- Pipeline Tabs -->
+                    <div class="pipeline-tabs">
+                        <button class="pipeline-tab active" onclick="switchPipelineTab('builder')">🛠️ Pipeline Builder</button>
+                        <button class="pipeline-tab" onclick="switchPipelineTab('orchestration')">⚙️ Orchestration Rules</button>
+                        <button class="pipeline-tab" onclick="switchPipelineTab('monitoring')">📊 Live Monitoring</button>
+                        <button class="pipeline-tab" onclick="switchPipelineTab('history')">📜 Execution History</button>
+                    </div>
+                    
+                    <!-- Pipeline Builder Tab -->
+                    <div id="pipeline-builder" class="pipeline-tab-content active">
+                        <div class="pipeline-builder-container">
+                            <!-- Visual Pipeline Editor -->
+                            <div class="visual-pipeline-editor">
+                                <div class="pipeline-canvas" id="pipelineCanvas">
+                                    <!-- Stage 1: Image Analysis -->
+                                    <div class="pipeline-stage" data-stage="image-analysis">
+                                        <div class="stage-header">
+                                            <span class="stage-icon">📷</span>
+                                            <h4>Image Analysis</h4>
+                                        </div>
+                                        <div class="stage-content">
+                                            <div class="stage-config">
+                                                <label>Quality Threshold:</label>
+                                                <input type="range" min="0" max="100" value="80" class="quality-slider">
+                                                <span class="quality-value">80%</span>
+                                            </div>
+                                            <div class="stage-metrics">
+                                                <div class="metric">Resolution: <span>-</span></div>
+                                                <div class="metric">Clarity: <span>-</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Connection Arrow -->
+                                    <div class="pipeline-connection">→</div>
+                                    
+                                    <!-- Stage 2: Model Selection -->
+                                    <div class="pipeline-stage" data-stage="model-selection">
+                                        <div class="stage-header">
+                                            <span class="stage-icon">🤖</span>
+                                            <h4>Model Selection</h4>
+                                        </div>
+                                        <div class="stage-content">
+                                            <div class="model-selector">
+                                                <label>
+                                                    <input type="checkbox" checked> GPT-4o
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox" checked> Claude-3.5
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox" checked> Gemini-2.0
+                                                </label>
+                                            </div>
+                                            <div class="stage-config">
+                                                <label>Strategy:</label>
+                                                <select>
+                                                    <option>Consensus</option>
+                                                    <option>Sequential</option>
+                                                    <option>Adaptive</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Connection Arrow -->
+                                    <div class="pipeline-connection">→</div>
+                                    
+                                    <!-- Stage 3: Extraction -->
+                                    <div class="pipeline-stage" data-stage="extraction">
+                                        <div class="stage-header">
+                                            <span class="stage-icon">📊</span>
+                                            <h4>Extraction</h4>
+                                        </div>
+                                        <div class="stage-content">
+                                            <div class="extraction-phases">
+                                                <div class="phase active">1. Structure</div>
+                                                <div class="phase">2. Products</div>
+                                                <div class="phase">3. Details</div>
+                                            </div>
+                                            <div class="stage-progress">
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" style="width: 0%"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Connection Arrow -->
+                                    <div class="pipeline-connection">→</div>
+                                    
+                                    <!-- Stage 4: Validation -->
+                                    <div class="pipeline-stage" data-stage="validation">
+                                        <div class="stage-header">
+                                            <span class="stage-icon">✅</span>
+                                            <h4>Validation</h4>
+                                        </div>
+                                        <div class="stage-content">
+                                            <div class="validation-rules">
+                                                <label>
+                                                    <input type="checkbox" checked> Product count check
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox" checked> Shelf consistency
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox" checked> Price validation
+                                                </label>
+                                            </div>
+                                            <div class="stage-config">
+                                                <label>Min Confidence:</label>
+                                                <input type="number" value="85" min="0" max="100">%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Connection Arrow -->
+                                    <div class="pipeline-connection">→</div>
+                                    
+                                    <!-- Stage 5: Output -->
+                                    <div class="pipeline-stage" data-stage="output">
+                                        <div class="stage-header">
+                                            <span class="stage-icon">📦</span>
+                                            <h4>Output</h4>
+                                        </div>
+                                        <div class="stage-content">
+                                            <div class="output-formats">
+                                                <label>
+                                                    <input type="checkbox" checked> JSON
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox"> CSV
+                                                </label>
+                                                <label>
+                                                    <input type="checkbox" checked> Planogram
+                                                </label>
+                                            </div>
+                                            <button class="btn btn-primary">Save Configuration</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Pipeline Configuration Panel -->
+                            <div class="pipeline-config-panel">
+                                <h3>Pipeline Configuration</h3>
+                                <div class="config-sections">
+                                    <div class="config-section">
+                                        <h4>🎯 Accuracy Target</h4>
+                                        <input type="range" min="50" max="100" value="95" id="accuracyTarget">
+                                        <span id="accuracyValue">95%</span>
+                                    </div>
+                                    
+                                    <div class="config-section">
+                                        <h4>🔄 Max Iterations</h4>
+                                        <input type="number" value="5" min="1" max="10" id="maxIterations">
+                                    </div>
+                                    
+                                    <div class="config-section">
+                                        <h4>💰 Cost Limit</h4>
+                                        <input type="number" value="10.00" step="0.01" id="costLimit">
+                                        <span>USD per extraction</span>
+                                    </div>
+                                    
+                                    <div class="config-section">
+                                        <h4>⏱️ Timeout</h4>
+                                        <input type="number" value="300" min="60" max="600" id="timeout">
+                                        <span>seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Orchestration Rules Tab -->
+                    <div id="pipeline-orchestration" class="pipeline-tab-content">
+                        <div class="orchestration-container">
+                            <div class="rules-editor">
+                                <h3>Orchestration Rules</h3>
+                                <div class="rule-builder">
+                                    <div class="rule-item">
+                                        <div class="rule-condition">
+                                            <span class="rule-if">IF</span>
+                                            <select>
+                                                <option>Image Quality</option>
+                                                <option>Previous Accuracy</option>
+                                                <option>Product Count</option>
+                                            </select>
+                                            <select>
+                                                <option>&lt;</option>
+                                                <option>&gt;</option>
+                                                <option>=</option>
+                                            </select>
+                                            <input type="number" value="70">
+                                        </div>
+                                        <div class="rule-action">
+                                            <span class="rule-then">THEN</span>
+                                            <select>
+                                                <option>Switch Model</option>
+                                                <option>Adjust Parameters</option>
+                                                <option>Retry Extraction</option>
+                                            </select>
+                                            <input type="text" placeholder="Action details...">
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-secondary">+ Add Rule</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Live Monitoring Tab -->
+                    <div id="pipeline-monitoring" class="pipeline-tab-content">
+                        <div class="monitoring-container">
+                            <h3>Live Pipeline Execution</h3>
+                            <div id="liveExecutionView">
+                                <p style="text-align: center; color: #64748b; padding: 40px;">
+                                    No active extractions. Start processing to see live monitoring.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Execution History Tab -->
+                    <div id="pipeline-history" class="pipeline-tab-content">
+                        <div class="history-container">
+                            <h3>Execution History</h3>
+                            <div id="executionHistoryTable">
+                                <p style="text-align: center; color: #64748b; padding: 40px;">
+                                    Loading execution history...
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Prompt Lab Interface -->
+            <div id="prompts-interface" class="prompts-interface">
+                <div class="prompts-container">
+                    <div class="prompts-header">
+                        <h2>🧪 Prompt Lab</h2>
+                        <p>Design, test, and optimize prompts for each extraction model</p>
+                    </div>
+                    
+                    <!-- Prompt Lab Layout -->
+                    <div class="prompt-lab-layout">
+                        <!-- Model Columns -->
+                        <div class="model-columns">
+                            <!-- Structure Model -->
+                            <div class="model-column" data-model="structure">
+                                <div class="model-header">
+                                    <h3>📐 Structure Agent</h3>
+                                    <button class="btn btn-sm">Test</button>
+                                </div>
+                                
+                                <div class="prompt-section">
+                                    <h4>Prompt Template</h4>
+                                    <textarea class="prompt-editor" placeholder="Enter your structure extraction prompt..."></textarea>
+                                </div>
+                                
+                                <div class="extraction-structure-section">
+                                    <h4>Extraction Structure</h4>
+                                    <div class="structure-editor">
+                                        <pre><code>{
+  "shelves": [
+    {
+      "position": "int",
+      "height": "float",
+      "products": "int"
+    }
+  ]
+}</code></pre>
+                                    </div>
+                                </div>
+                                
+                                <div class="ai-format-section">
+                                    <h4>AI-Formatted (Instructor)</h4>
+                                    <div class="ai-format-display">
+                                        <pre><code>class Shelf(BaseModel):
+    position: int
+    height: float
+    products: int
+
+class Structure(BaseModel):
+    shelves: List[Shelf]</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Products Model -->
+                            <div class="model-column" data-model="products">
+                                <div class="model-header">
+                                    <h3>📦 Products Agent</h3>
+                                    <button class="btn btn-sm">Test</button>
+                                </div>
+                                
+                                <div class="prompt-section">
+                                    <h4>Prompt Template</h4>
+                                    <textarea class="prompt-editor" placeholder="Enter your products extraction prompt..."></textarea>
+                                </div>
+                                
+                                <div class="extraction-structure-section">
+                                    <h4>Extraction Structure</h4>
+                                    <div class="structure-editor">
+                                        <pre><code>{
+  "products": [
+    {
+      "name": "string",
+      "brand": "string",
+      "position": {
+        "shelf": "int",
+        "x": "float",
+        "y": "float"
+      }
+    }
+  ]
+}</code></pre>
+                                    </div>
+                                </div>
+                                
+                                <div class="ai-format-section">
+                                    <h4>AI-Formatted (Instructor)</h4>
+                                    <div class="ai-format-display">
+                                        <pre><code>class Position(BaseModel):
+    shelf: int
+    x: float
+    y: float
+
+class Product(BaseModel):
+    name: str
+    brand: str
+    position: Position
+
+class Products(BaseModel):
+    products: List[Product]</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Details Model -->
+                            <div class="model-column" data-model="details">
+                                <div class="model-header">
+                                    <h3>🔍 Details Agent</h3>
+                                    <button class="btn btn-sm">Test</button>
+                                </div>
+                                
+                                <div class="prompt-section">
+                                    <h4>Prompt Template</h4>
+                                    <textarea class="prompt-editor" placeholder="Enter your details extraction prompt..."></textarea>
+                                </div>
+                                
+                                <div class="extraction-structure-section">
+                                    <h4>Extraction Structure</h4>
+                                    <div class="structure-editor">
+                                        <pre><code>{
+  "details": {
+    "price": "float",
+    "quantity": "int",
+    "sku": "string",
+    "category": "string"
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+                                
+                                <div class="ai-format-section">
+                                    <h4>AI-Formatted (Instructor)</h4>
+                                    <div class="ai-format-display">
+                                        <pre><code>class Details(BaseModel):
+    price: float
+    quantity: int
+    sku: str
+    category: str</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Test Results Panel -->
+                        <div class="test-results-panel">
+                            <h3>Test Results</h3>
+                            <div id="promptTestResults">
+                                <p style="text-align: center; color: #64748b; padding: 20px;">
+                                    Run a test to see results here
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics Interface (Placeholder) -->
+            <div id="analytics-interface" class="analytics-interface">
+                <div class="analytics-container">
+                    <h2>📊 Analytics Dashboard</h2>
+                    <p style="text-align: center; color: #64748b; padding: 40px;">
+                        Analytics dashboard coming soon...
                     </p>
                 </div>
-                
-                <!-- Batch Operations Section -->
-                <div class="prompt-section">
-                    <h4>🔄 Batch Operations</h4>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <button class="btn btn-primary" onclick="applyConfigToSelected()" style="padding: 8px 12px; font-size: 12px;">
-                            Apply to Selected
-                        </button>
-                        <button class="btn btn-secondary" onclick="resetSelectedItems()" style="padding: 8px 12px; font-size: 12px;">
-                            Reset Selected
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- System Status Section -->
-                <div class="prompt-section">
-                    <h4>📊 System Status</h4>
-                    <div style="font-size: 12px; color: #64748b;">
-                        <div style="margin-bottom: 8px;">
-                            <strong>Queue Items:</strong> <span id="totalQueueItems">-</span>
-                        </div>
-                        <div style="margin-bottom: 8px;">
-                            <strong>Selected:</strong> <span id="selectedQueueItems">0</span>
-                        </div>
-                        <div style="margin-bottom: 8px;">
-                            <strong>Active System:</strong> <span id="activeSystem">Custom Consensus</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Quick Actions Section -->
-                <div class="prompt-section">
-                    <h4>⚡ Quick Actions</h4>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <button class="btn btn-warning" onclick="resetAllFailedItems()" style="padding: 6px 10px; font-size: 11px;">
-                            🔄 Reset All Failed
-                        </button>
-                        <button class="btn btn-success" onclick="loadQueue()" style="padding: 6px 10px; font-size: 11px;">
-                            🔄 Refresh Queue
-                        </button>
-                    </div>
+            </div>
+            
+            <!-- Settings Interface (Placeholder) -->
+            <div id="settings-interface" class="settings-interface">
+                <div class="settings-container">
+                    <h2>⚙️ Settings</h2>
+                    <p style="text-align: center; color: #64748b; padding: 40px;">
+                        Settings interface coming soon...
+                    </p>
                 </div>
             </div>
         
@@ -4816,10 +5326,14 @@ async def root():
                  }
                  
                 // Hide all modes
-                 document.getElementById('queue-interface').classList.remove('active');
+                 document.getElementById('extractions-interface').classList.remove('active');
                 document.getElementById('simple-mode').classList.remove('active');
                 document.getElementById('advanced-mode').classList.remove('active');
                 document.getElementById('intelligence-interface').classList.remove('active');
+                document.getElementById('pipeline-interface').classList.remove('active');
+                document.getElementById('prompts-interface').classList.remove('active');
+                document.getElementById('analytics-interface').classList.remove('active');
+                document.getElementById('settings-interface').classList.remove('active');
                 
                 // Update mode buttons
                 document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
@@ -4834,8 +5348,9 @@ async def root():
                  const imageSidebar = document.getElementById('imageSelectionSidebar');
                  const sidebar = document.querySelector('.left-sidebar');
                  
-                 if (mode === 'queue') {
-                     // Show prompt management sidebar for queue mode
+                 // Update sidebar visibility based on mode
+                 if (mode === 'extractions') {
+                     // Show consolidated sidebar for extractions
                      promptSidebar.style.display = 'block';
                      imageSidebar.style.display = 'none';
                      sidebar.style.display = 'flex';
@@ -4845,20 +5360,23 @@ async def root():
                          initializePromptManagement();
                          window.promptManagementInitialized = true;
                      }
-                 } else if (mode === 'intelligence') {
-                     // Hide sidebar for intelligence mode (full-width dashboard)
+                 } else if (mode === 'pipeline' || mode === 'prompts' || mode === 'analytics') {
+                     // Hide sidebar for full-width interfaces
+                     sidebar.style.display = 'none';
+                 } else if (mode === 'settings') {
+                     // Settings mode - hide sidebar
                      sidebar.style.display = 'none';
                  } else {
-                     // Show image selection sidebar for simple/advanced modes
+                     // Legacy modes (to be removed)
                      promptSidebar.style.display = 'none';
                      imageSidebar.style.display = 'block';
                      sidebar.style.display = 'flex';
                  }
                 
                 // Show selected mode
-                if (mode === 'queue') {
-                     document.getElementById('queue-interface').classList.add('active');
-                    updateBreadcrumb('Extraction Queue');
+                if (mode === 'extractions') {
+                     document.getElementById('extractions-interface').classList.add('active');
+                    updateBreadcrumb('Active Extractions');
                 } else if (mode === 'simple') {
                     document.getElementById('simple-mode').classList.add('active');
                      
@@ -4886,6 +5404,18 @@ async def root():
                     document.getElementById('intelligence-interface').classList.add('active');
                     updateBreadcrumb('Prompt Intelligence Dashboard');
                     loadIntelligenceData();
+                } else if (mode === 'pipeline') {
+                    document.getElementById('pipeline-interface').classList.add('active');
+                    updateBreadcrumb('Pipeline Studio');
+                } else if (mode === 'prompts') {
+                    document.getElementById('prompts-interface').classList.add('active');
+                    updateBreadcrumb('Prompt Lab');
+                } else if (mode === 'analytics') {
+                    document.getElementById('analytics-interface').classList.add('active');
+                    updateBreadcrumb('Analytics Dashboard');
+                } else if (mode === 'settings') {
+                    document.getElementById('settings-interface').classList.add('active');
+                    updateBreadcrumb('Settings');
                 }
                 
                 currentMode = mode;
@@ -5888,8 +6418,17 @@ async def root():
                 // Update breadcrumb
                 updateBreadcrumb(`Extraction #${itemId} Selected`);
                  
-                 // Note: Don't auto-switch to simple mode since real data isn't available
-                 console.log(`📋 Selected queue item #${itemId} (real extraction data not available yet)`);
+                // Note: Don't auto-switch to simple mode since real data isn't available
+                console.log(`📋 Selected queue item #${itemId} (real extraction data not available yet)`);
+                
+                // Check if image quality analysis is available
+                const item = queueData.find(item => item.id === itemId);
+                if (item && item.image_quality_analysis) {
+                    displayImageQualityInfo(item.image_quality_analysis);
+                } else {
+                    // Optionally analyze image quality on selection
+                    // analyzeImageQuality(itemId);
+                }
             }
             
             // System selection update
@@ -11714,32 +12253,6 @@ ${getOptimizationTips(goal, extractionType)}`;
                 }
             }
             
-            // Toggle Right Sidebar
-            function toggleRightSidebar() {
-                const sidebar = document.getElementById('rightSidebar');
-                if (sidebar) {
-                    const toggle = sidebar.querySelector('.sidebar-toggle');
-                    const isCollapsed = sidebar.classList.contains('collapsed');
-                    
-                    if (isCollapsed) {
-                        // Expand sidebar
-                        sidebar.classList.remove('collapsed');
-                        if (toggle) {
-                            toggle.innerHTML = '◀';
-                            toggle.style.right = '-30px';
-                            toggle.style.borderRadius = '4px 0 0 4px';
-                        }
-                    } else {
-                        // Collapse sidebar
-                        sidebar.classList.add('collapsed');
-                        if (toggle) {
-                            toggle.innerHTML = '▶';
-                            toggle.style.right = '0px';
-                            toggle.style.borderRadius = '0 4px 4px 0';
-                        }
-                    }
-                }
-            }
             
             // Additional initialization functions (called from main DOMContentLoaded)
             function initializeAdditionalFeatures() {
@@ -11750,6 +12263,76 @@ ${getOptimizationTips(goal, extractionType)}`;
                 
                 console.log('✅ Additional features initialized');
             }
+            
+            // Pipeline Studio Functions
+            function switchPipelineTab(tab) {
+                // Hide all pipeline tabs
+                document.querySelectorAll('.pipeline-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                
+                // Remove active class from all tabs
+                document.querySelectorAll('.pipeline-tab').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Show selected tab
+                document.getElementById(`pipeline-${tab}`).classList.add('active');
+                
+                // Mark button as active
+                event.target.classList.add('active');
+            }
+            
+            function openPipelineStudio() {
+                switchMode('pipeline');
+            }
+            
+            // Prompt Lab Functions
+            function loadPromptTemplates() {
+                // Load existing prompts from database
+                fetch('/api/prompts')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Populate prompt editors
+                        const structurePrompt = data.find(p => p.type === 'structure');
+                        const productsPrompt = data.find(p => p.type === 'products');
+                        const detailsPrompt = data.find(p => p.type === 'details');
+                        
+                        if (structurePrompt) {
+                            document.querySelector('[data-model="structure"] .prompt-editor').value = structurePrompt.content;
+                        }
+                        if (productsPrompt) {
+                            document.querySelector('[data-model="products"] .prompt-editor').value = productsPrompt.content;
+                        }
+                        if (detailsPrompt) {
+                            document.querySelector('[data-model="details"] .prompt-editor').value = detailsPrompt.content;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to load prompt templates:', error);
+                    });
+            }
+            
+            // Update accuracy slider value display
+            document.addEventListener('DOMContentLoaded', function() {
+                const accuracySlider = document.getElementById('accuracyTarget');
+                const accuracyValue = document.getElementById('accuracyValue');
+                
+                if (accuracySlider && accuracyValue) {
+                    accuracySlider.addEventListener('input', function() {
+                        accuracyValue.textContent = this.value + '%';
+                    });
+                }
+                
+                // Update quality slider in pipeline
+                const qualitySliders = document.querySelectorAll('.quality-slider');
+                qualitySliders.forEach(slider => {
+                    const valueSpan = slider.nextElementSibling;
+                    slider.addEventListener('input', function() {
+                        valueSpan.textContent = this.value + '%';
+                    });
+                });
+            });
             
             // Initialize Enhanced Extraction Settings
             async function initializeEnhancedExtractionSettings() {
@@ -11797,6 +12380,82 @@ ${getOptimizationTips(goal, extractionType)}`;
                 } catch (error) {
                     console.error('❌ Failed to initialize Enhanced Extraction Settings:', error);
                 }
+            }
+            
+            // New Consolidated Sidebar Functions
+            function processSelectedWithAI() {
+                const selectedItems = getSelectedQueueItems();
+                if (selectedItems.length === 0) {
+                    showNotification('Please select items to process', 'warning');
+                    return;
+                }
+                
+                // Open process modal with system selection
+                openProcessWithModal();
+            }
+            
+            function quickProcessSelected() {
+                const selectedItems = getSelectedQueueItems();
+                if (selectedItems.length === 0) {
+                    showNotification('Please select items to process', 'warning');
+                    return;
+                }
+                
+                // Process with auto-selected best settings
+                showNotification('Processing with auto-selected optimal settings...', 'info');
+                
+                // Use the system's auto-selection logic
+                selectedItems.forEach(item => {
+                    processQueueItem(item.id, 'auto');
+                });
+            }
+            
+            function openPipelineStudio() {
+                // Switch to Pipeline Studio tab
+                switchMode('pipeline');
+            }
+            
+            function clearCompleted() {
+                if (confirm('Clear all completed items from the queue?')) {
+                    // Clear completed items
+                    showNotification('Clearing completed items...', 'info');
+                    // TODO: Implement API call to clear completed
+                }
+            }
+            
+            function exportResults() {
+                showNotification('Exporting results...', 'info');
+                // TODO: Implement export functionality
+            }
+            
+            function viewLiveDetails() {
+                // Open detailed view of current processing
+                // TODO: Implement live details modal
+            }
+            
+            function pauseProcessing() {
+                // Pause current processing
+                // TODO: Implement pause functionality
+            }
+            
+            function skipToReview() {
+                // Skip current iteration and go to human review
+                // TODO: Implement skip functionality
+            }
+            
+            function updateActiveSystem() {
+                const system = document.getElementById('activeSystem').value;
+                extractionConfig.system = system;
+                showNotification(`System changed to ${system}`, 'info');
+            }
+            
+            // Update selected count
+            function updateSelectedCount() {
+                const selectedItems = document.querySelectorAll('.queue-item-checkbox:checked').length;
+                const totalItems = document.querySelectorAll('.queue-item-checkbox').length;
+                
+                document.getElementById('selectedCount').textContent = selectedItems;
+                document.getElementById('totalCount').textContent = totalItems;
             }
             
             // Enhanced Extraction Configuration State
@@ -12198,195 +12857,131 @@ ${getOptimizationTips(goal, extractionType)}`;
             let currentPromptGeneration = null;
             let editingPromptData = null;
             
-            // Open enhanced prompt engineering modal with versioning
+            // Open enhanced prompt engineering modal - shows all 3 models side by side
             function openPromptEngineeringModal(type = null, existingPrompt = null) {
                 const modal = document.getElementById('promptEngineeringModal');
                 if (modal) {
                     modal.remove(); // Remove existing modal
                 }
                 
-                editingPromptData = existingPrompt;
-                
-                // Create enhanced modal with versioning
+                // Create new streamlined modal showing all 3 prompts
                 const modalHtml = `
-                    <div id="promptEngineeringModal" class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
-                        <div class="modal-content" style="background: white; border-radius: 12px; max-width: 1400px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                            <div style="padding: 20px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
+                    <div id="promptEngineeringModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                        <div style="background: white; border-radius: 12px; width: 95%; max-width: 1600px; height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                            <!-- Header -->
+                            <div style="padding: 20px; border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h2 style="margin: 0; color: #1f2937; font-size: 20px;">✨ AI-Assisted Prompt Engineering</h2>
-                                    <div style="display: flex; gap: 10px; align-items: center;">
-                                        <button onclick="openPromptLibrary()" style="background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                                            📚 Browse Library
-                                        </button>
-                                        <button onclick="closePromptEngineeringModal()" style="background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕ Close</button>
+                                    <div>
+                                        <h2 style="margin: 0; color: #1f2937; font-size: 24px;">🎯 Multi-Model Prompt Configuration</h2>
+                                        <p style="margin: 5px 0 0 0; color: #6b7280;">Configure prompts for all three extraction models working together</p>
                                     </div>
+                                    <button onclick="closePromptEngineeringModal()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px;">✕ Close</button>
                                 </div>
-                                
-                                ${existingPrompt ? `
-                                    <div id="versionInfo" class="version-management" style="margin-top: 15px;">
-                                        <div class="current-version">
-                                            Editing: <span id="currentPromptName">${existingPrompt.name || existingPrompt.template_id}</span>
-                                            <span class="version-badge">v${existingPrompt.version || existingPrompt.prompt_version}</span>
-                                        </div>
-                                        <div class="version-options">
-                                            <label>
-                                                <input type="radio" name="versionStrategy" value="new" checked>
-                                                Create New Version (v${incrementVersion(existingPrompt.version || existingPrompt.prompt_version)})
-                                            </label>
-                                            <label>
-                                                <input type="radio" name="versionStrategy" value="branch">
-                                                Create Branch (${existingPrompt.name || existingPrompt.template_id} - Custom)
-                                            </label>
-                                        </div>
-                                    </div>
-                                ` : ''}
                             </div>
                             
-                            <div style="flex: 1; overflow: hidden; display: flex;">
-                                <!-- Left Panel: User Inputs -->
-                                <div style="width: 400px; padding: 20px; border-right: 1px solid #e5e7eb; overflow-y: auto;">
-                                    <h3 style="margin: 0 0 15px 0; color: #1f2937;">1. Prompt Configuration</h3>
+                            <!-- Main Content - 3 columns for 3 models -->
+                            <div style="flex: 1; display: flex; overflow: hidden;">
+                                <!-- Structure Model -->
+                                <div style="flex: 1; padding: 20px; border-right: 2px solid #e5e7eb; overflow-y: auto;">
+                                    <div style="background: #dbeafe; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h3 style="margin: 0; color: #1e40af;">📊 Structure Analysis</h3>
+                                        <p style="margin: 5px 0 0 0; font-size: 14px; color: #3730a3;">Identifies shelves, sections, and product positions</p>
+                                    </div>
                                     
                                     <div style="margin-bottom: 15px;">
-                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Prompt Type:</label>
-                                        <select id="promptTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
-                                            <option value="structure" ${type === 'structure' ? 'selected' : ''}>Structure Analysis</option>
-                                            <option value="products" ${type === 'products' ? 'selected' : ''}>Product Extraction</option>
-                                            <option value="details" ${type === 'details' ? 'selected' : ''}>Detail Enhancement</option>
+                                        <label style="font-weight: 600;">Model:</label>
+                                        <select id="model-structure" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                            <option value="claude">Claude 3.5</option>
+                                            <option value="gpt4">GPT-4</option>
+                                            <option value="gemini">Gemini</option>
                                         </select>
                                     </div>
                                     
                                     <div style="margin-bottom: 15px;">
-                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">
-                                            Fields to Extract:
-                                            <button onclick="manageFieldDefinitions()" style="float: right; padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer;">📝 Manage Definitions</button>
-                                        </label>
-                                        <div id="fieldCheckboxContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 180px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 10px; border-radius: 4px;">
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="product_name" checked> Product Name</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="brand" checked> Brand</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="price" checked> Price</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="position" checked> Position</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="facings" checked> Facings</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="stack" checked> Stack</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="color"> Color</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="promo_text"> Promo Text</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="package_size"> Package Size</label>
-                                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;"><input type="checkbox" name="field" value="confidence"> Confidence</label>
-                                        </div>
-                                        <div id="fieldDefinitionsPreview" style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 4px; border: 1px solid #e5e7eb; display: none;">
-                                            <h5 style="margin: 0 0 8px 0; font-size: 13px; color: #4b5563;">📖 Field Definitions:</h5>
-                                            <div id="definitionsList" style="font-size: 12px; color: #6b7280;"></div>
-                                        </div>
+                                        <label style="font-weight: 600;">Prompt:</label>
+                                        <textarea id="prompt-structure" rows="15" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace; font-size: 13px;">Analyze this shelf image and identify:
+1. Number of shelves (top to bottom)
+2. Products per shelf
+3. Section boundaries
+4. Overall layout structure
+
+Be precise with positions and counts.</textarea>
+                                    </div>
+                                </div>
+                                
+                                <!-- Products Model -->
+                                <div style="flex: 1; padding: 20px; border-right: 2px solid #e5e7eb; overflow-y: auto;">
+                                    <div style="background: #dcfce7; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h3 style="margin: 0; color: #166534;">📦 Product Extraction</h3>
+                                        <p style="margin: 5px 0 0 0; font-size: 14px; color: #14532d;">Extracts product names, brands, and basic info</p>
                                     </div>
                                     
                                     <div style="margin-bottom: 15px;">
-                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Base Prompt Context:</label>
-                                        <textarea id="basePromptContext" rows="4" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="Enter the base prompt template...">${existingPrompt?.prompt_content || existingPrompt?.content || 'Extract products from this retail shelf image.\\nFocus on accuracy and systematic extraction from left to right.\\nPay special attention to small products and edge cases.'}</textarea>
+                                        <label style="font-weight: 600;">Model:</label>
+                                        <select id="model-products" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                            <option value="gpt4">GPT-4</option>
+                                            <option value="claude">Claude 3.5</option>
+                                            <option value="gemini">Gemini</option>
+                                        </select>
                                     </div>
                                     
-                                    <div style="margin-bottom: 20px;">
-                                        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Special Instructions:</label>
-                                        <textarea id="specialInstructions" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" placeholder="E.g., This prompt is optimized for Tesco shelves with high product density..."></textarea>
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="font-weight: 600;">Prompt:</label>
+                                        <textarea id="prompt-products" rows="15" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace; font-size: 13px;">Extract product information:
+- Product name
+- Brand
+- Size/variant
+- Number of facings
+- Shelf position
+
+Use the structure provided by the previous model.</textarea>
                                     </div>
-                                    
-                                    <div style="margin-bottom: 20px;">
-                                        <details style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">
-                                            <summary style="cursor: pointer; font-weight: 600; color: #1f2937;">🧠 Advanced: View/Edit Meta-Prompt</summary>
-                                            <div style="margin-top: 10px;">
-                                                <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">This is the prompt sent to Claude to generate your optimized prompt. You can customize it:</p>
-                                                <textarea id="metaPromptEditor" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; min-height: 200px; font-family: monospace; font-size: 12px;" placeholder="Leave empty to use default meta-prompt"></textarea>
-                                                <button onclick="resetMetaPrompt()" style="margin-top: 8px; padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer;">Reset to Default</button>
-                                            </div>
-                                        </details>
-                                    </div>
-                                    
-                                    <button onclick="generateOptimizedPrompt()" class="btn-primary" style="width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
-                                        🤖 Generate Optimized Prompt
-                                    </button>
                                 </div>
                                 
-                                <!-- Right Panel: AI Results -->
-                                <div style="flex: 1; display: flex; flex-direction: column;">
-                                    <div id="aiThinking" style="display: none; flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                                        <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
-                                        <p style="color: #64748b; font-size: 16px;">AI is optimizing your prompt...</p>
+                                <!-- Details Model -->
+                                <div style="flex: 1; padding: 20px; overflow-y: auto;">
+                                    <div style="background: #fef3c7; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h3 style="margin: 0; color: #92400e;">💰 Price & Details</h3>
+                                        <p style="margin: 5px 0 0 0; font-size: 14px; color: #78350f;">Extracts prices, promotions, and fine details</p>
                                     </div>
                                     
-                                    <div id="aiResults" style="display: none; flex: 1; flex-direction: column;">
-                                        <!-- Tabs for different views -->
-                                        <div style="display: flex; border-bottom: 1px solid #e5e7eb; background: #f8fafc;">
-                                            <button class="result-tab-btn active" onclick="showResultTab('combined')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: 600;">Combined View</button>
-                                            <button class="result-tab-btn" onclick="showResultTab('prompt')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Prompt Only</button>
-                                            <button class="result-tab-btn" onclick="showResultTab('schema')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Pydantic Schema</button>
-                                            <button class="result-tab-btn" onclick="showResultTab('reasoning')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">AI Reasoning</button>
-                                            <button class="result-tab-btn" onclick="showResultTab('meta')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">Meta-Prompt</button>
-                                        </div>
-                                        
-                                        <!-- Combined View Tab -->
-                                        <div id="combinedTab" class="result-tab active" style="flex: 1; padding: 20px; overflow-y: auto;">
-                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">📋 Complete Instructor Configuration:</h4>
-                                            <pre id="finalConfigPreview" style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 11px; line-height: 1.4; overflow-x: auto; white-space: pre-wrap; border: 1px solid #e5e7eb;"></pre>
-                                            <div style="background: #eff6ff; padding: 12px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #3b82f6;">
-                                                <p style="margin: 0; font-size: 13px; color: #1e40af;">📋 This is exactly what will be stored and used by the Instructor library.</p>
-                                                <p style="margin: 5px 0 0 0; font-size: 13px; color: #1e40af;">🔧 The prompt template guides the AI model, while the Pydantic schema ensures structured output.</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Prompt Only Tab -->
-                                        <div id="promptTab" class="result-tab" style="display: none; flex: 1; padding: 20px; flex-direction: column;">
-                                            <h4 style="margin: 0 0 10px 0; color: #1f2937;">✏️ Optimized Prompt (Editable):</h4>
-                                            <textarea id="editablePrompt" style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-family: 'Monaco', monospace; font-size: 12px; resize: none;"></textarea>
-                                            <div style="display: flex; gap: 15px; margin-top: 10px; font-size: 12px; color: #64748b;">
-                                                <span>Estimated tokens: <span id="tokenCount">0</span></span>
-                                                <span>Complexity: <span id="complexityScore">Medium</span></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Pydantic Schema Tab -->
-                                        <div id="schemaTab" class="result-tab" style="display: none; flex: 1; padding: 20px; flex-direction: column;">
-                                            <h4 style="margin: 0 0 10px 0; color: #1f2937;">🏗️ Generated Pydantic Model:</h4>
-                                            <pre id="pydanticModelCode" style="flex: 1; background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 11px; overflow: auto; border: 1px solid #e5e7eb;"></pre>
-                                            <div style="margin-top: 10px;">
-                                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
-                                                    <input type="checkbox" id="includeValidation" checked> Include field validation
-                                                </label>
-                                                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 5px;">
-                                                    <input type="checkbox" id="includeExamples" checked> Include field examples
-                                                </label>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- AI Reasoning Tab -->
-                                        <div id="reasoningTab" class="result-tab" style="display: none; flex: 1; padding: 20px; overflow-y: auto;">
-                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">🧠 AI Optimization Reasoning:</h4>
-                                            <ul id="reasoningList" style="margin: 0 0 20px 0; padding-left: 20px; line-height: 1.6;"></ul>
-                                            <div>
-                                                <h5 style="margin: 0 0 10px 0; color: #1f2937;">🚀 Key Improvements:</h5>
-                                                <ul id="improvementsList" style="margin: 0; padding-left: 20px; line-height: 1.6;"></ul>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Meta-Prompt Tab -->
-                                        <div id="metaTab" class="result-tab" style="display: none; flex: 1; padding: 20px; overflow-y: auto;">
-                                            <h4 style="margin: 0 0 15px 0; color: #1f2937;">🔍 Meta-Prompt Used:</h4>
-                                            <p style="font-size: 12px; color: #64748b; margin-bottom: 10px;">This is the exact prompt that was sent to Claude to generate your optimized prompt:</p>
-                                            <pre id="metaPromptUsed" style="background: #f1f5f9; padding: 15px; border-radius: 6px; font-size: 12px; overflow: auto; border: 1px solid #e5e7eb; white-space: pre-wrap;"></pre>
-                                        </div>
-                                        
-                                        <!-- Actions -->
-                                        <div style="padding: 20px; border-top: 1px solid #e5e7eb; background: #f8fafc;">
-                                            <div style="display: flex; gap: 10px;">
-                                                <button onclick="saveOptimizedPrompt()" class="btn-primary" style="flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                                                    💾 Save to Database
-                                                </button>
-                                                <button onclick="regeneratePrompt()" class="btn-secondary" style="padding: 10px 15px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
-                                                    🔄 Regenerate
-                                                </button>
-                                                <button onclick="testPrompt()" class="btn-secondary" style="padding: 10px 15px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
-                                                    🧪 Test
-                                                </button>
-                                            </div>
-                                        </div>
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="font-weight: 600;">Model:</label>
+                                        <select id="model-details" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                            <option value="gemini">Gemini</option>
+                                            <option value="gpt4">GPT-4</option>
+                                            <option value="claude">Claude 3.5</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="font-weight: 600;">Prompt:</label>
+                                        <textarea id="prompt-details" rows="15" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace; font-size: 13px;">Focus on extracting:
+- Prices (look for price tags)
+- Promotions/discounts
+- Stock levels if visible
+- Any additional product details
+
+Enhance the data from previous models.</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Footer with Actions -->
+                            <div style="padding: 20px; border-top: 2px solid #e5e7eb; background: #f8fafc;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; gap: 10px;">
+                                        <button onclick="loadPromptFromLibrary()" style="background: #6366f1; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                                            📚 Load from Library
+                                        </button>
+                                        <button onclick="testPromptsOnSample()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                                            🧪 Test on Sample
+                                        </button>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button onclick="savePromptConfiguration()" style="background: #3b82f6; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                            💾 Save Configuration
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -12396,21 +12991,9 @@ ${getOptimizationTips(goal, extractionType)}`;
                 
                 document.body.insertAdjacentHTML('beforeend', modalHtml);
                 
-                // Pre-fill fields if editing existing prompt
-                if (existingPrompt && existingPrompt.metadata) {
-                    try {
-                        const metadata = typeof existingPrompt.metadata === 'string' 
-                            ? JSON.parse(existingPrompt.metadata) 
-                            : existingPrompt.metadata;
-                        
-                        if (metadata.fields) {
-                            document.querySelectorAll('input[name="field"]').forEach(cb => {
-                                cb.checked = metadata.fields.includes(cb.value);
-                            });
-                        }
-                    } catch (e) {
-                        console.warn('Could not parse prompt metadata:', e);
-                    }
+                // Load existing prompts if provided
+                if (existingPrompt) {
+                    // TODO: Load existing prompt data into the three models
                 }
             }
             
@@ -12420,8 +13003,40 @@ ${getOptimizationTips(goal, extractionType)}`;
                 if (modal) {
                     modal.remove();
                 }
-                editingPromptData = null;
-                currentPromptGeneration = null;
+            }
+            
+            // Save prompt configuration for all 3 models
+            async function savePromptConfiguration() {
+                const config = {
+                    structure: {
+                        model: document.getElementById('model-structure').value,
+                        prompt: document.getElementById('prompt-structure').value
+                    },
+                    products: {
+                        model: document.getElementById('model-products').value,
+                        prompt: document.getElementById('prompt-products').value
+                    },
+                    details: {
+                        model: document.getElementById('model-details').value,
+                        prompt: document.getElementById('prompt-details').value
+                    }
+                };
+                
+                // TODO: Save to database
+                showNotification('Prompt configuration saved!', 'success');
+                closePromptEngineeringModal();
+            }
+            
+            // Test prompts on a sample image
+            async function testPromptsOnSample() {
+                // TODO: Implement test functionality
+                showNotification('Test functionality coming soon!', 'info');
+            }
+            
+            // Load prompts from library
+            async function loadPromptFromLibrary() {
+                // TODO: Implement library loading
+                showNotification('Library functionality coming soon!', 'info');
             }
             
             // Generate optimized prompt using AI
@@ -12691,21 +13306,71 @@ Format the response as JSON with keys:
             // Load field definitions when modal opens
             async function loadFieldDefinitions() {
                 try {
-                    const response = await fetch('/field-definitions');
+                    const response = await fetch('/field-definitions/tree');
                     const data = await response.json();
                     
-                    if (data.definitions) {
-                        window.fieldDefinitions = data.definitions.reduce((acc, def) => {
-                            acc[def.field_name] = def;
-                            return acc;
-                        }, {});
+                    if (data.tree && data.tree.length > 0) {
+                        // Store tree and create flat lookup
+                        window.fieldTree = data.tree;
+                        window.fieldDefinitions = {};
                         
-                        // Update field checkboxes with tooltips
-                        updateFieldCheckboxes();
+                        // Flatten tree for quick lookup
+                        function flattenTree(nodes) {
+                            nodes.forEach(node => {
+                                window.fieldDefinitions[node.field_name] = node;
+                                if (node.children) flattenTree(node.children);
+                            });
+                        }
+                        flattenTree(data.tree);
+                        
+                        // Render field tree instead of simple checkboxes
+                        renderFieldSelectionTree();
                     }
                 } catch (error) {
                     console.error('Failed to load field definitions:', error);
                 }
+            }
+            
+            // Render field selection tree
+            function renderFieldSelectionTree() {
+                const container = document.getElementById('fieldCheckboxContainer');
+                if (!container || !window.fieldTree) return;
+                
+                container.innerHTML = `
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">
+                        Select fields to extract (organized by category):
+                    </div>
+                    ${renderFieldSelectionNodes(window.fieldTree)}
+                `;
+                
+                // Update preview when checkboxes change
+                container.addEventListener('change', updateFieldDefinitionsPreview);
+            }
+            
+            // Render field selection nodes recursively
+            function renderFieldSelectionNodes(nodes, level = 0) {
+                return nodes.map(node => `
+                    <div style="margin-left: ${level * 20}px; margin-bottom: 4px;">
+                        <label style="display: flex; align-items: start; gap: 6px; font-size: 12px; cursor: pointer; padding: 4px; border-radius: 4px;"
+                               onmouseover="this.style.backgroundColor='#e5e7eb'" 
+                               onmouseout="this.style.backgroundColor='transparent'">
+                            <input type="checkbox" name="field" value="${node.field_name}" 
+                                   ${['product_name', 'brand', 'price', 'position', 'facings'].includes(node.field_name) ? 'checked' : ''}
+                                   style="margin-top: 2px;">
+                            <div style="flex: 1;">
+                                <span style="font-weight: ${level === 0 ? '600' : '400'};">${node.display_name}</span>
+                                ${node.is_required ? '<span style="color: #ef4444;">*</span>' : ''}
+                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${node.definition}</div>
+                                ${node.examples ? `<div style="font-size: 10px; color: #9ca3af; font-style: italic;">e.g., ${node.examples}</div>` : ''}
+                            </div>
+                        </label>
+                        ${node.children && node.children.length > 0 ? 
+                            `<div style="margin-top: 4px;">
+                                ${renderFieldSelectionNodes(node.children, level + 1)}
+                            </div>` : ''
+                        }
+                    </div>
+                `).join('');
             }
             
             // Update field checkboxes with definition tooltips
@@ -12766,6 +13431,7 @@ Format the response as JSON with keys:
             // Manage field definitions modal
             function manageFieldDefinitions() {
                 const modal = document.createElement('div');
+                modal.id = 'fieldDefinitionsModal';
                 modal.style.cssText = `
                     position: fixed;
                     top: 0;
@@ -12780,24 +13446,39 @@ Format the response as JSON with keys:
                 `;
                 
                 modal.innerHTML = `
-                    <div style="background: white; border-radius: 8px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                        <h2 style="margin: 0 0 20px 0;">📝 Manage Field Definitions</h2>
-                        
-                        <div id="fieldDefinitionsList" style="margin-bottom: 20px;">
-                            <p style="color: #6b7280;">Loading field definitions...</p>
+                    <div style="background: white; border-radius: 8px; padding: 30px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">📝 Manage Field Definitions</h2>
+                            <div>
+                                <button onclick="toggleTreeView()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 8px;">
+                                    <span id="treeViewToggle">🌳 Tree View</span>
+                                </button>
+                                <button onclick="addFieldDefinition()" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                    ➕ Add New Field
+                                </button>
+                            </div>
                         </div>
                         
-                        <button onclick="addFieldDefinition()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
-                            ➕ Add New Field
-                        </button>
+                        <div id="fieldDefinitionsContainer">
+                            <div id="fieldDefinitionsList" style="margin-bottom: 20px;">
+                                <p style="color: #6b7280;">Loading field definitions...</p>
+                            </div>
+                            
+                            <div id="fieldDefinitionsTree" style="display: none; margin-bottom: 20px;">
+                                <p style="color: #6b7280;">Loading field tree...</p>
+                            </div>
+                        </div>
                         
-                        <button onclick="this.closest('.fixed').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            Close
-                        </button>
+                        <div style="display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                            <button onclick="document.getElementById('fieldDefinitionsModal').remove()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 `;
                 
                 document.body.appendChild(modal);
+                window.currentFieldView = 'list';
                 loadFieldDefinitionsList();
             }
             
@@ -12811,6 +13492,14 @@ Format the response as JSON with keys:
                     const data = await response.json();
                     
                     if (data.categories && data.categories.length > 0) {
+                        // Store field data for reference
+                        window.currentFieldsByCategory = {};
+                        window.allFieldDefinitions = [];
+                        data.categories.forEach(cat => {
+                            window.currentFieldsByCategory[cat.name] = cat.fields;
+                            window.allFieldDefinitions = window.allFieldDefinitions.concat(cat.fields);
+                        });
+                        
                         container.innerHTML = `
                             <div style="margin-bottom: 20px;">
                                 <button onclick="toggleAllCategories()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 10px;">
@@ -12994,28 +13683,58 @@ Format the response as JSON with keys:
                     const form = `
                         <div style="border: 1px solid #e5e7eb; padding: 20px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb;">
                             <h3 style="margin: 0 0 15px 0;">Edit Field Definition</h3>
-                            <div style="margin-bottom: 10px;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Field Name:</label>
-                                <input type="text" value="${def.field_name}" disabled style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px;">Field Name:</label>
+                                    <input type="text" id="editFieldName" value="${def.field_name}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px;">Display Name:</label>
+                                    <input type="text" id="editDisplayName" value="${def.display_name}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                </div>
                             </div>
-                            <div style="margin-bottom: 10px;">
-                                <label style="display: block; font-weight: 600; margin-bottom: 4px;">Display Name:</label>
-                                <input type="text" id="editDisplayName" value="${def.display_name}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
-                            </div>
-                            <div style="margin-bottom: 10px;">
+                            <div style="margin-top: 10px;">
                                 <label style="display: block; font-weight: 600; margin-bottom: 4px;">Definition:</label>
                                 <textarea id="editDefinition" rows="3" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">${def.definition}</textarea>
                             </div>
-                            <div style="margin-bottom: 15px;">
+                            <div style="margin-top: 10px;">
                                 <label style="display: block; font-weight: 600; margin-bottom: 4px;">Examples (optional):</label>
                                 <textarea id="editExamples" rows="2" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">${def.examples || ''}</textarea>
                             </div>
-                            <button onclick="saveEditedFieldDefinition('${def.field_name}')" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
-                                Save Changes
-                            </button>
-                            <button onclick="loadFieldDefinitionsList()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                Cancel
-                            </button>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px;">
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px;">Category:</label>
+                                    <select id="editCategory" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                        <option value="Product Info" ${def.category === 'Product Info' ? 'selected' : ''}>Product Info</option>
+                                        <option value="Shelf Layout" ${def.category === 'Shelf Layout' ? 'selected' : ''}>Shelf Layout</option>
+                                        <option value="Pricing" ${def.category === 'Pricing' ? 'selected' : ''}>Pricing</option>
+                                        <option value="Inventory" ${def.category === 'Inventory' ? 'selected' : ''}>Inventory</option>
+                                        <option value="Other" ${(!def.category || def.category === 'Other') ? 'selected' : ''}>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px;">Sort Order:</label>
+                                    <input type="number" id="editSortOrder" value="${def.sort_order || 99}" min="1" max="999" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px;">Parent Field:</label>
+                                    <select id="editParentField" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                                        <option value="">None (Top Level)</option>
+                                        ${window.allFieldDefinitions ? window.allFieldDefinitions
+                                            .filter(f => f.field_name !== def.field_name)
+                                            .map(f => `<option value="${f.field_name}" ${def.parent_field === f.field_name ? 'selected' : ''}>${f.display_name}</option>`)
+                                            .join('') : ''}
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <button onclick="saveEditedFieldDefinition('${def.field_name}')" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                                    Save Changes
+                                </button>
+                                <button onclick="loadFieldDefinitionsList()" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     `;
                     
@@ -13031,11 +13750,15 @@ Format the response as JSON with keys:
             
             // Save edited field definition
             async function saveEditedFieldDefinition(fieldName) {
+                const newFieldName = document.getElementById('editFieldName').value.trim();
                 const displayName = document.getElementById('editDisplayName').value.trim();
                 const definition = document.getElementById('editDefinition').value.trim();
                 const examples = document.getElementById('editExamples').value.trim();
+                const category = document.getElementById('editCategory').value;
+                const sortOrder = parseInt(document.getElementById('editSortOrder').value) || 99;
+                const parentField = document.getElementById('editParentField').value || null;
                 
-                if (!displayName || !definition) {
+                if (!newFieldName || !displayName || !definition) {
                     showNotification('Please fill in all required fields', 'error');
                     return;
                 }
@@ -13045,10 +13768,13 @@ Format the response as JSON with keys:
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            field_name: fieldName,
+                            field_name: newFieldName,
                             display_name: displayName,
                             definition: definition,
-                            examples: examples || null
+                            examples: examples || null,
+                            category: category,
+                            sort_order: sortOrder,
+                            parent_field: parentField
                         })
                     });
                     
@@ -13128,14 +13854,57 @@ Format the response as JSON with keys:
             
             // Move field up in sort order
             async function moveFieldUp(fieldName, categoryName, currentIndex) {
-                // TODO: Implement API call to update sort_order
-                showNotification('Reordering functionality coming soon!', 'info');
+                const fieldsInCategory = window.currentFieldsByCategory[categoryName];
+                if (!fieldsInCategory || currentIndex === 0) return;
+                
+                // Swap sort orders with previous field
+                const currentField = fieldsInCategory[currentIndex];
+                const prevField = fieldsInCategory[currentIndex - 1];
+                
+                const updates = [
+                    { field_name: currentField.field_name, sort_order: prevField.sort_order || currentIndex - 1 },
+                    { field_name: prevField.field_name, sort_order: currentField.sort_order || currentIndex }
+                ];
+                
+                await updateFieldOrders(updates);
             }
             
             // Move field down in sort order
             async function moveFieldDown(fieldName, categoryName, currentIndex) {
-                // TODO: Implement API call to update sort_order
-                showNotification('Reordering functionality coming soon!', 'info');
+                const fieldsInCategory = window.currentFieldsByCategory[categoryName];
+                if (!fieldsInCategory || currentIndex >= fieldsInCategory.length - 1) return;
+                
+                // Swap sort orders with next field
+                const currentField = fieldsInCategory[currentIndex];
+                const nextField = fieldsInCategory[currentIndex + 1];
+                
+                const updates = [
+                    { field_name: currentField.field_name, sort_order: nextField.sort_order || currentIndex + 1 },
+                    { field_name: nextField.field_name, sort_order: currentField.sort_order || currentIndex }
+                ];
+                
+                await updateFieldOrders(updates);
+            }
+            
+            // Update field orders
+            async function updateFieldOrders(updates) {
+                try {
+                    const response = await fetch('/field-definitions/reorder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates })
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('Field order updated', 'success');
+                        loadFieldDefinitionsList();
+                    } else {
+                        showNotification('Failed to update field order', 'error');
+                    }
+                } catch (error) {
+                    showNotification('Error updating field order', 'error');
+                    console.error('Failed to update field order:', error);
+                }
             }
             
             // Add field to specific category
@@ -13154,6 +13923,437 @@ Format the response as JSON with keys:
             // Show reorder interface
             function showReorderInterface() {
                 showNotification('Drag-and-drop reordering coming soon!', 'info');
+            }
+            
+            // Toggle between list and tree view
+            function toggleTreeView() {
+                const listView = document.getElementById('fieldDefinitionsList');
+                const treeView = document.getElementById('fieldDefinitionsTree');
+                const toggle = document.getElementById('treeViewToggle');
+                
+                if (window.currentFieldView === 'list') {
+                    listView.style.display = 'none';
+                    treeView.style.display = 'block';
+                    toggle.textContent = '📋 List View';
+                    window.currentFieldView = 'tree';
+                    loadFieldDefinitionsTree();
+                } else {
+                    listView.style.display = 'block';
+                    treeView.style.display = 'none';
+                    toggle.textContent = '🌳 Tree View';
+                    window.currentFieldView = 'list';
+                    loadFieldDefinitionsList();
+                }
+            }
+            
+            // Load field definitions as tree
+            async function loadFieldDefinitionsTree() {
+                const container = document.getElementById('fieldDefinitionsTree');
+                if (!container) return;
+                
+                try {
+                    const response = await fetch('/field-definitions/tree');
+                    const data = await response.json();
+                    
+                    if (data.tree && data.tree.length > 0) {
+                        container.innerHTML = `
+                            <div style="font-size: 13px; color: #6b7280; margin-bottom: 10px;">
+                                🌳 Nested field structure - Drag fields to reorder or nest them under other fields
+                                <div style="font-size: 11px; margin-top: 4px;">
+                                    • Drag fields up/down to reorder
+                                    • Drag to the right to nest under another field
+                                    • Click field to edit details
+                                </div>
+                            </div>
+                            <div id="fieldTreeContainer">
+                                ${renderFieldTree(data.tree)}
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = '<p style="color: #6b7280;">No field definitions found.</p>';
+                    }
+                } catch (error) {
+                    container.innerHTML = '<p style="color: #ef4444;">Failed to load field tree.</p>';
+                    console.error('Failed to load field tree:', error);
+                }
+            }
+            
+            // Render field tree recursively with drag and drop support
+            function renderFieldTree(nodes, level = 0, parentField = null) {
+                return nodes.map((node, index) => `
+                    <div class="field-tree-node" 
+                         data-field-name="${node.field_name}"
+                         data-parent-field="${parentField || ''}"
+                         data-sort-order="${node.sort_order || index}"
+                         draggable="true"
+                         ondragstart="handleDragStart(event)"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleDrop(event)"
+                         ondragend="handleDragEnd(event)"
+                         style="margin-left: ${level * 20}px; margin-bottom: 8px;">
+                        <div class="field-tree-item" style="display: flex; align-items: center; padding: 8px; background: ${level === 0 ? '#f8fafc' : 'white'}; border: 1px solid #e5e7eb; border-radius: 6px; cursor: move; transition: all 0.2s;"
+                             onclick="editFieldDefinition('${node.field_name}')"
+                             onmouseover="this.style.backgroundColor='#f0f9ff'" 
+                             onmouseout="this.style.backgroundColor='${level === 0 ? '#f8fafc' : 'white'}'">
+                            <span style="margin-right: 8px; cursor: grab; color: #9ca3af;" onclick="event.stopPropagation();">⋮⋮</span>
+                            ${node.children && node.children.length > 0 ? 
+                                `<span style="margin-right: 8px; cursor: pointer;" onclick="event.stopPropagation(); toggleTreeNode('${node.field_name}')">
+                                    <span id="tree-arrow-${node.field_name}">▼</span>
+                                </span>` : 
+                                '<span style="margin-right: 8px; width: 16px; display: inline-block;"></span>'
+                            }
+                            <div style="flex: 1;">
+                                <strong>${node.display_name}</strong>
+                                <span style="font-size: 11px; color: #6b7280; margin-left: 8px;">(${node.field_name})</span>
+                                ${node.is_required ? '<span style="color: #ef4444; margin-left: 4px;">*</span>' : ''}
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">${node.definition}</div>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="event.stopPropagation(); editFieldDefinition('${node.field_name}')" 
+                                        style="padding: 4px 8px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                                    ✏️
+                                </button>
+                                <button onclick="event.stopPropagation(); deleteFieldDefinition('${node.field_name}')" 
+                                        style="padding: 4px 8px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                                    🗑
+                                </button>
+                            </div>
+                        </div>
+                        ${node.children && node.children.length > 0 ? 
+                            `<div id="tree-children-${node.field_name}" class="field-tree-children" style="display: block;">
+                                ${renderFieldTree(node.children, level + 1, node.field_name)}
+                            </div>` : 
+                            `<div id="tree-children-${node.field_name}" class="field-tree-children" style="display: none;"></div>`
+                        }
+                    </div>
+                `).join('');
+            }
+            
+            // Toggle tree node expand/collapse
+            function toggleTreeNode(fieldName) {
+                const children = document.getElementById(`tree-children-${fieldName}`);
+                const arrow = document.getElementById(`tree-arrow-${fieldName}`);
+                
+                if (children.style.display === 'none') {
+                    children.style.display = 'block';
+                    arrow.textContent = '▼';
+                } else {
+                    children.style.display = 'none';
+                    arrow.textContent = '▶';
+                }
+            }
+            
+            // Drag and Drop handlers
+            let draggedElement = null;
+            let dropIndicator = null;
+            
+            function handleDragStart(e) {
+                draggedElement = e.currentTarget;
+                e.currentTarget.style.opacity = '0.5';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+                
+                // Create drop indicator
+                dropIndicator = document.createElement('div');
+                dropIndicator.style.cssText = 'height: 2px; background: #3b82f6; margin: 4px 0; display: none; border-radius: 1px;';
+                dropIndicator.id = 'drop-indicator';
+            }
+            
+            function handleDragOver(e) {
+                if (e.preventDefault) {
+                    e.preventDefault();
+                }
+                e.dataTransfer.dropEffect = 'move';
+                
+                const targetNode = e.currentTarget;
+                if (targetNode === draggedElement) return;
+                
+                // Show drop indicator
+                const rect = targetNode.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                // Remove existing indicator
+                const existingIndicator = document.getElementById('drop-indicator');
+                if (existingIndicator) existingIndicator.remove();
+                
+                if (e.clientY < midpoint) {
+                    // Insert before
+                    targetNode.parentNode.insertBefore(dropIndicator, targetNode);
+                } else {
+                    // Insert after or as child
+                    const childrenContainer = targetNode.querySelector('.field-tree-children');
+                    if (childrenContainer && e.clientX > rect.left + 40) {
+                        // Drop as child (if indented enough)
+                        childrenContainer.style.display = 'block';
+                        dropIndicator.style.marginLeft = '20px';
+                        childrenContainer.insertBefore(dropIndicator, childrenContainer.firstChild);
+                    } else {
+                        // Drop after
+                        targetNode.parentNode.insertBefore(dropIndicator, targetNode.nextSibling);
+                    }
+                }
+                dropIndicator.style.display = 'block';
+                
+                return false;
+            }
+            
+            function handleDragLeave(e) {
+                // Only hide indicator if leaving the entire tree area
+                if (!e.relatedTarget || !e.relatedTarget.closest('.field-tree-node')) {
+                    const indicator = document.getElementById('drop-indicator');
+                    if (indicator) indicator.style.display = 'none';
+                }
+            }
+            
+            function handleDrop(e) {
+                if (e.stopPropagation) {
+                    e.stopPropagation();
+                }
+                
+                if (draggedElement !== e.currentTarget) {
+                    const targetNode = e.currentTarget;
+                    const draggedFieldName = draggedElement.getAttribute('data-field-name');
+                    const targetFieldName = targetNode.getAttribute('data-field-name');
+                    
+                    // Determine drop position
+                    const rect = targetNode.getBoundingClientRect();
+                    const midpoint = rect.top + rect.height / 2;
+                    
+                    let newParentField = null;
+                    let position = 'after';
+                    
+                    if (e.clientY < midpoint) {
+                        // Drop before target
+                        position = 'before';
+                        newParentField = targetNode.getAttribute('data-parent-field');
+                    } else {
+                        // Check if dropping as child
+                        const childrenContainer = targetNode.querySelector('.field-tree-children');
+                        if (childrenContainer && e.clientX > rect.left + 40) {
+                            // Drop as child of target
+                            newParentField = targetFieldName;
+                            position = 'child';
+                        } else {
+                            // Drop after target
+                            newParentField = targetNode.getAttribute('data-parent-field');
+                        }
+                    }
+                    
+                    // Save the new structure
+                    updateFieldHierarchy(draggedFieldName, newParentField, targetFieldName, position);
+                }
+                
+                return false;
+            }
+            
+            function handleDragEnd(e) {
+                e.currentTarget.style.opacity = '';
+                draggedElement = null;
+                
+                // Remove drop indicator
+                const indicator = document.getElementById('drop-indicator');
+                if (indicator) indicator.remove();
+            }
+            
+            // Update field hierarchy in database
+            async function updateFieldHierarchy(fieldName, newParentField, targetField, position) {
+                try {
+                    // First update the parent field using PATCH for partial update
+                    const updateData = {
+                        parent_field: newParentField || null
+                    };
+                    
+                    const response = await fetch(`/field-definitions/${fieldName}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                    });
+                    
+                    if (response.ok) {
+                        // Then reorder fields if needed
+                        await reorderFieldsAfterDrop(fieldName, targetField, position, newParentField);
+                        
+                        showNotification('Field hierarchy updated', 'success');
+                        loadFieldDefinitionsTree(); // Reload tree
+                        loadFieldDefinitions(); // Reload for the main form
+                    } else {
+                        showNotification('Failed to update field hierarchy', 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to update field hierarchy:', error);
+                    showNotification('Error updating field hierarchy', 'error');
+                }
+            }
+            
+            // Reorder fields after drop
+            async function reorderFieldsAfterDrop(movedField, targetField, position, parentField) {
+                try {
+                    // Get all fields with the same parent
+                    const response = await fetch('/field-definitions?organized=false');
+                    const data = await response.json();
+                    
+                    // Filter fields by parent
+                    const siblingFields = data.definitions.filter(f => 
+                        (f.parent_field || null) === (parentField || null)
+                    ).sort((a, b) => (a.sort_order || 999) - (b.sort_order || 999));
+                    
+                    // Remove moved field from list
+                    const filteredFields = siblingFields.filter(f => f.field_name !== movedField);
+                    
+                    // Find target index
+                    let targetIndex = filteredFields.findIndex(f => f.field_name === targetField);
+                    
+                    if (position === 'before') {
+                        // Insert before target
+                    } else if (position === 'after') {
+                        targetIndex += 1;
+                    } else if (position === 'child') {
+                        // Already handled by parent update
+                        return;
+                    }
+                    
+                    // Insert moved field at new position
+                    const movedFieldData = data.definitions.find(f => f.field_name === movedField);
+                    filteredFields.splice(targetIndex, 0, movedFieldData);
+                    
+                    // Update sort orders
+                    const updates = filteredFields.map((field, index) => ({
+                        field_name: field.field_name,
+                        sort_order: index + 1
+                    }));
+                    
+                    // Send reorder request
+                    await fetch('/field-definitions/reorder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates })
+                    });
+                } catch (error) {
+                    console.error('Failed to reorder fields:', error);
+                }
+            }
+            
+            // ========== Image Quality Analysis Functions ==========
+            
+            // Analyze image quality for current item
+            async function analyzeImageQuality(itemId) {
+                itemId = itemId || selectedItemId;
+                if (!itemId) return;
+                
+                const item = queueData.find(i => i.id === itemId);
+                if (!item) return;
+                
+                showNotification('Analyzing image quality...', 'info');
+                
+                try {
+                    // Get image URL from item
+                    const imageUrl = item.uploads?.image_url || item.image_url;
+                    if (!imageUrl) {
+                        showNotification('No image URL found', 'error');
+                        return;
+                    }
+                    
+                    // Fetch image and analyze
+                    const imageBlob = await fetch(imageUrl).then(r => r.blob());
+                    const formData = new FormData();
+                    formData.append('file', imageBlob, 'image.jpg');
+                    
+                    const response = await fetch('/api/image/analyze-quality', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const analysis = await response.json();
+                        
+                        // Store analysis in item data
+                        item.image_quality_analysis = analysis;
+                        
+                        // Display results
+                        displayImageQualityInfo(analysis);
+                        
+                        // Update recommendations based on quality
+                        updateSmartRecommendations(item, analysis);
+                        
+                        showNotification('Image analysis complete', 'success');
+                    } else {
+                        showNotification('Failed to analyze image', 'error');
+                    }
+                } catch (error) {
+                    console.error('Image analysis error:', error);
+                    showNotification('Error analyzing image', 'error');
+                }
+            }
+            
+            // Display image quality information
+            function displayImageQualityInfo(analysis) {
+                const qualityIndicators = document.getElementById('imageQualityIndicators');
+                const qualityMetrics = document.getElementById('qualityMetrics');
+                const qualityIssues = document.getElementById('qualityIssues');
+                const recImageQuality = document.getElementById('recImageQuality');
+                
+                if (!analysis || !qualityIndicators) return;
+                
+                // Show quality score
+                const overallQuality = analysis.quality_metrics.overall_quality;
+                const qualityColor = overallQuality >= 70 ? '#10b981' : overallQuality >= 40 ? '#f59e0b' : '#ef4444';
+                recImageQuality.innerHTML = `<span style="color: ${qualityColor}">${overallQuality.toFixed(0)}%</span>`;
+                
+                // Display metrics
+                qualityMetrics.innerHTML = `
+                    <div><span style="color: #6b7280;">Brightness:</span> ${analysis.quality_metrics.brightness.toFixed(0)}%</div>
+                    <div><span style="color: #6b7280;">Sharpness:</span> ${analysis.quality_metrics.sharpness.toFixed(0)}%</div>
+                    <div><span style="color: #6b7280;">Contrast:</span> ${analysis.quality_metrics.contrast.toFixed(0)}%</div>
+                    <div><span style="color: #6b7280;">Noise:</span> ${analysis.quality_metrics.noise_level.toFixed(0)}%</div>
+                `;
+                
+                // Display issues
+                const issues = analysis.detected_issues;
+                const issuesList = [];
+                if (issues.is_dark) issuesList.push('🌑 Dark');
+                if (issues.is_blurry) issuesList.push('😵‍💫 Blurry');
+                if (issues.is_cluttered) issuesList.push('🗂️ Cluttered');
+                if (issues.is_overexposed) issuesList.push('☀️ Overexposed');
+                if (issues.has_reflections) issuesList.push('✨ Reflections');
+                if (issues.has_shadows) issuesList.push('🌚 Shadows');
+                
+                if (issuesList.length > 0) {
+                    qualityIssues.innerHTML = `<strong>Issues:</strong> ${issuesList.join(', ')}`;
+                } else {
+                    qualityIssues.innerHTML = '<span style="color: #10b981;">✅ No major issues detected</span>';
+                }
+                
+                qualityIndicators.style.display = 'block';
+            }
+            
+            // Update smart recommendations based on image quality
+            function updateSmartRecommendations(item, analysis) {
+                if (!analysis || !analysis.recommendations) return;
+                
+                const autoSelectChoices = document.getElementById('autoSelectChoices');
+                const rec = analysis.recommendations;
+                
+                // Update system recommendation
+                let choicesHTML = `
+                    <div style="margin-bottom: 10px;">
+                        <strong>Recommended System:</strong> ${rec.system}
+                        <span style="font-size: 11px; color: #6b7280;">(${(rec.confidence * 100).toFixed(0)}% confidence)</span>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <strong>Recommended Models:</strong>
+                        <ul style="margin: 5px 0 0 20px; font-size: 12px;">
+                            <li>Structure: ${rec.models.structure}</li>
+                            <li>Products: ${rec.models.products}</li>
+                            <li>Details: ${rec.models.details}</li>
+                        </ul>
+                    </div>
+                    <div style="font-size: 11px; color: #6b7280; background: #f8fafc; padding: 8px; border-radius: 4px;">
+                        <strong>Reasoning:</strong> ${rec.reasoning}
+                    </div>
+                `;
+                
+                autoSelectChoices.innerHTML = choicesHTML;
             }
             
             // ========== Prompt Library Functions ==========
@@ -13979,20 +15179,6 @@ Format the response as JSON with keys:
     </html>
     """
 
-@app.get("/react", response_class=HTMLResponse)
-async def react_dashboard():
-    """React dashboard - UI separated version"""
-    try:
-        with open("new_dashboard_ui_separated.html", "r") as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback to 6AM version if new one doesn't exist
-        try:
-            with open("new_dashboard_6am.html", "r") as f:
-                return f.read()
-        except FileNotFoundError:
-            return "Dashboard file not found. Please check new_dashboard_ui_separated.html exists."
-
 @app.get("/test", response_class=HTMLResponse)
 async def test_page():
     """Simple test page"""
@@ -14030,7 +15216,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8130,
+        port=8000,
         reload=True,
         log_level="info"
     )

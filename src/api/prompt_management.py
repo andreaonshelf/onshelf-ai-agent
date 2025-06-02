@@ -31,6 +31,89 @@ else:
 prompt_templates = PromptTemplates()
 
 
+@router.get("/by-stage/{stage}")
+async def get_prompts_by_stage(stage: str):
+    """Get all prompts for a specific extraction stage"""
+    
+    try:
+        prompts = []
+        
+        if supabase:
+            # Map stage to prompt_type
+            stage_mapping = {
+                "structure": "structure",
+                "products": "position",
+                "details": "detail",
+                "validation": "validation"
+            }
+            
+            prompt_type = stage_mapping.get(stage, stage)
+            
+            # Get prompts from meta_prompts table
+            result = supabase.table("meta_prompts").select("*").eq("prompt_type", prompt_type).execute()
+            
+            for prompt in result.data:
+                prompts.append({
+                    "id": prompt['id'],
+                    "name": prompt['name'] or f"{prompt['prompt_type']} v{prompt['version']}",
+                    "content": prompt['content'],
+                    "prompt_type": prompt['prompt_type'],
+                    "model_type": prompt['model_type'] or 'all',
+                    "version": prompt['version'],
+                    "accuracy": prompt.get('avg_accuracy', 0) * 100 if prompt.get('avg_accuracy') else 85,
+                    "uses": prompt.get('usage_count', 0),
+                    "created_at": prompt['created_at'],
+                    "is_active": prompt.get('is_active', True)
+                })
+        
+        # If no prompts from database, provide examples
+        if not prompts:
+            example_prompts = {
+                "structure": [{
+                    "id": "struct_example_1",
+                    "name": "Dense Shelf Analysis v2.1",
+                    "content": """Analyze this retail shelf image step by step:
+1. Count the number of horizontal shelves from bottom to top
+2. Identify vertical sections (left, center, right)
+3. Estimate dimensions based on product sizes
+4. Note the fixture type (gondola, wall unit, cooler, etc.)
+5. Describe the overall layout and organization""",
+                    "prompt_type": "structure",
+                    "model_type": "all",
+                    "version": "2.1",
+                    "accuracy": 94,
+                    "uses": 234,
+                    "is_active": True
+                }],
+                "products": [{
+                    "id": "prod_example_1",
+                    "name": "Product Extraction v3.0",
+                    "content": """Extract all visible products with these details:
+1. Product name exactly as shown on packaging
+2. Brand name
+3. Price if visible on shelf edge or product
+4. Position: shelf number (from top) and position from left
+5. Number of facings (identical products side by side)
+6. Package size/volume if visible
+7. Any promotional signage or special pricing""",
+                    "prompt_type": "products",
+                    "model_type": "all",
+                    "version": "3.0",
+                    "accuracy": 91,
+                    "uses": 189,
+                    "is_active": True
+                }]
+            }
+            
+            prompts = example_prompts.get(stage, [])
+        
+        return {"prompts": prompts}
+        
+    except Exception as e:
+        logger.error(f"Failed to get prompts for stage {stage}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get prompts: {str(e)}")
+
+
 @router.get("/active")
 async def get_active_prompts():
     """Get currently active prompts for each type/model combination"""

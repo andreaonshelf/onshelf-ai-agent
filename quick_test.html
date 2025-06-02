@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Interface Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Click to open each interface:</h1>
+    
+    <button onclick="window.open('http://localhost:8000#extractions')">Extractions</button>
+    <button onclick="window.open('http://localhost:8000#pipeline')">Pipeline Studio</button>
+    <button onclick="window.open('http://localhost:8000#prompts')">Prompt Lab</button>
+    <button onclick="window.open('http://localhost:8000#analytics')">Analytics</button>
+    <button onclick="window.open('http://localhost:8000#settings')">Settings</button>
+    
+    <h2>What you should see:</h2>
+    <ul>
+        <li><b>Extractions:</b> Two panels side by side (Queue List + Results)</li>
+        <li><b>Pipeline Studio:</b> System selection cards (Custom Consensus, LangGraph, Hybrid)</li>
+        <li><b>Prompt Lab:</b> Three columns for different agents</li>
+        <li><b>Analytics:</b> Dashboard with metrics cards</li>
+        <li><b>Settings:</b> Configuration forms with tabs</li>
+    </ul>
+</body>
+</html>

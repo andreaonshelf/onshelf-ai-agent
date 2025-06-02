@@ -32,8 +32,9 @@ from .prompts import PromptTemplates
 class ModularExtractionEngine:
     """Extraction system with sequential, modular steps that build on each other"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, temperature: float = 0.1):
         self.config = config
+        self.temperature = temperature
         self._initialize_ai_clients()
         self.prompt_templates = PromptTemplates()
         self.step_history = []
@@ -46,7 +47,8 @@ class ModularExtractionEngine:
         logger.info(
             "Modular Extraction Engine initialized",
             component="extraction_engine",
-            models_configured=len(self.config.models)
+            models_configured=len(self.config.models),
+            temperature=temperature
         )
     
     def _initialize_ai_clients(self):
@@ -59,7 +61,14 @@ class ModularExtractionEngine:
                 anthropic.Anthropic(api_key=self.config.anthropic_api_key)
             )
             genai.configure(api_key=self.config.google_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Configure generation with temperature
+            generation_config = genai.types.GenerationConfig(
+                temperature=self.temperature,
+                top_p=1,
+                top_k=1,
+                max_output_tokens=8000,
+            )
+            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp', generation_config=generation_config)
             
             logger.info(
                 "AI clients initialized successfully",
@@ -420,6 +429,54 @@ class ModularExtractionEngine:
         # Execute with automatic model fallback for robustness
         return await self._execute_with_fallback(step.model, prompt, inputs["images"], step.output_schema, agent_id)
     
+    def _get_api_model_name(self, model_id: str) -> tuple[str, str]:
+        """Map frontend model ID to actual API model name and provider"""
+        model_mapping = {
+            # OpenAI models
+            "gpt-4.1": ("openai", "gpt-4o-2024-11-20"),  # Latest GPT-4
+            "gpt-4.1-mini": ("openai", "gpt-4o-mini"),
+            "gpt-4.1-nano": ("openai", "gpt-4o-mini"),   # Using mini as fallback
+            "gpt-4o": ("openai", "gpt-4o-2024-11-20"),
+            "gpt-4o-mini": ("openai", "gpt-4o-mini"),
+            "o3": ("openai", "gpt-4o-2024-11-20"),       # Using GPT-4o as fallback
+            "o4-mini": ("openai", "gpt-4o-mini"),
+            
+            # Anthropic models
+            "claude-3-5-sonnet-v2": ("anthropic", "claude-3-5-sonnet-20241022"),
+            "claude-3-7-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),  # Using 3.5 as fallback
+            "claude-4-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),    # Using 3.5 as fallback
+            "claude-4-opus": ("anthropic", "claude-3-5-sonnet-20241022"),      # Using 3.5 as fallback
+            
+            # Google models
+            "gemini-2.5-flash": ("google", "gemini-2.0-flash-exp"),
+            "gemini-2.5-flash-thinking": ("google", "gemini-2.0-flash-exp"),
+            "gemini-2.5-pro": ("google", "gemini-2.0-pro-exp"),
+        }
+        
+        return model_mapping.get(model_id, ("openai", "gpt-4o-2024-11-20"))
+    
+    async def execute_with_model_id(self, model_id: str, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with specific frontend model ID"""
+        provider, api_model = self._get_api_model_name(model_id)
+        
+        logger.info(
+            f"Executing with model {model_id} -> {api_model} ({provider})",
+            component="extraction_engine",
+            model_id=model_id,
+            api_model=api_model,
+            provider=provider
+        )
+        
+        if provider == "openai":
+            return await self._execute_with_gpt4o_model(prompt, images, output_schema, api_model, agent_id)
+        elif provider == "anthropic":
+            return await self._execute_with_claude_model(prompt, images, output_schema, api_model, agent_id)
+        elif provider == "google":
+            return await self._execute_with_gemini_model(prompt, images, output_schema, api_model, agent_id)
+        else:
+            # Fallback to GPT-4o
+            return await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
+    
     async def _execute_with_fallback(self, primary_model: AIModelType, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute step with automatic model fallback for maximum reliability"""
         
@@ -502,6 +559,43 @@ class ModularExtractionEngine:
         )
         raise Exception(f"All AI models failed. Last error: {last_error}")
     
+    async def _log_model_usage(self, model_id: str, model_provider: str, prompt_length: int, completion_length: int, duration: float, cost: float, stage: str, agent_id: str = None):
+        """Log model usage to analytics"""
+        try:
+            # Only log if we have queue item context
+            if hasattr(self, 'queue_item_id') and hasattr(self, 'extraction_run_id'):
+                from ..utils.model_usage_tracker import get_model_usage_tracker
+                tracker = get_model_usage_tracker()
+                
+                # Estimate tokens (rough approximation)
+                prompt_tokens = prompt_length // 4  # ~4 chars per token
+                completion_tokens = completion_length // 4  # Based on max_tokens
+                
+                # Extract iteration number from agent_id
+                iteration_number = 1
+                if agent_id and '_' in agent_id:
+                    try:
+                        iteration_number = int(agent_id.split('_')[-1])
+                    except:
+                        pass
+                
+                await tracker.log_model_usage(
+                    queue_item_id=self.queue_item_id,
+                    extraction_run_id=self.extraction_run_id,
+                    stage=stage,
+                    model_id=model_id,
+                    model_provider=model_provider,
+                    iteration_number=iteration_number,
+                    temperature=self.temperature,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    response_time_ms=int(duration * 1000),
+                    api_cost=cost,
+                    success=True
+                )
+        except Exception as e:
+            logger.error(f"Failed to log model usage: {e}", component="extraction_engine")
+    
     def _compress_image_for_model(self, img_data: bytes, model_type: str, img_name: str = "image") -> bytes:
         """Compress image only if needed for specific model limits"""
         MODEL_LIMITS = {
@@ -542,8 +636,32 @@ class ModularExtractionEngine:
         
         return output.getvalue()
     
+    async def _execute_with_claude_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with specific Claude model"""
+        return await self._execute_with_claude_internal(prompt, images, output_schema, api_model, agent_id)
+    
+    async def _execute_with_gpt4o_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with specific GPT-4 model"""
+        return await self._execute_with_gpt4o_internal(prompt, images, output_schema, api_model, agent_id)
+    
+    async def _execute_with_gemini_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with specific Gemini model"""
+        # Recreate Gemini model with specific model name
+        generation_config = genai.types.GenerationConfig(
+            temperature=self.temperature,
+            top_p=1,
+            top_k=1,
+            max_output_tokens=8000,
+        )
+        self.gemini_model = genai.GenerativeModel(api_model, generation_config=generation_config)
+        return await self._execute_with_gemini(prompt, images, output_schema, agent_id)
+    
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
     async def _execute_with_claude(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with default Claude model"""
+        return await self._execute_with_claude_internal(prompt, images, output_schema, "claude-3-5-sonnet-20241022", agent_id)
+    
+    async def _execute_with_claude_internal(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute extraction step with Claude"""
         
         # Use primary image or first available
@@ -590,40 +708,52 @@ class ModularExtractionEngine:
             # Execute based on schema
             if output_schema == "ShelfStructure":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=api_model,
                     max_tokens=4000,
+                    temperature=self.temperature,
                     messages=messages,
-                    response_model=ShelfStructure,
-                    temperature=self.config.model_temperature
+                    response_model=ShelfStructure
                 )
             elif output_schema == "List[ProductExtraction]":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=api_model,
                     max_tokens=6000,
+                    temperature=self.temperature,
                     messages=messages,
-                    response_model=List[ProductExtraction],
-                    temperature=self.config.model_temperature
+                    response_model=List[ProductExtraction]
                 )
             elif output_schema == "CompleteShelfExtraction":
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=api_model,
                     max_tokens=8000,
+                    temperature=self.temperature,
                     messages=messages,
-                    response_model=CompleteShelfExtraction,
-                    temperature=self.config.model_temperature
+                    response_model=CompleteShelfExtraction
                 )
             else:
                 # Generic text response
                 response = self.anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=api_model,
                     max_tokens=4000,
-                    messages=messages,
-                    temperature=self.config.model_temperature
+                    temperature=self.temperature,
+                    messages=messages
                 )
             
             # Estimate API cost (Claude 3 Sonnet pricing)
             duration = time.time() - start_time
             estimated_cost = self._estimate_claude_cost(len(prompt), 4000, len(images))
+            
+            # Log model usage with the actual model name
+            await self._log_model_usage(
+                model_id=api_model,
+                model_provider="anthropic",
+                prompt_length=len(prompt),
+                completion_length=4000,
+                duration=duration,
+                cost=estimated_cost,
+                stage="products",
+                agent_id=agent_id
+            )
             
             logger.debug(
                 f"Claude execution completed in {duration:.2f}s, cost: £{estimated_cost:.3f}",
@@ -647,6 +777,10 @@ class ModularExtractionEngine:
     
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
     async def _execute_with_gpt4o(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+        """Execute with default GPT-4o model"""
+        return await self._execute_with_gpt4o_internal(prompt, images, output_schema, "gpt-4o-2024-11-20", agent_id)
+    
+    async def _execute_with_gpt4o_internal(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute extraction step with GPT-4o"""
         
         # Use primary image or first available
@@ -687,32 +821,44 @@ class ModularExtractionEngine:
             
             if output_schema == "List[ProductExtraction]":
                 response = self.openai_client.chat.completions.create(
-                    model="gpt-4o-2024-11-20",
+                    model=api_model,
                     messages=messages,
                     response_model=List[ProductExtraction],
                     max_tokens=6000,
-                    temperature=self.config.model_temperature
+                    temperature=self.temperature
                 )
             elif output_schema == "CompleteShelfExtraction":
                 response = self.openai_client.chat.completions.create(
-                    model="gpt-4o-2024-11-20",
+                    model=api_model,
                     messages=messages,
                     response_model=CompleteShelfExtraction,
                     max_tokens=8000,
-                    temperature=self.config.model_temperature
+                    temperature=self.temperature
                 )
             else:
                 # Generic response
                 response = self.openai_client.chat.completions.create(
-                    model="gpt-4o-2024-11-20",
+                    model=api_model,
                     messages=messages,
                     max_tokens=4000,
-                    temperature=self.config.model_temperature
+                    temperature=self.temperature
                 )
             
-            # Estimate API cost
+            # Estimate API cost and tokens
             duration = time.time() - start_time
             estimated_cost = self._estimate_gpt4o_cost(len(prompt), 4000, len(images))
+            
+            # Log model usage with the actual model name
+            await self._log_model_usage(
+                model_id=api_model,
+                model_provider="openai",
+                prompt_length=len(prompt),
+                completion_length=4000,
+                duration=duration,
+                cost=estimated_cost,
+                stage="products",
+                agent_id=agent_id
+            )
             
             logger.debug(
                 f"GPT-4o execution completed in {duration:.2f}s, cost: £{estimated_cost:.3f}",
@@ -775,6 +921,18 @@ class ModularExtractionEngine:
             # Estimate API cost (Gemini is typically cheaper)
             duration = time.time() - start_time
             estimated_cost = self._estimate_gemini_cost(len(prompt), len(response.text))
+            
+            # Log model usage
+            await self._log_model_usage(
+                model_id=self.gemini_model.model_name,
+                model_provider="google",
+                prompt_length=len(prompt),
+                completion_length=len(response.text),
+                duration=duration,
+                cost=estimated_cost,
+                stage="products",
+                agent_id=agent_id
+            )
             
             logger.debug(
                 f"Gemini execution completed in {duration:.2f}s, cost: £{estimated_cost:.3f}",

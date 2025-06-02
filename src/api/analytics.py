@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["analytics"])
 
+# Also create extended analytics router
+analytics_extended_router = APIRouter(tags=["analytics-extended"])
+
 # Initialize Supabase client
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_key = os.getenv('SUPABASE_SERVICE_KEY')
@@ -1005,3 +1008,185 @@ async def initialize_analytics():
     except Exception as e:
         logger.error(f"Failed to initialize analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Extended Analytics Endpoints for Unified Dashboard
+@analytics_extended_router.get("/system-performance")
+async def get_system_performance() -> Dict[str, Any]:
+    """Get real system performance metrics from Supabase"""
+    
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Get all completed extractions
+        result = supabase.table("ai_extraction_queue").select("*").eq(
+            "status", "completed"
+        ).execute()
+        
+        items = result.data or []
+        
+        # Group by system
+        systems = {}
+        for item in items:
+            system = item.get("extraction_config", {}).get("system", "unknown")
+            if system not in systems:
+                systems[system] = {
+                    "count": 0,
+                    "total_accuracy": 0,
+                    "total_cost": 0,
+                    "total_duration": 0,
+                    "accuracy_scores": []
+                }
+            
+            systems[system]["count"] += 1
+            
+            # Get accuracy from final_accuracy or calculate from metadata
+            accuracy = item.get("final_accuracy", 0)
+            if not accuracy and item.get("extraction_results"):
+                # Try to get from results
+                results = item["extraction_results"]
+                if isinstance(results, dict):
+                    accuracy = results.get("accuracy", 0)
+            
+            systems[system]["total_accuracy"] += accuracy
+            systems[system]["accuracy_scores"].append(accuracy)
+            systems[system]["total_cost"] += item.get("api_cost", 0)
+            
+            # Calculate duration
+            if item.get("completed_at") and item.get("started_at"):
+                try:
+                    start = datetime.fromisoformat(item["started_at"].replace("Z", "+00:00"))
+                    end = datetime.fromisoformat(item["completed_at"].replace("Z", "+00:00"))
+                    duration = (end - start).total_seconds()
+                    systems[system]["total_duration"] += duration
+                except:
+                    pass
+        
+        # Calculate averages
+        system_stats = {}
+        for system, data in systems.items():
+            if data["count"] > 0:
+                system_stats[system] = {
+                    "total_runs": data["count"],
+                    "avg_accuracy": data["total_accuracy"] / data["count"],
+                    "avg_cost": data["total_cost"] / data["count"],
+                    "avg_duration": data["total_duration"] / data["count"] if data["total_duration"] > 0 else 0,
+                    "accuracy_range": {
+                        "min": min(data["accuracy_scores"]) if data["accuracy_scores"] else 0,
+                        "max": max(data["accuracy_scores"]) if data["accuracy_scores"] else 0
+                    }
+                }
+        
+        # Get recent trends (last 7 days)
+        seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        recent_result = supabase.table("ai_extraction_queue").select("*").eq(
+            "status", "completed"
+        ).gte("completed_at", seven_days_ago).execute()
+        
+        recent_items = recent_result.data or []
+        
+        return {
+            "systems": system_stats,
+            "overall": {
+                "total_extractions": len(items),
+                "recent_extractions": len(recent_items),
+                "average_accuracy": sum(item.get("final_accuracy", 0) for item in items) / len(items) if items else 0,
+                "total_cost": sum(item.get("api_cost", 0) for item in items)
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting system performance: {e}")
+        # Return empty data - no fake data
+        return {
+            "systems": {},
+            "overall": {
+                "total_extractions": 0,
+                "recent_extractions": 0,
+                "average_accuracy": 0,
+                "total_cost": 0
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+
+@analytics_extended_router.get("/prompt-performance")
+async def get_prompt_performance() -> Dict[str, Any]:
+    """Get real prompt performance metrics"""
+    
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Get meta prompts
+        prompts_result = supabase.table("meta_prompts").select("*").execute()
+        prompts = {p["id"]: p for p in prompts_result.data or []}
+        
+        # Get extraction runs that used prompts
+        runs_result = supabase.table("extraction_runs").select("*").execute()
+        runs = runs_result.data or []
+        
+        # Analyze prompt usage and performance
+        prompt_stats = {}
+        
+        for run in runs:
+            prompt_config = run.get("prompt_config", {})
+            for stage, stage_config in prompt_config.items():
+                prompt_id = stage_config.get("prompt_id")
+                if prompt_id and prompt_id in prompts:
+                    if prompt_id not in prompt_stats:
+                        prompt_stats[prompt_id] = {
+                            "name": prompts[prompt_id]["name"],
+                            "stage": prompts[prompt_id]["stage"],
+                            "uses": 0,
+                            "total_accuracy": 0,
+                            "total_cost": 0,
+                            "accuracy_scores": []
+                        }
+                    
+                    prompt_stats[prompt_id]["uses"] += 1
+                    
+                    # Get accuracy for this run
+                    accuracy = run.get("final_accuracy", 0)
+                    prompt_stats[prompt_id]["total_accuracy"] += accuracy
+                    prompt_stats[prompt_id]["accuracy_scores"].append(accuracy)
+                    prompt_stats[prompt_id]["total_cost"] += run.get("cost", 0)
+        
+        # Calculate averages
+        prompt_performance = []
+        for prompt_id, stats in prompt_stats.items():
+            if stats["uses"] > 0:
+                prompt_performance.append({
+                    "id": prompt_id,
+                    "name": stats["name"],
+                    "stage": stats["stage"],
+                    "uses": stats["uses"],
+                    "avg_accuracy": stats["total_accuracy"] / stats["uses"],
+                    "avg_cost": stats["total_cost"] / stats["uses"],
+                    "accuracy_range": {
+                        "min": min(stats["accuracy_scores"]) if stats["accuracy_scores"] else 0,
+                        "max": max(stats["accuracy_scores"]) if stats["accuracy_scores"] else 0
+                    }
+                })
+        
+        # Sort by performance
+        prompt_performance.sort(key=lambda x: x["avg_accuracy"], reverse=True)
+        
+        return {
+            "prompts": prompt_performance,
+            "total_prompts": len(prompts),
+            "active_prompts": len(prompt_performance),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting prompt performance: {e}")
+        # Return empty data - no fake data
+        return {
+            "prompts": [],
+            "total_prompts": 0,
+            "active_prompts": 0,
+            "timestamp": datetime.utcnow().isoformat()
+        }

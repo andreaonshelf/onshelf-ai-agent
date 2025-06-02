@@ -378,3 +378,182 @@ def identify_improvement_areas(feedback_items: List[Dict[str, Any]]) -> List[Dic
             })
     
     return areas
+
+
+# Product Correction Models
+class ProductCorrection(BaseModel):
+    """Model for product correction"""
+    name: str
+    brand: str
+    shelf: int
+    position: int
+    facings: int
+    price: Optional[str] = None
+
+
+class CorrectionSubmission(BaseModel):
+    """Model for submitting corrections"""
+    queue_item_id: int
+    product_id: str
+    corrections: ProductCorrection
+    timestamp: datetime
+
+
+class BatchCorrectionSubmission(BaseModel):
+    """Model for submitting multiple corrections"""
+    queue_item_id: int
+    corrections: Dict[str, ProductCorrection]
+    timestamp: datetime
+
+
+@router.post("/correction")
+async def submit_correction(
+    submission: CorrectionSubmission
+) -> Dict[str, Any]:
+    """Submit a correction for a single product"""
+    
+    logger.info(
+        "Receiving product correction",
+        queue_item_id=submission.queue_item_id,
+        product_id=submission.product_id
+    )
+    
+    try:
+        config = SystemConfig()
+        supabase = config.get_supabase_client()
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Create correction record
+        correction_data = {
+            "queue_item_id": submission.queue_item_id,
+            "product_id": submission.product_id,
+            "correction_type": "product_update",
+            "original_data": {},  # In real implementation, fetch original
+            "corrected_data": submission.corrections.dict(),
+            "created_at": submission.timestamp.isoformat(),
+            "created_by": "human_reviewer"
+        }
+        
+        # Insert into extraction_feedback table
+        result = supabase.table("extraction_feedback").insert({
+            "queue_item_id": submission.queue_item_id,
+            "upload_id": f"correction_{submission.product_id}",
+            "extraction_rating": 2,  # Low rating indicates correction needed
+            "planogram_rating": 3,
+            "needs_improvement": f"Product correction: {submission.product_id}",
+            "metadata": correction_data,
+            "created_at": submission.timestamp.isoformat()
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to save correction")
+        
+        return {
+            "success": True,
+            "correction_id": result.data[0].get("id"),
+            "message": "Correction saved successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error submitting correction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/submit-all")
+async def submit_all_corrections(
+    submission: BatchCorrectionSubmission
+) -> Dict[str, Any]:
+    """Submit multiple corrections at once"""
+    
+    logger.info(
+        "Receiving batch corrections",
+        queue_item_id=submission.queue_item_id,
+        correction_count=len(submission.corrections)
+    )
+    
+    try:
+        config = SystemConfig()
+        supabase = config.get_supabase_client()
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Process each correction
+        saved_corrections = []
+        for product_id, correction in submission.corrections.items():
+            correction_data = {
+                "queue_item_id": submission.queue_item_id,
+                "product_id": product_id,
+                "correction_type": "product_update",
+                "corrected_data": correction.dict(),
+                "created_at": submission.timestamp.isoformat(),
+                "created_by": "human_reviewer"
+            }
+            
+            # Insert into extraction_feedback table
+            result = supabase.table("extraction_feedback").insert({
+                "queue_item_id": submission.queue_item_id,
+                "upload_id": f"correction_batch_{submission.timestamp.timestamp()}",
+                "extraction_rating": 2,
+                "planogram_rating": 3,
+                "needs_improvement": f"Batch correction: {len(submission.corrections)} products",
+                "metadata": {"corrections": correction_data},
+                "created_at": submission.timestamp.isoformat()
+            }).execute()
+            
+            if result.data:
+                saved_corrections.append(result.data[0].get("id"))
+        
+        # Update queue item to indicate corrections exist
+        try:
+            queue_update = supabase.table("ai_extraction_queue").update({
+                "has_corrections": True,
+                "correction_count": len(submission.corrections),
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", submission.queue_item_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to update queue item with correction status: {e}")
+        
+        return {
+            "success": True,
+            "corrections_saved": len(saved_corrections),
+            "correction_ids": saved_corrections,
+            "message": f"Saved {len(saved_corrections)} corrections successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error submitting batch corrections: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/corrections/{queue_item_id}")
+async def get_corrections(
+    queue_item_id: int
+) -> Dict[str, Any]:
+    """Get all corrections for a queue item"""
+    
+    try:
+        config = SystemConfig()
+        supabase = config.get_supabase_client()
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Get corrections from feedback
+        result = supabase.table("extraction_feedback").select("*").eq(
+            "queue_item_id", queue_item_id
+        ).like("upload_id", "correction%").execute()
+        
+        corrections = []
+        for item in result.data or []:
+            if item.get("metadata") and "corrections" in item["metadata"]:
+                corrections.append(item["metadata"]["corrections"])
+        
+        return {
+            "queue_item_id": queue_item_id,
+            "corrections": corrections,
+            "total_corrections": len(corrections)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting corrections: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

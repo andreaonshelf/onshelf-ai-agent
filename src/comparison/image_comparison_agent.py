@@ -217,4 +217,4 @@ class ImageComparisonAgent:
         # TODO: Implement actual AI vision comparison
         # This would use GPT-4V or Claude with vision capabilities
         
-        return await self.compare_image_vs_planogram(original_image, None, structure_context) 
+        return await self.compare_image_vs_planogram(original_image, None, structure_context)
