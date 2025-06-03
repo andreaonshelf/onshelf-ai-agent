@@ -96,11 +96,10 @@ app.include_router(iteration_router)
 from src.api.field_definitions import router as field_definitions_router
 app.include_router(field_definitions_router)
 
-<<<<<<< HEAD
 # Include extraction configuration API
 from src.api.extraction_config import router as extraction_config_router
 app.include_router(extraction_config_router)
-=======
+
 # Include field schema builder API
 from src.api.field_schema_builder import router as schema_builder_router
 app.include_router(schema_builder_router)
@@ -120,7 +119,6 @@ async def websocket_endpoint(websocket: WebSocket, item_id: int):
             # Could handle client messages here if needed
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket, str(item_id))
->>>>>>> origin/main
 
 # Initialize mock iteration data on startup
 @app.on_event("startup")
@@ -5633,37 +5631,40 @@ async def root():
                                              <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 150px;">Product</th>
                                              <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Price</th>
                                              <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Facings</th>
-                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Stack</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 50px;">Stack</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Total Units</th>
+                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 60px;">Confidence</th>
+                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 80px;">Color</th>
                                              <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">Volume</th>
-                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">Color</th>
-                                             <th style="padding: 10px 6px; text-align: center; font-weight: 600; color: #4a5568; min-width: 80px;">Confidence</th>
-                                             <th style="padding: 10px 6px; text-align: left; font-weight: 600; color: #4a5568; min-width: 60px;">ID</th>
                                          </tr>
                                      </thead>
                                      <tbody>
                                          ${products.map(product => {
-                                             const confidence = Math.round((product.metadata?.extraction_confidence || 0.9) * 100);
-                                             const confidenceColor = confidence >= 90 ? '#10b981' : confidence >= 70 ? '#f59e0b' : '#ef4444';
+                                             const confidence = product.metadata?.extraction_confidence || 0;
+                                             const confidenceColor = product.visual?.confidence_color || getConfidenceColor(confidence);
                                              const section = product.position?.section?.vertical || 'Unknown';
                                              const stackHeight = product.quantity?.stack || 1;
-                                             const volume = product.metadata?.volume || product.volume || '-';
-                                             const color = product.metadata?.color || product.color || '-';
-                                             const productId = product.id || '-';
+                                             const facings = product.quantity?.columns || 1;
+                                             const totalUnits = product.quantity?.total_facings || 1;
                                              
                                              return `
-                                                 <tr style="border-bottom: 1px solid #e2e8f0; hover: background-color: #f8fafc;">
-                                                     <td style="padding: 8px 6px; font-weight: 600; color: #2d3748;">${product.shelf}</td>
-                                                     <td style="padding: 8px 6px; color: #4a5568;">${product.position}</td>
-                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${section}</td>
-                                                     <td style="padding: 8px 6px; color: #4a5568; font-weight: 500;">${product.brand}</td>
-                                                     <td style="padding: 8px 6px; color: #2d3748;">${product.name}</td>
-                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600; color: #2b6cb0;">${product.price ? '£' + product.price.toFixed(2) : '-'}</td>
-                                                     <td style="padding: 8px 6px; text-align: center; color: #4a5568;">${product.quantity?.total_facings || 1}</td>
-                                                     <td style="padding: 8px 6px; text-align: center; color: ${stackHeight > 1 ? '#f59e0b' : '#4a5568'}; font-weight: ${stackHeight > 1 ? '600' : 'normal'};">${stackHeight}${stackHeight > 1 ? ' 📚' : ''}</td>
-                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${volume}</td>
-                                                     <td style="padding: 8px 6px; color: #4a5568; font-size: 12px;">${color}</td>
-                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600; color: ${confidenceColor};">${confidence}%</td>
-                                                     <td style="padding: 8px 6px; color: #64748b; font-size: 11px; font-family: monospace;">${productId}</td>
+                                                 <tr style="border-bottom: 1px solid #e2e8f0;">
+                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600;">${product.shelf}</td>
+                                                     <td style="padding: 8px 6px; text-align: center;">${product.position || ''}</td>
+                                                     <td style="padding: 8px 6px;">${section}</td>
+                                                     <td style="padding: 8px 6px; font-weight: 500;">${product.brand || ''}</td>
+                                                     <td style="padding: 8px 6px;">${product.name || ''}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 500;">£${(product.price || 0).toFixed(2)}</td>
+                                                     <td style="padding: 8px 6px; text-align: center;">${facings}</td>
+                                                     <td style="padding: 8px 6px; text-align: center;">${stackHeight}</td>
+                                                     <td style="padding: 8px 6px; text-align: center; font-weight: 600;">${totalUnits}</td>
+                                                     <td style="padding: 8px 6px; text-align: center;">
+                                                         <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: white; background: ${confidenceColor};">
+                                                             ${Math.round(confidence * 100)}%
+                                                         </span>
+                                                     </td>
+                                                     <td style="padding: 8px 6px;">${product.metadata?.color || '-'}</td>
+                                                     <td style="padding: 8px 6px;">${product.metadata?.volume || '-'}</td>
                                                  </tr>
                                              `;
                                          }).join('')}

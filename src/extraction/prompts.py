@@ -280,6 +280,48 @@ EXTRACTION REQUIREMENTS WITH PLANOGRAM AWARENESS:
    - Are you distinguishing between facings (horizontal) and stack (depth)?
 
 REMEMBER: Your extraction directly drives planogram generation. Accurate facings and positions are CRITICAL for the planogram to match the original image.
+""",
+            
+            "structure_analysis": """
+Analyze this retail shelf image to extract the structural layout.
+
+Identify:
+1. SHELF COUNT: Count all horizontal shelves from bottom (1) to top
+2. SHELF BOUNDARIES: Identify the edges of each shelf
+3. DIMENSIONS: Estimate the width and height of the fixture
+4. SECTIONS: Identify any vertical dividers or sections
+5. SHELF SPACING: Note the vertical distance between shelves
+
+Output a structured analysis with:
+- Total number of shelves (count from bottom up)
+- Approximate width in meters
+- Approximate height in meters
+- Shelf coordinates (top edge of each shelf)
+- Expected products per shelf (based on width and typical product size)
+
+Focus on the physical structure only - ignore products in this stage.
+""",
+            
+            "details_extraction": """
+Extract detailed information for the following confirmed products.
+
+For each product, identify:
+1. PRICE: Look for price tags (format: £X.XX or X.XXp)
+2. SIZE/VARIANT: Package size, flavor, or variant details
+3. PROMOTIONAL TAGS: Special offers, discounts, new product tags
+4. STOCK STATUS: Low stock, out of stock indicators
+5. BARCODE: If visible
+6. MULTI-PACKS: Bundle information (e.g., "3 for £5")
+
+Specific instructions:
+- Prices are usually on shelf edge labels below products
+- Match price tags to products by position
+- Note if multiple products share one price tag
+- Flag any products without visible prices
+- Look for promotional stickers on products
+- Check for "NEW" or "SPECIAL OFFER" tags
+
+Be precise and only report what you can clearly see.
 """
         }
     

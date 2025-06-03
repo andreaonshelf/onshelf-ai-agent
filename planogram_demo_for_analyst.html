@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf Planogram Example - For Analyst Reference</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section h2 {
+            color: #444;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .important-note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .planogram-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+        }
+        
+        .shelf {
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            min-height: 100px;
+            position: relative;
+            background: white;
+            border: 2px solid #333;
+            padding: 5px;
+        }
+        
+        .shelf-label {
+            position: absolute;
+            left: -80px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: bold;
+            color: #666;
+        }
+        
+        .product {
+            background: #e3f2fd;
+            border: 2px solid #1976d2;
+            padding: 10px;
+            margin: 0 2px;
+            text-align: center;
+            font-size: 12px;
+            min-width: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-radius: 4px;
+        }
+        
+        .product.high-confidence {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+        
+        .product.medium-confidence {
+            background: #fff3e0;
+            border-color: #ff9800;
+        }
+        
+        .product.low-confidence {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+        
+        .product-brand {
+            font-weight: bold;
+            font-size: 11px;
+        }
+        
+        .product-name {
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .product-price {
+            font-weight: bold;
+            color: #d32f2f;
+            margin-top: 5px;
+        }
+        
+        .product-facings {
+            font-size: 10px;
+            color: #666;
+            margin-top: 3px;
+        }
+        
+        .gap {
+            width: 80px;
+            height: 100%;
+            border: 2px dashed #ccc;
+            margin: 0 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 11px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .confidence-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .confidence-high {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .confidence-medium {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .confidence-low {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .key-points {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .key-points h3 {
+            margin-top: 0;
+            color: #1565c0;
+        }
+        
+        .key-points ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        
+        .key-points li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OnShelf Planogram Visualization Example</h1>
+        <p class="subtitle">Reference for AI Prompt Engineering</p>
+        
+        <div class="important-note">
+            <strong>Important:</strong> This is a simplified 2D representation for CPG marketers to understand shelf execution. 
+            NOT a pixel-perfect replica of the actual shelf photo. Products are shown as boxes with key information only.
+        </div>
+        
+        <div class="section">
+            <h2>What Our AI Extracts and How It's Visualized</h2>
+            
+            <div class="key-points">
+                <h3>Key Extraction Points:</h3>
+                <ul>
+                    <li><strong>Shelf Structure:</strong> Number of shelves (counted bottom to top)</li>
+                    <li><strong>Product Position:</strong> Which shelf + left-to-right position</li>
+                    <li><strong>Facings:</strong> How many units side-by-side (3 facings = 3 cells in grid)</li>
+                    <li><strong>Gaps:</strong> Empty spaces between products (shown as dashed boxes)</li>
+                    <li><strong>Product Info:</strong> Brand, name, price, size</li>
+                    <li><strong>Confidence:</strong> How certain the AI is (shown by color)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Visual Planogram Representation</h2>
+            <p>This shows how extracted data is rendered. Each product gets a box, gaps are explicit, shelves are clearly separated.</p>
+            
+            <div class="planogram-container" style="position: relative; padding-left: 100px;">
+                <!-- Shelf 3 (Top) -->
+                <div class="shelf">
+                    <span class="shelf-label">Shelf 3</span>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Starbucks</div>
+                        <div class="product-name">Iced Coffee</div>
+                        <div class="product-price">£2.49</div>
+                        <div class="product-facings">2 facings</div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Starbucks</div>
+                        <div class="product-name">Iced Coffee</div>
+                        <div class="product-price">£2.49</div>
+                        <div class="product-facings"></div>
+                    </div>
+                    <div class="product medium-confidence">
+                        <div class="product-brand">Powerade</div>
+                        <div class="product-name">Berry</div>
+                        <div class="product-price">£1.79</div>
+                        <div class="product-facings">1 facing</div>
+                    </div>
+                    <div class="product medium-confidence">
+                        <div class="product-brand">Gatorade</div>
+                        <div class="product-name">Orange</div>
+                        <div class="product-price">£1.89</div>
+                        <div class="product-facings">1 facing</div>
+                    </div>
+                    <div class="gap">Gap</div>
+                    <div class="gap">Gap</div>
+                </div>
+                
+                <!-- Shelf 2 (Middle) -->
+                <div class="shelf">
+                    <span class="shelf-label">Shelf 2</span>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Evian</div>
+                        <div class="product-name">Still Water</div>
+                        <div class="product-price">£0.99</div>
+                        <div class="product-facings">3 facings</div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Evian</div>
+                        <div class="product-name">Still Water</div>
+                        <div class="product-price">£0.99</div>
+                        <div class="product-facings"></div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Evian</div>
+                        <div class="product-name">Still Water</div>
+                        <div class="product-price">£0.99</div>
+                        <div class="product-facings"></div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Innocent</div>
+                        <div class="product-name">Smoothie</div>
+                        <div class="product-price">£2.99</div>
+                        <div class="product-facings">2 facings</div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Innocent</div>
+                        <div class="product-name">Smoothie</div>
+                        <div class="product-price">£2.99</div>
+                        <div class="product-facings"></div>
+                    </div>
+                </div>
+                
+                <!-- Shelf 1 (Bottom) -->
+                <div class="shelf">
+                    <span class="shelf-label">Shelf 1</span>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Coca-Cola</div>
+                        <div class="product-name">Original</div>
+                        <div class="product-price">£1.29</div>
+                        <div class="product-facings">3 facings</div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Coca-Cola</div>
+                        <div class="product-name">Original</div>
+                        <div class="product-price">£1.29</div>
+                        <div class="product-facings"></div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Coca-Cola</div>
+                        <div class="product-name">Original</div>
+                        <div class="product-price">£1.29</div>
+                        <div class="product-facings"></div>
+                    </div>
+                    <div class="gap">Gap</div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Pepsi</div>
+                        <div class="product-name">Max</div>
+                        <div class="product-price">£1.19</div>
+                        <div class="product-facings">2 facings</div>
+                    </div>
+                    <div class="product high-confidence">
+                        <div class="product-brand">Pepsi</div>
+                        <div class="product-name">Max</div>
+                        <div class="product-price">£1.19</div>
+                        <div class="product-facings"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Extracted Product Data Table</h2>
+            <p>This is the structured data our AI extracts from shelf photos:</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Shelf</th>
+                        <th>Position</th>
+                        <th>Brand</th>
+                        <th>Product Name</th>
+                        <th>Price</th>
+                        <th>Facings</th>
+                        <th>Confidence</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>1</td>
+                        <td>Coca-Cola</td>
+                        <td>Original 330ml</td>
+                        <td>£1.29</td>
+                        <td>3</td>
+                        <td><span class="confidence-badge confidence-high">95%</span></td>
+                        <td>Red packaging, clear visibility</td>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>2</td>
+                        <td>-</td>
+                        <td>EMPTY SPACE</td>
+                        <td>-</td>
+                        <td>1</td>
+                        <td>-</td>
+                        <td>Gap between products</td>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>3</td>
+                        <td>Pepsi</td>
+                        <td>Max 330ml</td>
+                        <td>£1.19</td>
+                        <td>2</td>
+                        <td><span class="confidence-badge confidence-high">92%</span></td>
+                        <td>Black/silver packaging</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>1</td>
+                        <td>Evian</td>
+                        <td>Still Water 500ml</td>
+                        <td>£0.99</td>
+                        <td>3</td>
+                        <td><span class="confidence-badge confidence-high">98%</span></td>
+                        <td>Clear bottle, blue label</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>Innocent</td>
+                        <td>Smoothie 250ml</td>
+                        <td>£2.99</td>
+                        <td>2</td>
+                        <td><span class="confidence-badge confidence-high">91%</span></td>
+                        <td>On promotion</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>1</td>
+                        <td>Starbucks</td>
+                        <td>Iced Coffee 220ml</td>
+                        <td>£2.49</td>
+                        <td>2</td>
+                        <td><span class="confidence-badge confidence-high">93%</span></td>
+                        <td>Premium placement</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>Powerade</td>
+                        <td>Berry 500ml</td>
+                        <td>£1.79</td>
+                        <td>1</td>
+                        <td><span class="confidence-badge confidence-medium">78%</span></td>
+                        <td>Partially obscured</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>3</td>
+                        <td>Gatorade</td>
+                        <td>Orange 500ml</td>
+                        <td>£1.89</td>
+                        <td>1</td>
+                        <td><span class="confidence-badge confidence-medium">75%</span></td>
+                        <td>Top shelf, angle issue</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Critical Points for Prompt Writing</h2>
+            
+            <div class="key-points">
+                <h3>Remember When Writing Prompts:</h3>
+                <ul>
+                    <li><strong>Grid Awareness:</strong> Each facing = 1 cell, gaps = empty cells</li>
+                    <li><strong>Position Criticality:</strong> Wrong positions create wrong visualizations</li>
+                    <li><strong>Shelf-by-Shelf:</strong> Extract one shelf at a time for accuracy</li>
+                    <li><strong>Business Context:</strong> This helps CPG marketers optimize execution</li>
+                    <li><strong>Not Pixel-Perfect:</strong> We need abstracted data, not exact replication</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Example Prompt Structure</h2>
+            <pre style="background: #f8f9fa; padding: 20px; border-radius: 4px; overflow-x: auto;">
+You are extracting products that will be rendered in a visual planogram grid.
+
+CRITICAL: Your extraction will be visualized as follows:
+- Each FACING gets its own grid cell (3 facings = 3 separate cells)
+- Empty positions will be transparent gaps
+- Position numbers determine left-to-right order
+
+For Shelf {N}, extract:
+1. Products from left to right
+2. Brand and product name
+3. Facing count (how many side-by-side)
+4. Price if visible
+5. Note any gaps between products
+
+Remember: This creates a simplified 2D grid for marketers, not a photo.
+            </pre>
+        </div>
+    </div>
+</body>
+</html>

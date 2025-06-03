@@ -56,7 +56,26 @@ class MasterOrchestrator:
                                     queue_item_id: Optional[int] = None,
                                     system: str = "custom_consensus",
                                     configuration: Optional[Dict[str, Any]] = None) -> MasterResult:
-        """Main entry point: iterate until target accuracy achieved"""
+        """Main entry point: decides whether to use stage-based or iteration-based approach"""
+        
+        # Check if stage-based execution is configured
+        stages = configuration.get('stages', {}) if configuration else {}
+        stage_models = configuration.get('stage_models', {}) if configuration else {}
+        
+        # Use stage-based if we have stage configurations with models
+        if stages and stage_models and any(models for models in stage_models.values()):
+            stage_order = configuration.get('stage_order', ['structure', 'products', 'details'])
+            return await self.execute_stage_pipeline(
+                upload_id=upload_id,
+                queue_item_id=queue_item_id,
+                target_accuracy=target_accuracy,
+                max_iterations=max_iterations,
+                system=system,
+                configuration=configuration,
+                stage_order=stage_order
+            )
+        
+        # Otherwise use traditional iteration-based approach
         
         start_time = time.time()
         agent_id = str(uuid.uuid4())
@@ -669,5 +688,343 @@ class MasterOrchestrator:
             
         except Exception as e:
             logger.error(f"Failed to render planogram to PNG: {e}", component="master_orchestrator")
-            # Return empty bytes if rendering fails
-            return b"" 
+            return None
+    
+    async def execute_stage_pipeline(self,
+                                   upload_id: str,
+                                   queue_item_id: Optional[int] = None,
+                                   target_accuracy: float = 0.95,
+                                   max_iterations: int = 5,
+                                   system: str = 'langgraph_based',
+                                   configuration: Optional[Dict] = None,
+                                   stage_order: List[str] = None) -> MasterResult:
+        """Execute extraction using stage-based pipeline approach"""
+        
+        if not stage_order:
+            stage_order = ['structure', 'products', 'details']
+        
+        start_time = time.time()
+        agent_id = str(uuid.uuid4())
+        run_id = f"run_{upload_id}_{agent_id[:8]}"
+        
+        logger.info(
+            f"Starting STAGE-BASED orchestration for upload {upload_id}",
+            component="master_orchestrator",
+            upload_id=upload_id,
+            stage_order=stage_order,
+            agent_id=agent_id
+        )
+        
+        # Get images
+        images = await self._get_images(upload_id)
+        
+        # Initialize extraction orchestrator
+        from .extraction_orchestrator import ExtractionOrchestrator
+        self.extraction_orchestrator = ExtractionOrchestrator(self.config, queue_item_id=queue_item_id)
+        
+        # Load configuration
+        if configuration:
+            self.extraction_orchestrator.model_config = configuration
+            self.extraction_orchestrator.temperature = configuration.get('temperature', 0.1)
+            self.extraction_orchestrator.stage_models = configuration.get('stage_models', {})
+            self.extraction_orchestrator.stage_configs = configuration.get('stages', {})
+        
+        # Initialize tracking
+        stage_results = {}
+        locked_context = {}
+        total_cost = 0.0
+        
+        # Stage 1: Structure Extraction
+        if 'structure' in stage_order and 'structure' in configuration.get('stages', {}):
+            logger.info("Starting STAGE 1: Structure Extraction", component="master_orchestrator")
+            
+            structure_result = await self._execute_stage(
+                stage_name='structure',
+                images=images,
+                locked_context={},
+                queue_item_id=queue_item_id,
+                run_id=run_id,
+                target_accuracy=0.95  # High confidence needed for structure
+            )
+            
+            stage_results['structure'] = structure_result
+            locked_context['structure'] = structure_result['final_result']
+            total_cost += structure_result.get('total_cost', 0)
+            
+            logger.info(
+                f"Structure stage complete: {structure_result['final_result'].shelf_count} shelves",
+                component="master_orchestrator"
+            )
+        
+        # Stage 2: Product Extraction
+        if 'products' in stage_order and 'products' in configuration.get('stages', {}):
+            logger.info("Starting STAGE 2: Product Extraction", component="master_orchestrator")
+            
+            products_result = await self._execute_stage(
+                stage_name='products',
+                images=images,
+                locked_context=locked_context,
+                queue_item_id=queue_item_id,
+                run_id=run_id,
+                target_accuracy=target_accuracy
+            )
+            
+            stage_results['products'] = products_result
+            locked_context['products'] = products_result['final_result']
+            total_cost += products_result.get('total_cost', 0)
+            
+            logger.info(
+                f"Products stage complete: {len(products_result['final_result'].products)} products found",
+                component="master_orchestrator"
+            )
+        
+        # Stage 3: Details Enhancement
+        if 'details' in stage_order and 'details' in configuration.get('stages', {}):
+            logger.info("Starting STAGE 3: Details Enhancement", component="master_orchestrator")
+            
+            details_result = await self._execute_stage(
+                stage_name='details',
+                images=images,
+                locked_context=locked_context,
+                queue_item_id=queue_item_id,
+                run_id=run_id,
+                target_accuracy=0.90  # Can be slightly lower for details
+            )
+            
+            stage_results['details'] = details_result
+            total_cost += details_result.get('total_cost', 0)
+            
+            logger.info("Details stage complete", component="master_orchestrator")
+        
+        # Generate final planogram
+        final_extraction = stage_results.get('products', {}).get('final_result')
+        if not final_extraction and 'structure' in stage_results:
+            # Create mock extraction if only structure was run
+            final_extraction = ExtractionResult(
+                agent_number=1,
+                structure=stage_results['structure']['final_result'],
+                products=[],
+                total_products=0,
+                overall_confidence='LOW',
+                accuracy_estimate=0.0,
+                extraction_duration_seconds=0,
+                model_used='none',
+                api_cost_estimate=0
+            )
+        
+        # Generate planogram from final results
+        if final_extraction:
+            from .planogram_orchestrator import PlanogramOrchestrator
+            self.planogram_orchestrator = PlanogramOrchestrator(self.config)
+            
+            final_planogram = await self.planogram_orchestrator.generate_for_agent_iteration(
+                agent_number=1,
+                extraction_result=final_extraction,
+                structure_context=locked_context.get('structure'),
+                abstraction_level="product_view",
+                original_image=images['enhanced']
+            )
+        else:
+            final_planogram = None
+        
+        # Create final result
+        total_duration = time.time() - start_time
+        
+        result = MasterResult(
+            final_accuracy=stage_results.get('products', {}).get('final_accuracy', 0.0),
+            target_achieved=stage_results.get('products', {}).get('final_accuracy', 0.0) >= target_accuracy,
+            iterations_completed=sum(s.get('iterations_completed', 0) for s in stage_results.values()),
+            iteration_history=[],  # Different format for stage-based
+            needs_human_review=False,
+            structure_analysis=locked_context.get('structure'),
+            best_planogram=final_planogram,
+            total_duration=total_duration,
+            total_cost=total_cost,
+            stage_results=stage_results  # New field for stage-based results
+        )
+        
+        logger.info(
+            f"Stage-based orchestration complete",
+            component="master_orchestrator",
+            stages_completed=len(stage_results),
+            total_duration=total_duration,
+            total_cost=total_cost
+        )
+        
+        return result
+    
+    async def _execute_stage(self,
+                           stage_name: str,
+                           images: Dict[str, bytes],
+                           locked_context: Dict,
+                           queue_item_id: Optional[int],
+                           run_id: str,
+                           target_accuracy: float) -> Dict:
+        """Execute a single stage with multiple model attempts"""
+        
+        stage_config = self.extraction_orchestrator.stage_configs.get(stage_name, {})
+        stage_models = self.extraction_orchestrator.stage_models.get(stage_name, [])
+        
+        if not stage_models:
+            logger.warning(f"No models configured for stage {stage_name}", component="master_orchestrator")
+            return {}
+        
+        logger.info(
+            f"Executing stage '{stage_name}' with {len(stage_models)} models",
+            component="master_orchestrator",
+            models=stage_models
+        )
+        
+        stage_attempts = []
+        best_result = None
+        best_accuracy = 0.0
+        
+        # Run each configured model for this stage
+        for attempt_num, model_id in enumerate(stage_models, 1):
+            logger.info(
+                f"Stage {stage_name} - Attempt {attempt_num}/{len(stage_models)} with {model_id}",
+                component="master_orchestrator"
+            )
+            
+            # Update monitoring
+            if queue_item_id:
+                await monitoring_hooks.update_stage_progress(
+                    queue_item_id=queue_item_id,
+                    stage_name=stage_name,
+                    attempt=attempt_num,
+                    total_attempts=len(stage_models),
+                    model=model_id,
+                    complete=False
+                )
+            
+            # Execute stage with current model
+            attempt_result = await self.extraction_orchestrator.execute_stage(
+                stage_name=stage_name,
+                model_id=model_id,
+                images=images,
+                locked_context=locked_context,
+                previous_attempts=stage_attempts,
+                attempt_number=attempt_num,
+                agent_id=f"{run_id}_{stage_name}_{attempt_num}"
+            )
+            
+            stage_attempts.append(attempt_result)
+            
+            # Evaluate stage results
+            if stage_name == 'structure':
+                # For structure, we need high confidence in shelf count
+                current_accuracy = attempt_result.structure_confidence if hasattr(attempt_result, 'structure_confidence') else 0.8
+            elif stage_name == 'products':
+                # For products, generate planogram and compare
+                planogram = await self._generate_and_compare_planogram(
+                    attempt_result, 
+                    locked_context.get('structure'),
+                    images
+                )
+                current_accuracy = planogram.get('accuracy', 0.0) if planogram else 0.0
+            else:
+                # For details, check completeness
+                current_accuracy = self._evaluate_details_completeness(attempt_result)
+            
+            if current_accuracy > best_accuracy:
+                best_accuracy = current_accuracy
+                best_result = attempt_result
+            
+            # Check if we've reached target accuracy for this stage
+            if current_accuracy >= target_accuracy:
+                logger.info(
+                    f"Stage {stage_name} reached target accuracy {target_accuracy:.1%}",
+                    component="master_orchestrator",
+                    attempt=attempt_num,
+                    accuracy=current_accuracy
+                )
+                # Mark stage as complete
+                if queue_item_id:
+                    await monitoring_hooks.update_stage_progress(
+                        queue_item_id=queue_item_id,
+                        stage_name=stage_name,
+                        attempt=attempt_num,
+                        total_attempts=len(stage_models),
+                        model=model_id,
+                        complete=True
+                    )
+                break
+        
+        return {
+            'stage_name': stage_name,
+            'attempts': stage_attempts,
+            'final_result': best_result,
+            'final_accuracy': best_accuracy,
+            'iterations_completed': len(stage_attempts),
+            'models_used': stage_models[:len(stage_attempts)],
+            'total_cost': sum(a.api_cost_estimate if hasattr(a, 'api_cost_estimate') else 0 for a in stage_attempts)
+        }
+    
+    async def _generate_and_compare_planogram(self, extraction_result, structure_context, images):
+        """Generate planogram and compare for accuracy evaluation"""
+        try:
+            from .planogram_orchestrator import PlanogramOrchestrator
+            if not hasattr(self, 'planogram_orchestrator'):
+                self.planogram_orchestrator = PlanogramOrchestrator(self.config)
+            
+            # Generate planogram
+            planogram_result = await self.planogram_orchestrator.generate_for_agent_iteration(
+                agent_number=1,
+                extraction_result=extraction_result,
+                structure_context=structure_context,
+                abstraction_level="product_view",
+                original_image=images['enhanced']
+            )
+            
+            # Render to PNG
+            planogram_png = await self._render_planogram_to_png(
+                planogram_result.planogram,
+                extraction_result
+            )
+            
+            if planogram_png:
+                # Compare using vision
+                comparison_result = await self.comparison_agent.compare_image_vs_planogram(
+                    original_image=images['enhanced'],
+                    planogram=planogram_result.planogram,
+                    structure_context=structure_context,
+                    planogram_image=planogram_png,
+                    model='gpt-4-vision-preview'
+                )
+                
+                # Analyze accuracy
+                accuracy_analysis = self.feedback_manager.analyze_accuracy_with_failure_areas(
+                    comparison_result, structure_context
+                )
+                
+                return {
+                    'planogram': planogram_result,
+                    'comparison': comparison_result,
+                    'accuracy': accuracy_analysis.overall_accuracy
+                }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate/compare planogram: {e}", component="master_orchestrator")
+        
+        return None
+    
+    def _evaluate_details_completeness(self, details_result) -> float:
+        """Evaluate how complete the details extraction is"""
+        if not hasattr(details_result, 'products'):
+            return 0.0
+        
+        total_products = len(details_result.products)
+        if total_products == 0:
+            return 0.0
+        
+        # Count products with key details
+        with_prices = sum(1 for p in details_result.products if hasattr(p, 'price') and p.price is not None)
+        with_sizes = sum(1 for p in details_result.products if hasattr(p, 'size_variant') and p.size_variant)
+        
+        # Calculate completeness score
+        price_completeness = with_prices / total_products
+        size_completeness = with_sizes / total_products
+        
+        # Weighted average
+        return (price_completeness * 0.6 + size_completeness * 0.4)
+ 

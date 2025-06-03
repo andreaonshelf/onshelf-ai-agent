@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI - Comprehensive Planogram Visualization System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .header {
+            text-align: center;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+        .key-concept {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .key-concept h3 {
+            color: #92400e;
+            margin-top: 0;
+        }
+        .rule-box {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        .rule-box h3 {
+            color: #1e293b;
+            margin-top: 0;
+        }
+        .code-example {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .planogram-demo {
+            background: #f8f9fa;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        /* Grid-based planogram visualization */
+        .shelf-grid {
+            display: grid;
+            gap: 4px;
+            margin: 10px 0;
+            background: #e2e8f0;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .shelf-label {
+            font-weight: bold;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+        .grid-cell {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 5px;
+            text-align: center;
+            font-size: 11px;
+            border-radius: 4px;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .grid-cell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .grid-cell.high-confidence {
+            background: #22c55e;
+        }
+        .grid-cell.medium-confidence {
+            background: #f59e0b;
+        }
+        .grid-cell.low-confidence {
+            background: #ef4444;
+        }
+        .grid-cell.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+        .grid-cell.empty:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        .facing-indicator {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+        .stack-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+        .product-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .product-price {
+            font-size: 10px;
+            opacity: 0.9;
+        }
+        
+        /* Visual rules demonstration */
+        .rule-visual {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .rule-visual-before,
+        .rule-visual-after {
+            flex: 1;
+            text-align: center;
+        }
+        .rule-visual-arrow {
+            font-size: 24px;
+            color: #3b82f6;
+        }
+        
+        /* Section visualization */
+        .section-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .section {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px dashed #cbd5e1;
+            text-align: center;
+        }
+        .section-label {
+            font-weight: bold;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        
+        /* Dimension rules */
+        .dimension-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .dimension-table th,
+        .dimension-table td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #e2e8f0;
+        }
+        .dimension-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+        }
+        .dimension-table td.value {
+            font-family: monospace;
+            color: #3b82f6;
+        }
+        
+        /* Algorithm flow */
+        .algorithm-flow {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .algorithm-step {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+        }
+        .algorithm-step-number {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        /* Navigation */
+        .nav-menu {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 20px;
+            margin-bottom: 30px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .nav-links a {
+            color: #3b82f6;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .nav-links a:hover {
+            background: #eff6ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏪 OnShelf AI - Comprehensive Planogram Visualization System</h1>
+        <p>The complete guide to our advanced grid-based planogram rendering with cumulative positioning, global width consistency, and intelligent product placement</p>
+    </div>
+
+    <nav class="nav-menu">
+        <div class="nav-links">
+            <a href="#core-concepts">Core Concepts</a>
+            <a href="#positioning-rules">Positioning Rules</a>
+            <a href="#grid-calculation">Grid Calculation</a>
+            <a href="#visual-demo">Visual Demo</a>
+            <a href="#data-flow">Data Flow</a>
+            <a href="#key-learnings">Key Learnings</a>
+        </div>
+    </nav>
+
+    <div id="core-concepts">
+        <h2>🎯 Core Concepts</h2>
+        
+        <div class="key-concept">
+            <h3>⚡ Critical Understanding: JSON Position vs Grid Position</h3>
+            <p>This is the most important concept in the entire system:</p>
+            <div class="code-example">
+// JSON Position: Sequential numbering in the data (1, 2, 3...)
+// Grid Position: Actual visual slots occupied (cumulative)
+
+Example: Pepsi Max
+- JSON Position: 4 (fourth item in the data)
+- Facings: 3
+- Grid Positions: 7, 8, 9 (if previous products took 6 slots)</div>
+            <p><strong>Key Insight:</strong> We NEVER use JSON position directly for placement. We calculate grid positions cumulatively based on product facings.</p>
+        </div>
+
+        <div class="rule-box">
+            <h3>📐 Section System (Hidden from UI)</h3>
+            <p>Products are organized into three logical sections per shelf:</p>
+            
+            <div class="section-demo">
+                <div class="section">
+                    <div class="section-label">Left Section</div>
+                    <p>Left third of shelf</p>
+                </div>
+                <div class="section">
+                    <div class="section-label">Center Section</div>
+                    <p>Middle third of shelf</p>
+                </div>
+                <div class="section">
+                    <div class="section-label">Right Section</div>
+                    <p>Right third of shelf</p>
+                </div>
+            </div>
+            
+            <p><strong>Why sections exist:</strong></p>
+            <ul>
+                <li>✅ AI Guidance - Helps extraction identify products by region</li>
+                <li>✅ Processing Order - Ensures consistent left-to-right placement</li>
+                <li>✅ Spatial Organization - Logical grouping for complex shelves</li>
+            </ul>
+            
+            <p><strong>Why sections are hidden:</strong></p>
+            <ul>
+                <li>❌ Not a user feature - Internal organizational tool only</li>
+                <li>❌ Visual continuity - Products flow naturally across shelf</li>
+                <li>❌ Real shelves don't have visible divisions</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="positioning-rules">
+        <h2>📍 Positioning Rules</h2>
+        
+        <div class="algorithm-flow">
+            <h3>Cumulative Positioning Algorithm</h3>
+            
+            <div class="algorithm-step">
+                <span class="algorithm-step-number">1</span>
+                <strong>Initialize Grid Position</strong>
+                <div class="code-example">let currentGridPosition = 1; // Start at position 1</div>
+            </div>
+            
+            <div class="algorithm-step">
+                <span class="algorithm-step-number">2</span>
+                <strong>Process Sections in Order</strong>
+                <div class="code-example">['Left', 'Center', 'Right'].forEach(sectionName => {
+    // Process each section sequentially
+});</div>
+            </div>
+            
+            <div class="algorithm-step">
+                <span class="algorithm-step-number">3</span>
+                <strong>Place Products Cumulatively</strong>
+                <div class="code-example">if (slot.type === 'product') {
+    const facings = slot.data.quantity?.columns || 1;
+    placeProductInGrid(product, currentGridPosition);
+    currentGridPosition += facings; // Move to next position
+}</div>
+            </div>
+            
+            <div class="algorithm-step">
+                <span class="algorithm-step-number">4</span>
+                <strong>Handle Empty Slots</strong>
+                <div class="code-example">else if (slot.type === 'empty') {
+    currentGridPosition += 1; // Empty takes 1 position
+}</div>
+            </div>
+        </div>
+
+        <div class="rule-box">
+            <h3>🔢 Facing Distribution Rules</h3>
+            <p>Each product with multiple facings gets individual grid cells:</p>
+            
+            <div class="rule-visual">
+                <div class="rule-visual-before">
+                    <strong>❌ Wrong:</strong>
+                    <div class="planogram-demo">
+                        <div class="shelf-grid" style="grid-template-columns: 1fr;">
+                            <div class="grid-cell">
+                                <div class="product-name">Coca-Cola</div>
+                                <div>3×1</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="rule-visual-arrow">➡️</div>
+                <div class="rule-visual-after">
+                    <strong>✅ Correct:</strong>
+                    <div class="planogram-demo">
+                        <div class="shelf-grid" style="grid-template-columns: repeat(3, 1fr);">
+                            <div class="grid-cell high-confidence">
+                                <div class="product-name">Coca-Cola</div>
+                                <div class="facing-indicator">F1</div>
+                            </div>
+                            <div class="grid-cell high-confidence">
+                                <div class="product-name">Coca-Cola</div>
+                                <div class="facing-indicator">F2</div>
+                            </div>
+                            <div class="grid-cell high-confidence">
+                                <div class="product-name">Coca-Cola</div>
+                                <div class="facing-indicator">F3</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rule-box">
+            <h3>📚 Stacking Logic</h3>
+            <p>Products can stack vertically (representing depth on shelf):</p>
+            
+            <div class="planogram-demo">
+                <p><strong>Example: Red Bull 2×2 (2 facings × 2 stack)</strong></p>
+                <div class="shelf-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="grid-cell high-confidence">
+                        <div class="product-name">Red Bull</div>
+                        <div class="facing-indicator">F1</div>
+                        <div class="stack-indicator">S2</div>
+                    </div>
+                    <div class="grid-cell high-confidence">
+                        <div class="product-name">Red Bull</div>
+                        <div class="facing-indicator">F2</div>
+                        <div class="stack-indicator">S2</div>
+                    </div>
+                    <div class="grid-cell high-confidence">
+                        <div class="product-name">Red Bull</div>
+                        <div class="facing-indicator">F1</div>
+                        <div class="stack-indicator">S1</div>
+                    </div>
+                    <div class="grid-cell high-confidence">
+                        <div class="product-name">Red Bull</div>
+                        <div class="facing-indicator">F2</div>
+                        <div class="stack-indicator">S1</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="grid-calculation">
+        <h2>🔲 Grid Calculation System</h2>
+        
+        <div class="rule-box">
+            <h3>🌐 Global Width Consistency</h3>
+            <p><strong>Rule:</strong> All shelves MUST have the same width for visual alignment</p>
+            
+            <div class="code-example">// Calculate GLOBAL dimensions across ALL shelves
+let globalMaxPosition = 8; // Minimum shelf width
+
+shelves.forEach(shelf => {
+    let shelfGridPosition = calculateShelfWidth(shelf);
+    globalMaxPosition = Math.max(globalMaxPosition, shelfGridPosition);
+});
+
+// Apply to ALL shelves
+shelves.forEach(shelf => {
+    createShelfGrid(shelf, globalMaxPosition); // Same width for all
+});</div>
+        </div>
+
+        <div class="rule-box">
+            <h3>📏 Standard Dimensions</h3>
+            <table class="dimension-table">
+                <tr>
+                    <th>Dimension</th>
+                    <th>Value</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>Shelf Width</td>
+                    <td class="value">250 cm</td>
+                    <td>Default shelf width</td>
+                </tr>
+                <tr>
+                    <td>Shelf Height</td>
+                    <td class="value">30 cm</td>
+                    <td>Standard shelf height</td>
+                </tr>
+                <tr>
+                    <td>Product Width</td>
+                    <td class="value">8 cm per facing</td>
+                    <td>Width of one product facing</td>
+                </tr>
+                <tr>
+                    <td>Gap Width</td>
+                    <td class="value">2 cm</td>
+                    <td>Space between products</td>
+                </tr>
+                <tr>
+                    <td>Margin</td>
+                    <td class="value">5 cm</td>
+                    <td>Edge margins</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="rule-box">
+            <h3>🎨 Confidence Color Mapping</h3>
+            <p>Products are color-coded based on extraction confidence:</p>
+            
+            <div class="planogram-demo">
+                <div class="shelf-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="grid-cell high-confidence">
+                        <div>≥95%</div>
+                        <div style="font-size: 9px;">#22c55e</div>
+                    </div>
+                    <div class="grid-cell" style="background: #3b82f6;">
+                        <div>≥90%</div>
+                        <div style="font-size: 9px;">#3b82f6</div>
+                    </div>
+                    <div class="grid-cell medium-confidence">
+                        <div>≥80%</div>
+                        <div style="font-size: 9px;">#f59e0b</div>
+                    </div>
+                    <div class="grid-cell low-confidence">
+                        <div><80%</div>
+                        <div style="font-size: 9px;">#ef4444</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="visual-demo">
+        <h2>🖼️ Complete Visual Demo</h2>
+        
+        <div class="planogram-demo">
+            <h3>Full Planogram Example (18 Products, 3 Shelves)</h3>
+            
+            <!-- Shelf 3 (Top) -->
+            <div class="shelf-label">Shelf 3 (Top)</div>
+            <div class="shelf-grid" style="grid-template-columns: repeat(8, 1fr);">
+                <!-- Starbucks Vanilla (3 facings) -->
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Starbucks</div>
+                    <div class="product-price">£2.49</div>
+                    <div class="facing-indicator">F1</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Starbucks</div>
+                    <div class="product-price">£2.49</div>
+                    <div class="facing-indicator">F2</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Starbucks</div>
+                    <div class="product-price">£2.49</div>
+                    <div class="facing-indicator">F3</div>
+                </div>
+                <!-- Starbucks Mocha (2 facings) -->
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Mocha</div>
+                    <div class="product-price">£2.49</div>
+                    <div class="facing-indicator">F1</div>
+                </div>
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Mocha</div>
+                    <div class="product-price">£2.49</div>
+                    <div class="facing-indicator">F2</div>
+                </div>
+                <!-- Sports drinks -->
+                <div class="grid-cell medium-confidence">
+                    <div class="product-name">Powerade</div>
+                    <div class="product-price">£1.79</div>
+                </div>
+                <div class="grid-cell medium-confidence">
+                    <div class="product-name">Gatorade</div>
+                    <div class="product-price">£1.79</div>
+                </div>
+                <!-- Empty -->
+                <div class="grid-cell empty"></div>
+            </div>
+            
+            <!-- Shelf 2 (Middle) -->
+            <div class="shelf-label" style="margin-top: 20px;">Shelf 2 (Middle)</div>
+            <div class="shelf-grid" style="grid-template-columns: repeat(8, 1fr);">
+                <!-- Water products with stacking -->
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Evian</div>
+                    <div class="product-price">£0.89</div>
+                    <div class="stack-indicator">3×2</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Evian</div>
+                    <div class="product-price">£0.89</div>
+                    <div class="stack-indicator">3×2</div>
+                </div>
+                <!-- Juices -->
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Orange</div>
+                    <div class="product-price">£2.29</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Orange</div>
+                    <div class="product-price">£2.29</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Orange</div>
+                    <div class="product-price">£2.29</div>
+                </div>
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Apple</div>
+                    <div class="product-price">£2.29</div>
+                </div>
+                <div class="grid-cell medium-confidence">
+                    <div class="product-name">Berry</div>
+                    <div class="product-price">£2.79</div>
+                </div>
+                <!-- Empty -->
+                <div class="grid-cell empty"></div>
+            </div>
+            
+            <!-- Shelf 1 (Bottom) -->
+            <div class="shelf-label" style="margin-top: 20px;">Shelf 1 (Bottom)</div>
+            <div class="shelf-grid" style="grid-template-columns: repeat(8, 1fr);">
+                <!-- Coca-Cola products -->
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Coke Zero</div>
+                    <div class="product-price">£1.29</div>
+                    <div class="facing-indicator">F1</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Coke Zero</div>
+                    <div class="product-price">£1.29</div>
+                    <div class="facing-indicator">F2</div>
+                </div>
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Coke Zero</div>
+                    <div class="product-price">£1.29</div>
+                    <div class="facing-indicator">F3</div>
+                </div>
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Sprite</div>
+                    <div class="product-price">£1.29</div>
+                </div>
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Sprite</div>
+                    <div class="product-price">£1.29</div>
+                </div>
+                <!-- Empty -->
+                <div class="grid-cell empty"></div>
+                <!-- Energy drinks -->
+                <div class="grid-cell high-confidence">
+                    <div class="product-name">Red Bull</div>
+                    <div class="product-price">£1.89</div>
+                </div>
+                <div class="grid-cell" style="background: #3b82f6;">
+                    <div class="product-name">Monster</div>
+                    <div class="product-price">£2.15</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="data-flow">
+        <h2>🔄 Data Flow</h2>
+        
+        <div class="rule-box">
+            <h3>1. Backend Data Structure</h3>
+            <div class="code-example">{
+    "shelves": {
+        "1": {
+            "shelf_number": 1,
+            "sections": {
+                "Left": [{
+                    "type": "product",
+                    "position": 1,  // Sequential in JSON
+                    "data": {
+                        "brand": "Coca-Cola",
+                        "name": "Coke Zero 330ml",
+                        "quantity": {
+                            "columns": 3,  // 3 facings
+                            "stack": 1     // 1 row high
+                        },
+                        "visual": {
+                            "confidence_color": "#22c55e"
+                        }
+                    }
+                }],
+                "Center": [...],
+                "Right": [...]
+            }
+        }
+    }
+}</div>
+        </div>
+
+        <div class="rule-box">
+            <h3>2. Grid Cell Structure</h3>
+            <div class="code-example">{
+    type: 'product',
+    product: productData,
+    jsonPosition: 1,        // Original position in JSON
+    gridPosition: 3,        // Actual grid slot (cumulative)
+    stackLevel: 1,          // Which stack level
+    facingIndex: 2,         // Which facing of this product
+    totalFacings: 3,        // Total facings for product
+    cellId: "coke-JSON1-GRID3-F2S1"  // Unique identifier
+}</div>
+        </div>
+    </div>
+
+    <div id="key-learnings">
+        <h2>💡 Key Learnings & Gotchas</h2>
+        
+        <div class="rule-box">
+            <h3>🔴 Critical Mistakes to Avoid</h3>
+            
+            <div style="background: #fee2e2; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>❌ Using JSON position directly for grid placement</strong>
+                <div class="code-example">// WRONG
+const gridCol = product.position - 1;</div>
+            </div>
+            
+            <div style="background: #fee2e2; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>❌ Different shelf widths</strong>
+                <p>All shelves must use the same global maximum width</p>
+            </div>
+            
+            <div style="background: #fee2e2; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>❌ Showing section boundaries in UI</strong>
+                <p>Sections are for AI processing only, not user display</p>
+            </div>
+            
+            <div style="background: #fee2e2; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>❌ One cell for multiple facings</strong>
+                <p>Each facing needs its own grid cell</p>
+            </div>
+        </div>
+
+        <div class="rule-box">
+            <h3>✅ Best Practices</h3>
+            
+            <div style="background: #d1fae5; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>✓ Cumulative positioning</strong>
+                <div class="code-example">let currentGridPosition = 1;
+currentGridPosition += facings;</div>
+            </div>
+            
+            <div style="background: #d1fae5; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>✓ Process sections in order</strong>
+                <p>Always Left → Center → Right for consistency</p>
+            </div>
+            
+            <div style="background: #d1fae5; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>✓ Transparent empty cells</strong>
+                <p>Empty slots should be completely invisible</p>
+            </div>
+            
+            <div style="background: #d1fae5; padding: 15px; border-radius: 6px; margin: 10px 0;">
+                <strong>✓ Consistent color mapping</strong>
+                <p>Use the same confidence thresholds everywhere</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="rule-box">
+        <h3>🚀 Future Enhancements</h3>
+        <ul>
+            <li><strong>Click-to-Edit:</strong> Grid cells are ready for interactive editing</li>
+            <li><strong>Drag & Drop:</strong> Reorder products by dragging</li>
+            <li><strong>Real-time Updates:</strong> WebSocket integration for live changes</li>
+            <li><strong>Smart Gap Detection:</strong> AI-powered missing product identification</li>
+            <li><strong>Performance:</strong> Canvas rendering for 50+ products per shelf</li>
+        </ul>
+    </div>
+
+    <div style="text-align: center; margin-top: 60px; padding: 20px; background: #f1f5f9; border-radius: 8px;">
+        <p style="color: #64748b;">This comprehensive planogram system transforms retail shelf photos into structured, interactive grid visualizations with intelligent product placement and visual clarity.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI - Planogram Visualization Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            color: #1e293b;
+        }
+        .subtitle {
+            color: #64748b;
+            font-size: 18px;
+        }
+        
+        /* Planogram Demo Section */
+        .planogram-section {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        /* Grid-based planogram */
+        .planogram-container {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        
+        .shelf {
+            margin-bottom: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .shelf-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .shelf-number {
+            background: #3b82f6;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .shelf-info {
+            flex: 1;
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .grid {
+            display: grid;
+            gap: 2px;
+            background: #e2e8f0;
+            padding: 2px;
+            border-radius: 4px;
+        }
+        
+        .grid-cell {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 4px;
+            text-align: center;
+            font-size: 11px;
+            border-radius: 4px;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .grid-cell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        
+        /* Confidence colors */
+        .confidence-high { background: #22c55e; }
+        .confidence-good { background: #3b82f6; }
+        .confidence-medium { background: #f59e0b; }
+        .confidence-low { background: #ef4444; }
+        
+        /* Empty cells */
+        .grid-cell.empty {
+            background: transparent;
+            border: 2px dashed #cbd5e1;
+            color: #94a3b8;
+            cursor: default;
+        }
+        .grid-cell.empty:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Product info */
+        .product-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .product-price {
+            font-size: 10px;
+            opacity: 0.9;
+        }
+        
+        /* Indicators */
+        .facing-indicator {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.3);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+        
+        .stack-indicator {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            background: rgba(0,0,0,0.3);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 9px;
+        }
+        
+        /* Annotations */
+        .annotation {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        .annotation-title {
+            font-weight: bold;
+            color: #92400e;
+            margin-bottom: 5px;
+        }
+        
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        /* JSON example */
+        .json-example {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 OnShelf AI - Planogram Visualization Demo</h1>
+            <p class="subtitle">Interactive demonstration of our grid-based planogram system with 18 products across 3 shelves</p>
+        </div>
+
+        <div class="planogram-section">
+            <h2>📊 Live Planogram Demo</h2>
+            
+            <!-- Statistics -->
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value">18</div>
+                    <div class="stat-label">Total Products</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">Shelf Levels</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">8</div>
+                    <div class="stat-label">Grid Width (slots)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">92%</div>
+                    <div class="stat-label">Avg. Confidence</div>
+                </div>
+            </div>
+
+            <div class="annotation">
+                <div class="annotation-title">🎯 Key Concept: Cumulative Positioning</div>
+                Each product's grid position is calculated by adding up all previous products' facings. This is NOT the JSON position number!
+            </div>
+
+            <div class="planogram-container">
+                <!-- Shelf 3 (Top) -->
+                <div class="shelf">
+                    <div class="shelf-header">
+                        <div class="shelf-number">3</div>
+                        <div class="shelf-info">
+                            <strong>Shelf 3 (Top)</strong> - Coffee & Sports Drinks
+                            <br>5 products, 1 gap, 2 stacked items
+                        </div>
+                    </div>
+                    <div class="grid" style="grid-template-columns: repeat(8, 80px); grid-template-rows: repeat(2, 50px);">
+                        <!-- Row 2 (Stacked items) -->
+                        <div class="confidence-good">
+                            <div class="product-name">Powerade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S2</div>
+                        </div>
+                        <div class="confidence-good">
+                            <div class="product-name">Powerade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S2</div>
+                        </div>
+                        <div class="confidence-medium">
+                            <div class="product-name">Gatorade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S2</div>
+                        </div>
+                        <div class="confidence-medium">
+                            <div class="product-name">Gatorade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S2</div>
+                        </div>
+                        <div style="grid-column: span 4;"></div>
+                        
+                        <!-- Row 1 (Bottom) -->
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Starbucks</div>
+                            <div class="product-price">£2.49</div>
+                            <div class="facing-indicator">F1</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Starbucks</div>
+                            <div class="product-price">£2.49</div>
+                            <div class="facing-indicator">F2</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Starbucks</div>
+                            <div class="product-price">£2.49</div>
+                            <div class="facing-indicator">F3</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Mocha</div>
+                            <div class="product-price">£2.49</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Mocha</div>
+                            <div class="product-price">£2.49</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Powerade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S1</div>
+                        </div>
+                        <div class="grid-cell confidence-medium">
+                            <div class="product-name">Gatorade</div>
+                            <div class="product-price">£1.79</div>
+                            <div class="stack-indicator">S1</div>
+                        </div>
+                        <div class="grid-cell empty">
+                            📭
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shelf 2 (Middle) -->
+                <div class="shelf">
+                    <div class="shelf-header">
+                        <div class="shelf-number">2</div>
+                        <div class="shelf-info">
+                            <strong>Shelf 2 (Middle)</strong> - Water & Juices
+                            <br>6 products, 1 gap, 1 triple-stacked item
+                        </div>
+                    </div>
+                    <div class="grid" style="grid-template-columns: repeat(8, 80px);">
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Evian</div>
+                            <div class="product-price">£0.89</div>
+                            <div class="facing-indicator">F1</div>
+                            <div class="stack-indicator">3×2</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Evian</div>
+                            <div class="product-price">£0.89</div>
+                            <div class="facing-indicator">F2</div>
+                            <div class="stack-indicator">3×2</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Smartwater</div>
+                            <div class="product-price">£1.49</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Orange Juice</div>
+                            <div class="product-price">£2.29</div>
+                            <div class="facing-indicator">F1</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Orange Juice</div>
+                            <div class="product-price">£2.29</div>
+                            <div class="facing-indicator">F2</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Orange Juice</div>
+                            <div class="product-price">£2.29</div>
+                            <div class="facing-indicator">F3</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Apple Juice</div>
+                            <div class="product-price">£2.29</div>
+                        </div>
+                        <div class="grid-cell empty">
+                            📭
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shelf 1 (Bottom) -->
+                <div class="shelf">
+                    <div class="shelf-header">
+                        <div class="shelf-number">1</div>
+                        <div class="shelf-info">
+                            <strong>Shelf 1 (Bottom)</strong> - Sodas & Energy Drinks
+                            <br>7 products, 1 gap
+                        </div>
+                    </div>
+                    <div class="grid" style="grid-template-columns: repeat(8, 80px);">
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Coke Zero</div>
+                            <div class="product-price">£1.29</div>
+                            <div class="facing-indicator">F1</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Coke Zero</div>
+                            <div class="product-price">£1.29</div>
+                            <div class="facing-indicator">F2</div>
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Coke Zero</div>
+                            <div class="product-price">£1.29</div>
+                            <div class="facing-indicator">F3</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Sprite</div>
+                            <div class="product-price">£1.29</div>
+                            <div class="facing-indicator">F1</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Sprite</div>
+                            <div class="product-price">£1.29</div>
+                            <div class="facing-indicator">F2</div>
+                        </div>
+                        <div class="grid-cell empty">
+                            📭
+                        </div>
+                        <div class="grid-cell confidence-high">
+                            <div class="product-name">Red Bull</div>
+                            <div class="product-price">£1.89</div>
+                        </div>
+                        <div class="grid-cell confidence-good">
+                            <div class="product-name">Monster</div>
+                            <div class="product-price">£2.15</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color confidence-high"></div>
+                    <span>≥95% Confidence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color confidence-good"></div>
+                    <span>85-94% Confidence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color confidence-medium"></div>
+                    <span>70-84% Confidence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color confidence-low"></div>
+                    <span><70% Confidence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: transparent; border: 2px dashed #cbd5e1;"></div>
+                    <span>Empty Slot</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="planogram-section">
+            <h2>🔍 Visualization Concepts Explained</h2>
+
+            <div class="annotation">
+                <div class="annotation-title">📐 Concept 1: Each Facing Gets Its Own Cell</div>
+                Notice how Coca-Cola Zero with 3 facings occupies 3 separate grid cells (F1, F2, F3), not one cell labeled "3×1".
+            </div>
+
+            <div class="annotation">
+                <div class="annotation-title">📚 Concept 2: Stacking Visualization</div>
+                Powerade and Gatorade on Shelf 3 show 2×2 stacking. Each product has 2 facings (width) × 2 stack (depth), creating 4 total units in a 2×2 grid arrangement.
+            </div>
+
+            <div class="annotation">
+                <div class="annotation-title">🌐 Concept 3: Global Width Consistency</div>
+                All shelves have exactly 8 grid columns, even if they don't use all slots. This ensures visual alignment across all shelf levels.
+            </div>
+
+            <div class="annotation">
+                <div class="annotation-title">👻 Concept 4: Transparent Empty Slots</div>
+                Empty slots are completely transparent with just a dashed border and mailbox icon. They take exactly 1 grid position.
+            </div>
+        </div>
+
+        <div class="planogram-section">
+            <h2>📋 JSON Structure Example</h2>
+            
+            <p>Here's how Shelf 1 is represented in JSON (showing Coke Zero with 3 facings):</p>
+            
+            <div class="json-example">
+{
+  "shelf_number": 1,
+  "sections": {
+    "Left": [
+      {
+        "type": "product",
+        "position": 1,
+        "data": {
+          "id": "coke_1",
+          "brand": "Coca-Cola",
+          "name": "Coke Zero 330ml",
+          "price": 1.29,
+          "quantity": {
+            "columns": 3,      // ← This creates 3 grid cells
+            "stack": 1,        // ← Single row (no stacking)
+            "total_facings": 3
+          },
+          "visual": {
+            "confidence_color": "#22c55e"
+          },
+          "metadata": {
+            "extraction_confidence": 0.98
+          }
+        }
+      },
+      {
+        "type": "product",
+        "position": 2,
+        "data": {
+          "brand": "Coca-Cola",
+          "name": "Sprite 330ml",
+          "quantity": {
+            "columns": 2,      // ← This creates 2 grid cells
+            "stack": 1
+          }
+        }
+      }
+    ],
+    "Center": [
+      {
+        "type": "empty",      // ← Empty slot
+        "position": 3
+      }
+    ]
+  }
+}</div>
+        </div>
+
+        <div class="planogram-section">
+            <h2>🎯 Key Takeaways for LLM Extraction</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border: 2px solid #22c55e;">
+                    <h3 style="color: #166534; margin-top: 0;">✅ DO:</h3>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>Count exact facings: "columns": 3</li>
+                        <li>Specify stack depth: "stack": 2</li>
+                        <li>Include empty slots in sequence</li>
+                        <li>Process Left → Center → Right</li>
+                        <li>Use sequential position numbers</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #fef2f2; padding: 20px; border-radius: 8px; border: 2px solid #ef4444;">
+                    <h3 style="color: #991b1b; margin-top: 0;">❌ DON'T:</h3>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>Use vague terms: "multiple facings"</li>
+                        <li>Combine facings: "3×1" in one cell</li>
+                        <li>Skip empty positions</li>
+                        <li>Use grid position as JSON position</li>
+                        <li>Make shelves different widths</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

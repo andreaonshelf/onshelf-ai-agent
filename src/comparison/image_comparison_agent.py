@@ -63,8 +63,36 @@ class ImageComparisonAgent:
         if not planogram_image:
             raise ValueError("No planogram image provided for comparison - cannot perform visual comparison")
         
+        # Map frontend model IDs to actual API model names
+        model_mapping = {
+            # OpenAI models
+            "gpt-4-vision-preview": "gpt-4-vision-preview",
+            "gpt-4.1": "gpt-4o-2024-11-20",  # Latest GPT-4 with vision
+            "gpt-4.1-mini": "gpt-4o-mini",
+            "gpt-4o": "gpt-4o-2024-11-20",
+            "gpt-4o-mini": "gpt-4o-mini",
+            
+            # Anthropic models (these would need different handling for Claude API)
+            "claude-3-5-sonnet-v2": "claude-3-5-sonnet-20241022",
+            "claude-3-7-sonnet": "claude-3-5-sonnet-20241022",  # Fallback
+            "claude-4-sonnet": "claude-3-5-sonnet-20241022",    # Fallback
+            "claude-4-opus": "claude-3-5-sonnet-20241022",      # Fallback
+            
+            # Google models (would need different handling)
+            "gemini-2.5-flash": "gemini-2.0-flash-exp",
+            "gemini-2.5-flash-thinking": "gemini-2.0-flash-exp",
+            "gemini-2.5-pro": "gemini-2.0-pro-exp",
+            "gemini-pro-vision": "gemini-pro-vision"
+        }
+        
+        api_model = model_mapping.get(model, model)
+        
+        # Check if it's a Claude model
+        is_claude_model = model.startswith('claude-')
+        is_gemini_model = model.startswith('gemini-')
+        
         try:
-            # Use GPT-4V for visual comparison
+            # Use appropriate vision model for comparison
             import base64
             
             # Encode images to base64
@@ -93,9 +121,23 @@ class ImageComparisonAgent:
             Consider that the planogram is a simplified grid representation.
             """
             
+            # Handle different model providers
+            if is_claude_model:
+                # Use Claude for comparison (requires anthropic client)
+                logger.info(f"Using Claude model for comparison: {api_model}", component="comparison_agent")
+                # For now, fall back to GPT-4V since we need to implement Claude vision support
+                api_model = "gpt-4o-2024-11-20"
+                logger.info("Falling back to GPT-4 for vision comparison", component="comparison_agent")
+            elif is_gemini_model:
+                # Use Gemini for comparison (requires different API)
+                logger.info(f"Using Gemini model for comparison: {api_model}", component="comparison_agent")
+                # For now, fall back to GPT-4V since we need to implement Gemini vision support
+                api_model = "gpt-4o-2024-11-20"
+                logger.info("Falling back to GPT-4 for vision comparison", component="comparison_agent")
+            
             # Call vision model with both images
             response = self.client.chat.completions.create(
-                model=model,
+                model=api_model,
                 messages=[
                     {
                         "role": "user",

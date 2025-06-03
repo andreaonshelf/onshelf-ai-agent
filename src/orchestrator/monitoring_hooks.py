@@ -110,6 +110,33 @@ class MonitoringHooks:
             "current_processing": detail
         }
         self.update_monitor(queue_item_id, updates)
+    
+    async def update_stage_progress(self, queue_item_id: int, stage_name: str, 
+                                  attempt: int, total_attempts: int, 
+                                  model: str = None, complete: bool = False):
+        """Update stage-based progress for new pipeline"""
+        updates = {
+            "execution_mode": "stage-based",
+            "current_stage": stage_name,
+            "stage_attempt": attempt,
+            "stage_total_attempts": total_attempts,
+            "current_model": model
+        }
+        
+        # Update stage status
+        if "stages" not in self.monitors.get(queue_item_id, {}):
+            self.monitors[queue_item_id]["stages"] = {}
+        
+        if stage_name not in self.monitors[queue_item_id]["stages"]:
+            self.monitors[queue_item_id]["stages"][stage_name] = {
+                "attempts": 0,
+                "complete": False
+            }
+        
+        self.monitors[queue_item_id]["stages"][stage_name]["attempts"] = attempt
+        self.monitors[queue_item_id]["stages"][stage_name]["complete"] = complete
+        
+        self.update_monitor(queue_item_id, updates)
 
 
 # Global monitoring instance

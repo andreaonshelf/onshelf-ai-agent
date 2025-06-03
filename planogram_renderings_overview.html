@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnShelf AI - Planogram Rendering Examples</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        h1, h2, h3 {
+            color: #1e293b;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .rendering-type {
+            background: white;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .demo-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #e2e8f0;
+        }
+        .code-sample {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 5px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+        .planogram-demo {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        .shelf {
+            background: #f1f5f9;
+            border: 2px solid #cbd5e1;
+            margin: 10px auto;
+            padding: 15px;
+            border-radius: 6px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            min-height: 80px;
+        }
+        .product {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+            min-width: 80px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .product.high-confidence {
+            background: #22c55e;
+        }
+        .product.medium-confidence {
+            background: #f59e0b;
+        }
+        .product.low-confidence {
+            background: #ef4444;
+        }
+        .empty-slot {
+            border: 2px dashed #cbd5e1;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #94a3b8;
+            min-width: 80px;
+            text-align: center;
+        }
+        .api-endpoint {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .navigation {
+            position: sticky;
+            top: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            color: #3b82f6;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .nav-links a:hover {
+            background: #eff6ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏪 OnShelf AI - Planogram Rendering Approaches</h1>
+        <p>Comprehensive overview of all planogram visualization methods in the codebase</p>
+    </div>
+
+    <div class="navigation">
+        <div class="nav-links">
+            <a href="#react-component">React Component</a>
+            <a href="#svg-rendering">SVG Rendering</a>
+            <a href="#png-rendering">PNG Rendering</a>
+            <a href="#demo-data">Demo Data</a>
+            <a href="#api-endpoints">API Endpoints</a>
+        </div>
+    </div>
+
+    <div id="react-component" class="rendering-type">
+        <h2>1. Interactive React Component</h2>
+        <p><strong>Location:</strong> <code>/static/components/InteractivePlanogram.js</code></p>
+        
+        <h3>Features:</h3>
+        <ul class="feature-list">
+            <li>Full interactive planogram with React (no JSX, uses createElement)</li>
+            <li>Real-time display options (names, prices, facings, confidence)</li>
+            <li>Stacking visualization for multi-row products</li>
+            <li>Color-coded confidence levels</li>
+            <li>Responsive shelf sections (Left/Center/Right)</li>
+        </ul>
+
+        <div class="demo-container">
+            <h4>Visual Demo:</h4>
+            <div class="planogram-demo">
+                <h5>Shelf 3</h5>
+                <div class="shelf">
+                    <div class="product high-confidence">
+                        Starbucks<br>
+                        Vanilla<br>
+                        £2.49<br>
+                        <small>96%</small>
+                    </div>
+                    <div class="product medium-confidence">
+                        Starbucks<br>
+                        Mocha<br>
+                        £2.49<br>
+                        <small>89%</small>
+                    </div>
+                    <div class="product medium-confidence">
+                        Powerade<br>
+                        Blue<br>
+                        £1.79<br>
+                        <small>85%</small>
+                    </div>
+                </div>
+                
+                <h5>Shelf 2</h5>
+                <div class="shelf">
+                    <div class="product high-confidence">
+                        Evian<br>
+                        Water<br>
+                        £0.89<br>
+                        <small>97%</small>
+                    </div>
+                    <div class="product high-confidence">
+                        Innocent<br>
+                        Orange<br>
+                        £2.29<br>
+                        <small>94%</small>
+                    </div>
+                    <div class="empty-slot">
+                        📭<br>
+                        Empty
+                    </div>
+                </div>
+                
+                <h5>Shelf 1</h5>
+                <div class="shelf">
+                    <div class="product high-confidence">
+                        Coca-Cola<br>
+                        Zero<br>
+                        £1.29<br>
+                        <small>98%</small>
+                    </div>
+                    <div class="product medium-confidence">
+                        Sprite<br>
+                        330ml<br>
+                        £1.29<br>
+                        <small>92%</small>
+                    </div>
+                    <div class="product low-confidence">
+                        Monster<br>
+                        Energy<br>
+                        £2.15<br>
+                        <small>76%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="code-sample">
+// Usage in dashboard
+&lt;div id="planogram-container"&gt;&lt;/div&gt;
+&lt;script&gt;
+  const planogramContainer = document.getElementById('planogram-container');
+  ReactDOM.render(
+    React.createElement(InteractivePlanogram, { imageId: 'demo' }),
+    planogramContainer
+  );
+&lt;/script&gt;
+        </div>
+    </div>
+
+    <div id="svg-rendering" class="rendering-type">
+        <h2>2. SVG Rendering API</h2>
+        <p><strong>Location:</strong> <code>/src/api/planogram_renderer.py</code></p>
+        
+        <h3>Features:</h3>
+        <ul class="feature-list">
+            <li>Server-side SVG generation from extraction data</li>
+            <li>Three abstraction levels: brand_view, product_view, sku_view</li>
+            <li>Color-coded confidence visualization</li>
+            <li>Scalable vector graphics output</li>
+        </ul>
+
+        <div class="api-endpoint">
+            GET /api/planogram/{image_id}/render?abstraction_level=product_view&format=svg
+        </div>
+
+        <div class="code-sample">
+# SVG Generation Example
+def generate_svg_from_real_data(extraction_data, abstraction_level):
+    products = extraction_data.get("products", [])
+    
+    # Color based on confidence
+    if confidence >= 0.9:
+        color = "#28a745"  # Green
+    elif confidence >= 0.7:
+        color = "#ffc107"  # Yellow
+    else:
+        color = "#dc3545"  # Red
+        
+    # Generate SVG elements for each product
+    svg_content = f'''
+    &lt;rect x="{x}" y="{y}" width="80" height="70" 
+          fill="{color}" stroke="#333"/&gt;
+    &lt;text x="{x+40}" y="{y+35}" text-anchor="middle"&gt;
+        {product_name}
+    &lt;/text&gt;
+    '''
+        </div>
+    </div>
+
+    <div id="png-rendering" class="rendering-type">
+        <h2>3. PNG Rendering API</h2>
+        <p><strong>Location:</strong> <code>/src/api/planogram_renderer.py</code></p>
+        
+        <h3>Features:</h3>
+        <ul class="feature-list">
+            <li>Server-side PNG generation using PIL/Pillow</li>
+            <li>Base64 encoded output for web display</li>
+            <li>Suitable for email reports or static exports</li>
+            <li>Fixed dimensions with product list layout</li>
+        </ul>
+
+        <div class="api-endpoint">
+            GET /api/planogram/{image_id}/render?abstraction_level=product_view&format=png
+        </div>
+
+        <div class="code-sample">
+# PNG Generation Example
+def generate_png_from_real_data(extraction_data, abstraction_level):
+    image = Image.new('RGB', (800, 600), 'white')
+    draw = ImageDraw.Draw(image)
+    
+    # Draw products with confidence colors
+    for product in products:
+        if confidence >= 0.9:
+            color = (40, 167, 69)  # Green
+        elif confidence >= 0.7:
+            color = (255, 193, 7)  # Yellow
+        else:
+            color = (220, 53, 69)  # Red
+            
+        draw.rectangle([x, y, x+width, y+height], 
+                      fill=color, outline=(0, 0, 0))
+        </div>
+    </div>
+
+    <div id="demo-data" class="rendering-type">
+        <h2>4. Demo Planogram Data</h2>
+        <p><strong>Location:</strong> <code>/src/api/planogram_editor.py</code></p>
+        
+        <h3>Demo Structure:</h3>
+        <ul class="feature-list">
+            <li>18 products across 3 shelves</li>
+            <li>Beverage category focus (sodas, energy drinks, water, juice)</li>
+            <li>Realistic pricing and positioning</li>
+            <li>Includes stacking examples (Red Bull, Evian)</li>
+            <li>Gap detection demonstration</li>
+        </ul>
+
+        <div class="demo-container">
+            <h4>Demo Data Structure:</h4>
+            <div class="code-sample">
+{
+    "shelves": [
+        {
+            "shelf_number": 1,
+            "sections": {
+                "Left": [
+                    {"type": "product", "data": {
+                        "brand": "Coca-Cola",
+                        "name": "Coke Zero 330ml",
+                        "price": 1.29,
+                        "quantity": {"stack": 1, "columns": 3},
+                        "extraction_confidence": 0.98
+                    }}
+                ],
+                "Center": [...],
+                "Right": [...]
+            }
+        }
+    ]
+}
+            </div>
+        </div>
+    </div>
+
+    <div id="api-endpoints" class="rendering-type">
+        <h2>5. Complete API Endpoints</h2>
+        
+        <h3>Planogram Rendering:</h3>
+        <div class="api-endpoint">
+            GET /api/planogram/{image_id}/render
+        </div>
+        <p>Parameters:</p>
+        <ul>
+            <li><code>abstraction_level</code>: brand_view, product_view, sku_view</li>
+            <li><code>format</code>: svg, png, json</li>
+        </ul>
+
+        <h3>Editable Planogram Data:</h3>
+        <div class="api-endpoint">
+            GET /api/planogram/{image_id}/editable
+        </div>
+        <p>Returns planogram data merged with human corrections for interactive editing</p>
+
+        <h3>Save Corrections:</h3>
+        <div class="api-endpoint">
+            POST /api/planogram/{image_id}/corrections
+        </div>
+        <p>Saves human corrections for planogram edits</p>
+
+        <h3>Demo Access:</h3>
+        <div class="api-endpoint">
+            GET /api/planogram/demo/editable
+        </div>
+        <p>Returns the full 18-product demo planogram for testing</p>
+    </div>
+
+    <div class="rendering-type">
+        <h2>Key Differences Between Approaches</h2>
+        
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background: #f1f5f9;">
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Approach</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Best For</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0;">Key Features</th>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>React Component</strong></td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Interactive dashboard views</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Real-time updates, toggle overlays, hover effects</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>SVG API</strong></td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Web display, scalable graphics</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Clean vectors, customizable abstraction</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>PNG API</strong></td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Reports, emails, static exports</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Fixed format, base64 encoding</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>JSON API</strong></td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Data exchange, custom rendering</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0;">Raw data access, flexible integration</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="rendering-type">
+        <h2>Visual Comparison Interface</h2>
+        <p><strong>Bonus Finding:</strong> <code>/visual_comparison.html</code></p>
+        
+        <p>A dedicated page for comparing different OnShelf interfaces, showing how each mode (Extractions, Pipeline Studio, Prompt Lab, Analytics, Settings) has unique visual elements and features.</p>
+        
+        <div class="demo-container">
+            <p>This comparison interface helps identify the unique CSS classes and visual elements for each section, useful for understanding the overall UI architecture.</p>
+        </div>
+    </div>
+</body>
+</html>

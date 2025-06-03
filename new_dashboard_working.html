@@ -676,6 +676,23 @@
             border-color: #3b82f6 !important;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
+        
+        /* Stage-based status indicators */
+        .status-active {
+            color: #3b82f6;
+            font-weight: 600;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        .status-complete {
+            color: #16a34a;
+            font-weight: 500;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -4160,22 +4177,56 @@ Provide structured output with:
                                 </div>
                                 
                                 <div style={{ marginBottom: '16px' }}>
-                                    <div style={{ fontWeight: 500, marginBottom: '8px' }}>
-                                        Current: Iteration {monitoringData.current_iteration}, {monitoringData.current_stage}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '8px', fontSize: '14px' }}>
-                                        <span className={monitoringData.structure_complete ? 'status-complete' : ''}>
-                                            Structure {monitoringData.structure_complete ? '✓' : '⚡'}
-                                        </span>
-                                        <span>→</span>
-                                        <span className={monitoringData.products_complete ? 'status-complete' : ''}>
-                                            Products {monitoringData.products_complete ? '✓' : '⚡'}
-                                        </span>
-                                        <span>→</span>
-                                        <span>Details</span>
-                                        <span>→</span>
-                                        <span>Validation</span>
-                                    </div>
+                                    {/* Stage-based or Iteration-based display */}
+                                    {monitoringData.execution_mode === 'stage-based' ? (
+                                        // Stage-based Progress
+                                        <div>
+                                            <div style={{ fontWeight: 500, marginBottom: '8px' }}>
+                                                Stage: {monitoringData.current_stage} (Attempt {monitoringData.stage_attempt}/{monitoringData.stage_total_attempts})
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '12px', fontSize: '14px', marginBottom: '12px' }}>
+                                                <span className={monitoringData.stages?.structure?.complete ? 'status-complete' : (monitoringData.current_stage === 'structure' ? 'status-active' : '')}>
+                                                    1. Structure {monitoringData.stages?.structure?.complete ? '✓' : (monitoringData.current_stage === 'structure' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.structure?.attempts && ` (${monitoringData.stages.structure.attempts} attempts)`}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.stages?.products?.complete ? 'status-complete' : (monitoringData.current_stage === 'products' ? 'status-active' : '')}>
+                                                    2. Products {monitoringData.stages?.products?.complete ? '✓' : (monitoringData.current_stage === 'products' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.products?.attempts && ` (${monitoringData.stages.products.attempts} attempts)`}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.stages?.details?.complete ? 'status-complete' : (monitoringData.current_stage === 'details' ? 'status-active' : '')}>
+                                                    3. Details {monitoringData.stages?.details?.complete ? '✓' : (monitoringData.current_stage === 'details' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.details?.attempts && ` (${monitoringData.stages.details.attempts} attempts)`}
+                                                </span>
+                                            </div>
+                                            {monitoringData.current_model && (
+                                                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                                                    Using: {monitoringData.current_model}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        // Iteration-based Progress (existing)
+                                        <div>
+                                            <div style={{ fontWeight: 500, marginBottom: '8px' }}>
+                                                Current: Iteration {monitoringData.current_iteration}, {monitoringData.current_stage}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px', fontSize: '14px' }}>
+                                                <span className={monitoringData.structure_complete ? 'status-complete' : ''}>
+                                                    Structure {monitoringData.structure_complete ? '✓' : '⚡'}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.products_complete ? 'status-complete' : ''}>
+                                                    Products {monitoringData.products_complete ? '✓' : '⚡'}
+                                                </span>
+                                                <span>→</span>
+                                                <span>Details</span>
+                                                <span>→</span>
+                                                <span>Validation</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {monitoringData.locked_items && monitoringData.locked_items.length > 0 && (

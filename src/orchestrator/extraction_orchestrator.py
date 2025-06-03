@@ -692,4 +692,177 @@ class ExtractionOrchestrator:
                 f"Increased high-confidence products from {high_conf_previous} to {high_conf_current}"
             )
         
-        return improvements 
+        return improvements
+    
+    async def execute_stage(self,
+                          stage_name: str,
+                          model_id: str,
+                          images: Dict[str, bytes],
+                          locked_context: Dict,
+                          previous_attempts: List = None,
+                          attempt_number: int = 1,
+                          agent_id: str = None) -> Any:
+        """Execute a single stage with a specific model"""
+        
+        logger.info(
+            f"Executing stage '{stage_name}' with model {model_id}",
+            component="extraction_orchestrator",
+            stage=stage_name,
+            model=model_id,
+            attempt=attempt_number,
+            has_locked_context='structure' in locked_context
+        )
+        
+        if stage_name == 'structure':
+            return await self._execute_structure_stage(
+                images=images,
+                model_id=model_id,
+                previous_attempts=previous_attempts,
+                agent_id=agent_id
+            )
+        elif stage_name == 'products':
+            return await self._execute_products_stage(
+                images=images,
+                structure=locked_context.get('structure'),
+                model_id=model_id,
+                previous_attempts=previous_attempts,
+                attempt_number=attempt_number,
+                agent_id=agent_id
+            )
+        elif stage_name == 'details':
+            return await self._execute_details_stage(
+                images=images,
+                structure=locked_context.get('structure'),
+                products=locked_context.get('products'),
+                model_id=model_id,
+                previous_attempts=previous_attempts,
+                agent_id=agent_id
+            )
+        else:
+            raise ValueError(f"Unknown stage: {stage_name}")
+    
+    async def _execute_structure_stage(self,
+                                     images: Dict[str, bytes],
+                                     model_id: str,
+                                     previous_attempts: List,
+                                     agent_id: str) -> ShelfStructure:
+        """Execute structure extraction stage"""
+        
+        # Get custom prompt if configured
+        prompt = self.stage_prompts.get('structure', self.prompt_templates.get_template('structure_analysis'))
+        
+        # If we have previous attempts, build on them
+        if previous_attempts:
+            previous_structure = previous_attempts[-1]
+            prompt += f"\n\nPrevious analysis found {previous_structure.shelf_count} shelves. Please verify and refine this analysis."
+        
+        # Execute with the model
+        result, cost = await self.extraction_engine.execute_with_model_id(
+            model_id=model_id,
+            prompt=prompt,
+            images=images,
+            output_schema="ShelfStructure",
+            agent_id=agent_id
+        )
+        
+        # Add confidence score
+        if not hasattr(result, 'structure_confidence'):
+            # Simple confidence based on consistency with previous attempts
+            if previous_attempts:
+                prev_shelf_counts = [a.shelf_count for a in previous_attempts if hasattr(a, 'shelf_count')]
+                if prev_shelf_counts and all(c == result.shelf_count for c in prev_shelf_counts):
+                    result.structure_confidence = 0.95
+                else:
+                    result.structure_confidence = 0.80
+            else:
+                result.structure_confidence = 0.85
+        
+        result.api_cost_estimate = cost
+        return result
+    
+    async def _execute_products_stage(self,
+                                    images: Dict[str, bytes],
+                                    structure: ShelfStructure,
+                                    model_id: str,
+                                    previous_attempts: List,
+                                    attempt_number: int,
+                                    agent_id: str) -> ExtractionResult:
+        """Execute products extraction stage with locked structure"""
+        
+        # Build cumulative context from previous attempts
+        context = None
+        if previous_attempts:
+            context = self._build_cumulative_context(
+                structure=structure,
+                previous_attempts=previous_attempts,
+                focus_areas=None,
+                locked_positions=None,
+                iteration=attempt_number
+            )
+        
+        # Use existing cumulative learning method but with locked structure
+        return await self.extract_with_cumulative_learning(
+            image=images.get('enhanced', images.get('main', list(images.values())[0])),
+            iteration=attempt_number,
+            previous_attempts=previous_attempts,
+            focus_areas=context.focus_areas if context else None,
+            locked_positions=context.locked_positions if context else None,
+            agent_id=agent_id
+        )
+    
+    async def _execute_details_stage(self,
+                                   images: Dict[str, bytes],
+                                   structure: ShelfStructure,
+                                   products: ExtractionResult,
+                                   model_id: str,
+                                   previous_attempts: List,
+                                   agent_id: str) -> ExtractionResult:
+        """Execute details extraction stage with locked products"""
+        
+        # Get custom prompt for details
+        prompt = self.stage_prompts.get('details', self.prompt_templates.get_template('details_extraction'))
+        
+        # Build context with locked products
+        products_list = products.products if hasattr(products, 'products') else []
+        
+        prompt += f"\n\nExtract details for these {len(products_list)} confirmed products:\n"
+        for i, product in enumerate(products_list, 1):
+            prompt += f"{i}. Shelf {product.position.shelf_number}, Position {product.position.position_on_shelf}: {product.brand} {product.name}\n"
+        
+        # Execute details extraction
+        result, cost = await self.extraction_engine.execute_with_model_id(
+            model_id=model_id,
+            prompt=prompt,
+            images=images,
+            output_schema="List[ProductExtraction]",
+            agent_id=agent_id
+        )
+        
+        # Merge details with existing products
+        enhanced_products = []
+        for original in products_list:
+            # Find matching product in details result
+            for detailed in result:
+                if (detailed.position.shelf_number == original.position.shelf_number and
+                    detailed.position.position_on_shelf == original.position.position_on_shelf):
+                    # Merge details
+                    original.price = detailed.price or original.price
+                    if hasattr(detailed, 'size_variant'):
+                        original.size_variant = detailed.size_variant
+                    if hasattr(detailed, 'promotional_tags'):
+                        original.promotional_tags = detailed.promotional_tags
+                    break
+            enhanced_products.append(original)
+        
+        # Create result with enhanced products
+        return ExtractionResult(
+            agent_number=attempt_number,
+            structure=structure,
+            products=enhanced_products,
+            total_products=len(enhanced_products),
+            overall_confidence=self._calculate_overall_confidence(enhanced_products),
+            accuracy_estimate=self._estimate_accuracy(enhanced_products),
+            extraction_duration_seconds=0,
+            model_used=model_id,
+            api_cost_estimate=cost
+        ) 
