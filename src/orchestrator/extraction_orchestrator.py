@@ -329,6 +329,60 @@ class ExtractionOrchestrator:
         
         return "\n".join(result) if result else "Stable confidence across positions"
     
+    def process_retry_blocks(self, prompt: str, attempt_number: int, context: dict = None) -> str:
+        """Process {IF_RETRY} blocks in prompts based on attempt number and fill context variables
+        
+        Args:
+            prompt: The prompt text containing {IF_RETRY} blocks and {VARIABLES}
+            attempt_number: Current attempt number (1-based)
+            context: Dictionary of variables to replace in the prompt
+            
+        Returns:
+            Processed prompt with retry blocks included/excluded and variables filled
+        """
+        import re
+        
+        # First, process {IF_RETRY} blocks
+        pattern = r'\{IF_RETRY\}(.*?)\{/IF_RETRY\}'
+        
+        def replace_block(match):
+            # Include content only if this is a retry (attempt > 1)
+            if attempt_number > 1:
+                return match.group(1)
+            else:
+                return ''
+        
+        # Process all {IF_RETRY} blocks
+        processed = re.sub(pattern, replace_block, prompt, flags=re.DOTALL)
+        
+        # Clean up any extra whitespace left from removed blocks
+        processed = re.sub(r'\n\s*\n\s*\n', '\n\n', processed)
+        
+        # Then, fill in context variables
+        if context:
+            for key, value in context.items():
+                # Replace {KEY} with value, handling different types
+                placeholder = f"{{{key.upper()}}}"
+                if placeholder in processed:
+                    # Convert value to string, handling special cases
+                    if isinstance(value, list):
+                        # Format lists nicely
+                        value_str = '\n'.join(f"- {item}" for item in value)
+                    elif isinstance(value, dict):
+                        # Format dicts as key: value pairs
+                        value_str = '\n'.join(f"{k}: {v}" for k, v in value.items())
+                    elif value is None:
+                        value_str = "Not available"
+                    else:
+                        value_str = str(value)
+                    
+                    processed = processed.replace(placeholder, value_str)
+        
+        # Remove any unfilled variables (optional - or leave them for debugging)
+        # processed = re.sub(r'\{[A-Z_]+\}', '[Missing]', processed)
+        
+        return processed
+    
     def _load_model_config(self):
         """Load model configuration from queue item"""
         try:
@@ -438,6 +492,32 @@ class ExtractionOrchestrator:
             )
         else:
             shelf_prompt_template = prompt_templates.get_template("shelf_by_shelf_extraction")
+        
+        # Process {IF_RETRY} blocks based on agent number (which serves as attempt number for products)
+        # Build context for variable replacement
+        retry_context = {
+            'shelf_number': shelf_num,
+            'total_shelves': context.structure.shelf_count
+        }
+        
+        # Add previous extraction data if this is a retry
+        if agent_number > 1:
+            # Find products already extracted for this shelf
+            existing_products = [p for p in context.successful_extractions 
+                               if p.get('shelf_level') == shelf_num]
+            if existing_products:
+                retry_context['previous_shelf_products'] = '\n'.join(
+                    f"Position {p.get('position_on_shelf')}: {p.get('brand')} {p.get('name')}"
+                    for p in existing_products[:10]  # Limit to prevent overflow
+                )
+            
+            # Add any visual feedback
+            retry_context['planogram_feedback'] = "Check edges and promotional areas for missed products"
+            
+            # Add alias for consistency with prompt
+            retry_context['previous_extraction_data'] = retry_context.get('previous_shelf_products', 'No previous extraction data')
+        
+        shelf_prompt_template = self.process_retry_blocks(shelf_prompt_template, agent_number, retry_context)
         
         logger.info(
             f"Starting shelf-by-shelf extraction for {context.structure.shelf_count} shelves",
@@ -747,9 +827,27 @@ class ExtractionOrchestrator:
                                      previous_attempts: List,
                                      agent_id: str) -> ShelfStructure:
         """Execute structure extraction stage"""
+        from ..extraction.prompts import PromptTemplates
         
         # Get custom prompt if configured
-        prompt = self.stage_prompts.get('structure', self.prompt_templates.get_template('structure_analysis'))
+        if hasattr(self, 'stage_prompts') and 'structure' in self.stage_prompts:
+            prompt = self.stage_prompts['structure']
+        else:
+            # Fallback to default template
+            prompt_templates = PromptTemplates()
+            prompt = prompt_templates.get_template('scaffolding_analysis')
+        
+        # Process {IF_RETRY} blocks based on attempt number
+        attempt_number = len(previous_attempts) + 1 if previous_attempts else 1
+        
+        # Build context for retry
+        retry_context = {}
+        if previous_attempts and attempt_number > 1:
+            last_attempt = previous_attempts[-1]
+            retry_context['shelves'] = last_attempt.shelf_count
+            retry_context['problem_areas'] = "Check bottom shelf for floor products, verify top shelf visibility"
+            
+        prompt = self.process_retry_blocks(prompt, attempt_number, retry_context)
         
         # If we have previous attempts, build on them
         if previous_attempts:
@@ -818,12 +916,61 @@ class ExtractionOrchestrator:
                                    previous_attempts: List,
                                    agent_id: str) -> ExtractionResult:
         """Execute details extraction stage with locked products"""
+        from ..extraction.prompts import PromptTemplates
         
         # Get custom prompt for details
-        prompt = self.stage_prompts.get('details', self.prompt_templates.get_template('details_extraction'))
+        if hasattr(self, 'stage_prompts') and 'details' in self.stage_prompts:
+            prompt = self.stage_prompts['details']
+        else:
+            # Fallback to default template
+            prompt_templates = PromptTemplates()
+            prompt = prompt_templates.get_template('details_extraction')
         
-        # Build context with locked products
+        # Process {IF_RETRY} blocks based on attempt number
+        attempt_number = len(previous_attempts) + 1 if previous_attempts else 1
+        
+        # Build context with locked products first (needed for retry context)
         products_list = products.products if hasattr(products, 'products') else []
+        
+        # Build context for retry
+        retry_context = {}
+        
+        # Always build complete product list for template
+        product_strings = []
+        current_shelf = 0
+        for product in products_list:
+            # Add shelf header when we reach a new shelf
+            if product.position.shelf_number != current_shelf:
+                current_shelf = product.position.shelf_number
+                product_strings.append(f"\nShelf {current_shelf}:")
+            
+            # Add product entry
+            facings_text = f"({product.quantity.total_facings} facings)" if hasattr(product.quantity, 'total_facings') else ""
+            section = getattr(product.position, 'section_on_shelf', 'center')
+            section_text = f"- {section.title()} section"
+            product_strings.append(
+                f"- Position {product.position.position_on_shelf}: {product.brand} {product.name} {facings_text} {section_text}"
+            )
+        
+        retry_context['complete_product_list'] = '\n'.join(product_strings) if product_strings else "No products extracted yet"
+        
+        # Add retry-specific context if this is a retry
+        if previous_attempts and attempt_number > 1:
+            # Analyze what details are missing
+            missing_details = []
+            for product in products_list:
+                missing_items = []
+                if not getattr(product, 'price', None):
+                    missing_items.append("price")
+                if not getattr(product, 'size_variant', None):
+                    missing_items.append("size")
+                if missing_items:
+                    missing_details.append(f"{product.brand} {product.name}: {', '.join(missing_items)} missing")
+            
+            if missing_details:
+                retry_context['previous_details_by_product'] = f"Missing details:\n" + '\n'.join(missing_details[:10])
+            
+        prompt = self.process_retry_blocks(prompt, attempt_number, retry_context)
         
         prompt += f"\n\nExtract details for these {len(products_list)} confirmed products:\n"
         for i, product in enumerate(products_list, 1):
