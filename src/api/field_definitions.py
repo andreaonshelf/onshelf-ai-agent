@@ -279,3 +279,127 @@ async def get_field_definitions_for_prompt(field_names: List[str] = []):
     except Exception as e:
         # Return empty if there's an error (table might not exist)
         return {"definitions_text": "", "definitions": []}
+
+
+@router.post("/field-definitions/stage/{stage_name}")
+async def get_field_definitions_for_stage(stage_name: str, request: dict = {}):
+    """Get field definitions for a specific extraction stage and build Pydantic schema."""
+    
+    # Import the fix function
+    from fix_field_definition_nesting import build_extraction_model_safe
+    
+    # Mock field definitions for different stages
+    stage_fields = {
+        "structure": {
+            "shelf_structure": {
+                "type": "object",
+                "description": "Overall shelf structure",
+                "properties": {
+                    "total_shelves": {
+                        "type": "integer",
+                        "description": "Total number of shelves",
+                        "required": True
+                    },
+                    "shelf_type": {
+                        "type": "string",
+                        "description": "Type of shelving (gondola, wall unit, etc.)"
+                    },
+                    "fixture_width": {
+                        "type": "number",
+                        "description": "Width of the fixture in meters"
+                    },
+                    "fixture_height": {
+                        "type": "number",
+                        "description": "Height of the fixture in meters"
+                    }
+                }
+            }
+        },
+        "products": {
+            "product_details": {
+                "type": "object",
+                "properties": {
+                    "products": {
+                        "type": "array",
+                        "description": "List of all products",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Product name"},
+                                "brand": {"type": "string", "description": "Brand name"},
+                                "price": {"type": "number", "description": "Price"},
+                                "shelf_position": {"type": "integer", "description": "Which shelf (1-based)"},
+                                "facings": {"type": "integer", "description": "Number of facings"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "details": {
+            "additional_details": {
+                "type": "object",
+                "properties": {
+                    "promotional_items": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Products with promotional pricing"
+                    },
+                    "out_of_stock": {
+                        "type": "array", 
+                        "items": {"type": "string"},
+                        "description": "Empty positions or out of stock items"
+                    },
+                    "non_product_elements": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Price rails, shelf talkers, etc."
+                    }
+                }
+            }
+        }
+    }
+    
+    # Get fields for the requested stage
+    fields = stage_fields.get(stage_name, {})
+    
+    if not fields:
+        # If no mock data, try to get from database if available
+        if supabase:
+            try:
+                # Query field definitions for this stage (assuming there's a stage column or naming convention)
+                result = supabase.table("field_definitions")\
+                    .select("*")\
+                    .eq("stage", stage_name)\
+                    .eq("is_active", True)\
+                    .execute()
+                
+                if result.data:
+                    # Convert database fields to the expected format
+                    fields = {}
+                    for field in result.data:
+                        fields[field['field_name']] = {
+                            'type': field.get('data_type', 'string'),
+                            'description': field.get('definition', ''),
+                            'required': field.get('is_required', False)
+                        }
+            except:
+                pass
+    
+    # Build Pydantic model using the safe builder
+    try:
+        model = build_extraction_model_safe(f"{stage_name}_extraction", fields)
+        schema = model.model_json_schema()
+        
+        return {
+            "stage": stage_name,
+            "fields": fields,
+            "schema": schema,
+            "field_count": len(fields)
+        }
+    except Exception as e:
+        return {
+            "stage": stage_name,
+            "fields": fields,
+            "error": str(e)
+        }

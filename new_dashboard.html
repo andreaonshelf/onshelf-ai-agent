@@ -2380,7 +2380,20 @@
                                                 </div>
                                             </div>
                                         ))}
-                                        <div className="prompt-option" style={{ borderTop: '1px solid #e2e8f0' }}>
+                                        <div 
+                                            className="prompt-option" 
+                                            style={{ 
+                                                borderTop: '1px solid #e2e8f0',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                                color: '#3b82f6'
+                                            }}
+                                            onClick={() => {
+                                                setPromptText('');
+                                                setSelectedPrompt(null);
+                                                setShowPromptDropdown(false);
+                                            }}
+                                        >
                                             + Create New Prompt
                                         </div>
                                     </div>

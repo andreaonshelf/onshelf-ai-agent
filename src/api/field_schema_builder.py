@@ -138,22 +138,37 @@ async def build_schema(schema_def: SchemaDefinition):
         example_schema = model.model_json_schema()
         
         # Generate example instance
-        example_data = {}
-        for field in schema_def.fields:
-            if field.examples and len(field.examples) > 0:
-                example_data[field.name] = field.examples[0]
-            elif field.type == FieldType.STRING:
-                example_data[field.name] = "example"
-            elif field.type == FieldType.INTEGER:
-                example_data[field.name] = 1
-            elif field.type == FieldType.FLOAT:
-                example_data[field.name] = 1.0
-            elif field.type == FieldType.BOOLEAN:
-                example_data[field.name] = True
-            elif field.type == FieldType.LIST:
-                example_data[field.name] = []
-            elif field.type == FieldType.DICT:
-                example_data[field.name] = {}
+        def generate_example_data(fields: List[FieldDefinition]) -> dict:
+            data = {}
+            for field in fields:
+                if field.examples and len(field.examples) > 0:
+                    data[field.name] = field.examples[0]
+                elif field.type == FieldType.STRING:
+                    data[field.name] = "example"
+                elif field.type == FieldType.INTEGER:
+                    data[field.name] = 1
+                elif field.type == FieldType.FLOAT:
+                    data[field.name] = 1.0
+                elif field.type == FieldType.BOOLEAN:
+                    data[field.name] = True
+                elif field.type == FieldType.LIST:
+                    if field.list_item_type == "object" and field.nested_fields:
+                        # Create example list with one nested object
+                        data[field.name] = [generate_example_data(field.nested_fields)]
+                    else:
+                        data[field.name] = []
+                elif field.type == FieldType.DICT:
+                    data[field.name] = {}
+                elif field.type == FieldType.OBJECT and field.nested_fields:
+                    # Generate nested object data
+                    data[field.name] = generate_example_data(field.nested_fields)
+                else:
+                    # Default for required fields
+                    if field.required:
+                        data[field.name] = None
+            return data
+        
+        example_data = generate_example_data(schema_def.fields)
         
         # Validate example
         try:
