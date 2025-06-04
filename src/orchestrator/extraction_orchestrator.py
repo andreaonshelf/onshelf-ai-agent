@@ -493,32 +493,6 @@ class ExtractionOrchestrator:
         else:
             shelf_prompt_template = prompt_templates.get_template("shelf_by_shelf_extraction")
         
-        # Process {IF_RETRY} blocks based on agent number (which serves as attempt number for products)
-        # Build context for variable replacement
-        retry_context = {
-            'shelf_number': shelf_num,
-            'total_shelves': context.structure.shelf_count
-        }
-        
-        # Add previous extraction data if this is a retry
-        if agent_number > 1:
-            # Find products already extracted for this shelf
-            existing_products = [p for p in context.successful_extractions 
-                               if p.get('shelf_level') == shelf_num]
-            if existing_products:
-                retry_context['previous_shelf_products'] = '\n'.join(
-                    f"Position {p.get('position_on_shelf')}: {p.get('brand')} {p.get('name')}"
-                    for p in existing_products[:10]  # Limit to prevent overflow
-                )
-            
-            # Add any visual feedback
-            retry_context['planogram_feedback'] = "Check edges and promotional areas for missed products"
-            
-            # Add alias for consistency with prompt
-            retry_context['previous_extraction_data'] = retry_context.get('previous_shelf_products', 'No previous extraction data')
-        
-        shelf_prompt_template = self.process_retry_blocks(shelf_prompt_template, agent_number, retry_context)
-        
         logger.info(
             f"Starting shelf-by-shelf extraction for {context.structure.shelf_count} shelves",
             component="extraction_orchestrator",
@@ -535,8 +509,35 @@ class ExtractionOrchestrator:
                 shelf_number=shelf_num
             )
             
+            # Process {IF_RETRY} blocks based on agent number (which serves as attempt number for products)
+            # Build context for variable replacement
+            retry_context = {
+                'shelf_number': shelf_num,
+                'total_shelves': context.structure.shelf_count
+            }
+            
+            # Add previous extraction data if this is a retry
+            if agent_number > 1:
+                # Find products already extracted for this shelf
+                existing_products = [p for p in context.successful_extractions 
+                                   if p.get('shelf_level') == shelf_num]
+                if existing_products:
+                    retry_context['previous_shelf_products'] = '\n'.join(
+                        f"Position {p.get('position_on_shelf')}: {p.get('brand')} {p.get('name')}"
+                        for p in existing_products[:10]  # Limit to prevent overflow
+                    )
+                    retry_context['high_confidence_products'] = retry_context['previous_shelf_products']
+                
+                # Add any visual feedback
+                retry_context['planogram_feedback'] = "Check edges and promotional areas for missed products"
+                
+                # Add alias for consistency with prompt
+                retry_context['previous_extraction_data'] = retry_context.get('previous_shelf_products', 'No previous extraction data')
+            
+            shelf_prompt = self.process_retry_blocks(shelf_prompt_template, agent_number, retry_context)
+            
             # Build shelf-specific prompt
-            shelf_prompt = shelf_prompt_template.format(
+            shelf_prompt = shelf_prompt.format(
                 shelf_number=shelf_num,
                 total_shelves=context.structure.shelf_count
             )
@@ -844,7 +845,8 @@ class ExtractionOrchestrator:
         retry_context = {}
         if previous_attempts and attempt_number > 1:
             last_attempt = previous_attempts[-1]
-            retry_context['shelves'] = last_attempt.shelf_count
+            retry_context['shelf_count'] = last_attempt.shelf_count
+            retry_context['shelves'] = last_attempt.shelf_count  # Alias for compatibility
             retry_context['problem_areas'] = "Check bottom shelf for floor products, verify top shelf visibility"
             
         prompt = self.process_retry_blocks(prompt, attempt_number, retry_context)
@@ -968,6 +970,7 @@ class ExtractionOrchestrator:
                     missing_details.append(f"{product.brand} {product.name}: {', '.join(missing_items)} missing")
             
             if missing_details:
+                retry_context['missing_details'] = '\n'.join(missing_details[:10])
                 retry_context['previous_details_by_product'] = f"Missing details:\n" + '\n'.join(missing_details[:10])
             
         prompt = self.process_retry_blocks(prompt, attempt_number, retry_context)

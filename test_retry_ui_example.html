@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{IF_RETRY} Prompt Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
+        }
+        .prompt-section {
+            margin-bottom: 2rem;
+        }
+        .prompt-label {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .highlight {
+            background-color: #ffeb3b33;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .retry-block {
+            color: #4caf50;
+            font-weight: 600;
+        }
+        .variable {
+            color: #2196f3;
+            font-weight: 600;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .example-box {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Using {IF_RETRY} Blocks in Prompts</h1>
+        
+        <div class="info-box">
+            <strong>How it works:</strong> The system uses ONE prompt with conditional <code>{IF_RETRY}</code> blocks. 
+            On the first attempt, these blocks are removed. On retry attempts (attempt 2+), the blocks are included 
+            and context variables are filled with actual values.
+        </div>
+
+        <div class="prompt-section">
+            <div class="prompt-label">Structure Extraction Prompt Example:</div>
+            <textarea readonly>
+Analyze the shelf structure and identify all shelf levels.
+Count shelves from bottom (1) to top.
+Identify the overall layout and shelf configuration.
+
+{IF_RETRY}
+Previous extraction found {SHELF_COUNT} shelves.
+Areas to double-check:
+- Bottom shelf: Check for products on the floor level
+- Top shelf: Verify if partially visible shelves should be counted
+- Middle sections: Ensure no shelf divisions were missed
+Problem areas identified: {PROBLEM_AREAS}
+{/IF_RETRY}</textarea>
+        </div>
+
+        <div class="prompt-section">
+            <div class="prompt-label">Products Extraction Prompt Example:</div>
+            <textarea readonly>
+Extract all products from shelf {SHELF_NUMBER} of {TOTAL_SHELVES} total shelves.
+Scan systematically from left to right.
+Include product name, brand, and position.
+
+{IF_RETRY}
+Previous extraction had low confidence on this shelf.
+Focus particularly on:
+- Products behind promotional tags or sale stickers
+- Edge products that may be partially cut off
+- Small products between larger items
+- Products in shadow areas
+
+High-confidence products to preserve:
+{HIGH_CONFIDENCE_PRODUCTS}
+
+Visual feedback suggests: {PLANOGRAM_FEEDBACK}
+{/IF_RETRY}</textarea>
+        </div>
+
+        <div class="prompt-section">
+            <div class="prompt-label">Details Extraction Prompt Example:</div>
+            <textarea readonly>
+Extract detailed information for all products.
+For each product, identify:
+- Price (from shelf labels or product tags)
+- Size/Volume (from product packaging)
+- Color variants or flavors
+- Promotional information
+
+{IF_RETRY}
+Previous extraction is still missing these details:
+{MISSING_DETAILS}
+
+Tips for finding missing information:
+- Check shelf edge labels for prices
+- Look at product packaging for size information
+- Zoom into areas with small text
+- Check for price tags above or below products
+{/IF_RETRY}</textarea>
+        </div>
+
+        <div class="example-box">
+            <h3>Available Context Variables</h3>
+            <p>These variables are automatically filled by the system during retry attempts:</p>
+            <ul>
+                <li><span class="variable">{SHELF_COUNT}</span> - Number of shelves found</li>
+                <li><span class="variable">{SHELF_NUMBER}</span> - Current shelf being processed</li>
+                <li><span class="variable">{TOTAL_SHELVES}</span> - Total number of shelves</li>
+                <li><span class="variable">{HIGH_CONFIDENCE_PRODUCTS}</span> - List of products with high confidence</li>
+                <li><span class="variable">{MISSING_DETAILS}</span> - List of missing product details</li>
+                <li><span class="variable">{PROBLEM_AREAS}</span> - Identified problem areas</li>
+                <li><span class="variable">{PLANOGRAM_FEEDBACK}</span> - Visual comparison feedback</li>
+            </ul>
+        </div>
+
+        <div class="info-box" style="background: #c8e6c9; border-color: #4caf50; margin-top: 2rem;">
+            <strong>✅ Best Practices:</strong>
+            <ul style="margin-top: 0.5rem;">
+                <li>Keep initial instructions clear and complete (outside {IF_RETRY} blocks)</li>
+                <li>Use {IF_RETRY} blocks for additional guidance based on previous attempts</li>
+                <li>Reference context variables to provide specific feedback</li>
+                <li>Focus retry instructions on problem areas identified in previous attempts</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
