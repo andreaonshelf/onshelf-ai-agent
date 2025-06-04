@@ -1569,6 +1569,9 @@
             const [modelCreativity, setModelCreativity] = useState(0.7);
             const [orchestratorModel, setOrchestratorModel] = useState('claude-4-opus');
             const [orchestratorPrompt, setOrchestratorPrompt] = useState('');
+            const [showConfigDropdown, setShowConfigDropdown] = useState(false);
+            const [availableConfigs, setAvailableConfigs] = useState([]);
+            const [loadingConfigs, setLoadingConfigs] = useState(false);
             
             const updateConfigPreview = () => {
                 const preview = {
@@ -1603,8 +1606,10 @@
                 if (stageConfigs[activeStage]) {
                     const config = stageConfigs[activeStage];
                     setPromptText(config.prompt_text || '');
+                    setPromptName(config.prompt_name || '');  // Load saved prompt name
                     setSelectedPrompt(config.prompt);
                     setFields(config.fields || []);
+                    // Models are already loaded via the ModelSelector component
                 }
             }, [activeStage]);
             
@@ -1664,6 +1669,23 @@
                     console.error('Failed to fetch prompts:', error);
                     loadPromptExamples();
                 }
+            };
+            
+            const fetchAvailableConfigs = async () => {
+                setLoadingConfigs(true);
+                try {
+                    const response = await fetch(`${API_BASE}/configurations`);
+                    if (response.ok) {
+                        const configs = await response.json();
+                        setAvailableConfigs(configs || []);
+                    } else {
+                        setAvailableConfigs([]);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch configurations:', error);
+                    setAvailableConfigs([]);
+                }
+                setLoadingConfigs(false);
             };
             
             const loadPromptExamples = () => {
@@ -1918,7 +1940,7 @@
                     prompt_name: promptName || selectedPrompt?.name,  // Include prompt name
                     prompt: selectedPrompt,
                     fields: fields,
-                    models: document.querySelector('.stage-content select')?.value || 'All 3 models (vote)'
+                    models: stageConfigs[activeStage]?.models || []  // Get models from current stage config
                 };
                 
                 setStageConfigs({
@@ -1932,6 +1954,64 @@
                 
                 // Update preview
                 updateConfigPreview();
+            };
+            
+            const handleSavePromptToLibrary = async () => {
+                if (!promptName || !promptText) {
+                    alert('Please provide both a name and content for the prompt');
+                    return;
+                }
+                
+                try {
+                    // Save prompt to database without model information
+                    const response = await fetch(`${API_BASE}/prompts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: promptName,
+                            stage: activeStage,
+                            content: promptText,
+                            fields: fields,  // Include field definitions
+                            version: '1.0',
+                            is_active: true,
+                            stage_type: activeStage,
+                            prompt_type: activeStage,  // For backward compatibility
+                            tags: [`${activeStage}-extraction`, 'user-created']
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const savedPrompt = await response.json();
+                        
+                        // Set this as the selected prompt
+                        setSelectedPrompt({
+                            id: savedPrompt.prompt_id || savedPrompt.id,
+                            name: promptName,
+                            content: promptText,
+                            fields: fields
+                        });
+                        
+                        // Refresh available prompts
+                        await fetchAvailablePrompts();
+                        
+                        // Show success message
+                        setSaveMessage({ 
+                            type: 'success', 
+                            text: `Prompt "${promptName}" saved to library!` 
+                        });
+                        setTimeout(() => setSaveMessage(null), 3000);
+                    } else {
+                        const error = await response.text();
+                        throw new Error(error || 'Failed to save prompt');
+                    }
+                } catch (error) {
+                    console.error('Failed to save prompt to library:', error);
+                    setSaveMessage({ 
+                        type: 'error', 
+                        text: `Failed to save prompt: ${error.message}` 
+                    });
+                    setTimeout(() => setSaveMessage(null), 5000);
+                }
             };
             
             const handleSaveConfiguration = async () => {
@@ -2038,35 +2118,13 @@
                 }
             };
             
-            const handleLoadConfiguration = async () => {
+            const handleLoadConfiguration = async (selectedConfig) => {
                 try {
-                    // First, get list of saved configurations
-                    const configsResponse = await fetch(`${API_BASE}/configurations`);
-                    if (!configsResponse.ok) {
-                        throw new Error('Failed to load configurations');
-                    }
-                    
-                    const configs = await configsResponse.json();
-                    if (!configs || configs.length === 0) {
-                        alert('No saved configurations found');
+                    // If no config passed, this is the old button click - shouldn't happen now
+                    if (!selectedConfig) {
+                        alert('Please select a configuration from the dropdown');
                         return;
                     }
-                    
-                    // Show selection dialog
-                    const configList = configs.map((c, i) => 
-                        `${i + 1}. ${c.name} (${c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Unknown date'})`
-                    ).join('\n');
-                    
-                    const selection = prompt(`Select a configuration to load:\n\n${configList}\n\nEnter number:`);
-                    if (!selection) return;
-                    
-                    const selectedIndex = parseInt(selection) - 1;
-                    if (selectedIndex < 0 || selectedIndex >= configs.length) {
-                        alert('Invalid selection');
-                        return;
-                    }
-                    
-                    const selectedConfig = configs[selectedIndex];
                     
                     // Load the selected configuration
                     const configResponse = await fetch(`${API_BASE}/configurations/${selectedConfig.id}`);
@@ -2104,6 +2162,7 @@
                         if (fullConfig.stages[activeStage]) {
                             const config = fullConfig.stages[activeStage];
                             setPromptText(config.prompt_text || '');
+                            setPromptName(config.prompt_name || '');  // Load prompt name
                             setSelectedPrompt(config.prompt);
                             setFields(config.fields || []);
                         }
@@ -2474,27 +2533,21 @@
                                         </button>
                                     </div>
                                     
-                                    {/* Save Stage Button - Moved here from bottom */}
-                                    <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    {/* Save Prompt to Library Button - After fields so it saves prompt + fields together */}
+                                    <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
                                         <button 
-                                            className="btn btn-primary" 
-                                            onClick={handleSaveStage}
-                                            style={{ 
-                                                background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
+                                            className="btn btn-secondary"
+                                            onClick={handleSavePromptToLibrary}
+                                            disabled={!promptName || !promptText || selectedPrompt}
+                                            style={{
+                                                fontSize: '13px',
+                                                padding: '6px 16px',
+                                                opacity: (!promptName || !promptText || selectedPrompt) ? 0.5 : 1
                                             }}
+                                            title={selectedPrompt ? "Cannot save while a prompt is selected" : "Save prompt and field definitions to library"}
                                         >
-                                            {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
+                                            💾 Save Prompt to Library
                                         </button>
-                                        
-                                        {saveMessage && (
-                                            <div style={{ 
-                                                fontSize: '14px', 
-                                                color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
-                                                fontWeight: 500
-                                            }}>
-                                                {saveMessage.text}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -2559,6 +2612,29 @@
                                         {modelCreativity >= 0.3 && modelCreativity < 0.7 && 'Balanced between accuracy and variation'}
                                         {modelCreativity >= 0.7 && 'More creative and exploratory'}
                                     </div>
+                                </div>
+                                
+                                {/* Save Stage Button - Moved after model selection and creativity */}
+                                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <button 
+                                        className="btn btn-primary" 
+                                        onClick={handleSaveStage}
+                                        style={{ 
+                                            background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
+                                        }}
+                                    >
+                                        {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
+                                    </button>
+                                    
+                                    {saveMessage && (
+                                        <div style={{ 
+                                            fontSize: '14px', 
+                                            color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
+                                            fontWeight: 500
+                                        }}>
+                                            {saveMessage.text}
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {/* Orchestrator Model Selection */}
@@ -2670,12 +2746,64 @@
                         >
                             Save Full Configuration
                         </button>
-                        <button 
-                            className="btn btn-secondary"
-                            onClick={handleLoadConfiguration}
-                        >
-                            Load Previous Config
-                        </button>
+                        
+                        {/* Configuration Dropdown */}
+                        <div style={{ position: 'relative' }}>
+                            <button 
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                    setShowConfigDropdown(!showConfigDropdown);
+                                    if (!showConfigDropdown && availableConfigs.length === 0) {
+                                        fetchAvailableConfigs();
+                                    }
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                                Load Configuration
+                                <span style={{ fontSize: '12px' }}>▼</span>
+                            </button>
+                            
+                            {showConfigDropdown && (
+                                <div className="prompt-dropdown-menu" style={{ 
+                                    position: 'absolute', 
+                                    top: '100%', 
+                                    left: 0, 
+                                    marginTop: '4px',
+                                    minWidth: '300px',
+                                    maxHeight: '400px',
+                                    overflowY: 'auto',
+                                    zIndex: 1000
+                                }}>
+                                    {loadingConfigs ? (
+                                        <div style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
+                                            Loading configurations...
+                                        </div>
+                                    ) : availableConfigs.length === 0 ? (
+                                        <div style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
+                                            No saved configurations found
+                                        </div>
+                                    ) : (
+                                        availableConfigs.map(config => (
+                                            <div
+                                                key={config.id}
+                                                className="prompt-option"
+                                                onClick={() => {
+                                                    handleLoadConfiguration(config);
+                                                    setShowConfigDropdown(false);
+                                                }}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <div style={{ fontWeight: 500 }}>{config.name}</div>
+                                                <div className="prompt-stats" style={{ fontSize: '12px', color: '#64748b' }}>
+                                                    <span>{new Date(config.created_at).toLocaleDateString()}</span>
+                                                    {config.description && <span> • {config.description}</span>}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             );
