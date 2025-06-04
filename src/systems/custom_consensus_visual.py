@@ -304,82 +304,113 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
         
         # Add visual feedback if available
         if visual_feedback and attempt_number > 1:
-            prompt += "\n\nVISUAL FEEDBACK FROM PREVIOUS MODELS:\n"
+            prompt += "\n\nVISUAL COMPARISON FEEDBACK FROM PREVIOUS ATTEMPTS:\n"
             
             for feedback in visual_feedback:
-                prompt += f"\nModel {feedback['attempt']} ({feedback['model']}):\n"
+                prompt += f"\nModel {feedback['attempt']} ({feedback['model']}) extraction was checked:\n"
                 
-                for issue in feedback['actionable_feedback']:
-                    if issue['type'] == 'missing_product':
-                        prompt += f"- Missing product at shelf {issue['shelf']}, position {issue['position']}: {issue.get('description', 'Product visible in image but not extracted')}\n"
-                    elif issue['type'] == 'extra_product':
-                        prompt += f"- Extra product '{issue['product']}' at shelf {issue['shelf']}, position {issue['position']}: Not visible in image\n"
-                    elif issue['type'] == 'position_mismatch':
-                        prompt += f"- Position mismatch: {issue['issue']}\n"
-                    elif issue['type'] == 'quantity_mismatch':
-                        prompt += f"- Quantity issue for {issue['product']}: Shows {issue['extracted']} but image suggests {issue['visible']}\n"
+                # Group feedback by confidence level
+                high_conf = [f for f in feedback['actionable_feedback'] if f.get('confidence') == 'high']
+                med_conf = [f for f in feedback['actionable_feedback'] if f.get('confidence') == 'medium']
+                low_conf = [f for f in feedback['actionable_feedback'] if f.get('confidence') == 'low']
+                
+                if high_conf:
+                    prompt += "\n⚠️ HIGH CONFIDENCE ISSUES:\n"
+                    for issue in high_conf:
+                        prompt += self._format_feedback_item(issue)
+                
+                if med_conf:
+                    prompt += "\n⚡ MEDIUM CONFIDENCE ISSUES:\n"
+                    for issue in med_conf:
+                        prompt += self._format_feedback_item(issue)
+                
+                if low_conf:
+                    prompt += "\n❓ LOW CONFIDENCE ISSUES (may be incorrect):\n"
+                    for issue in low_conf:
+                        prompt += self._format_feedback_item(issue)
             
-            prompt += "\nConsider this visual feedback in your extraction, but make your own independent assessment."
+            prompt += "\n\nUse this feedback to guide your extraction, focusing on high-confidence issues. Make your own assessment."
         
         return prompt
     
+    def _format_feedback_item(self, issue: Dict) -> str:
+        """Format a single feedback item for the prompt"""
+        issue_type = issue.get('type', 'unknown')
+        product = issue.get('product', 'Unknown product')
+        details = issue.get('details', '')
+        
+        if issue_type == 'wrong_shelf':
+            return f"- {product}: Shows on shelf {issue.get('planogram_shelf', '?')} but actually on shelf {issue.get('photo_shelf', '?')}. {details}\n"
+        elif issue_type == 'wrong_quantity':
+            photo_loc = issue.get('photo_location', {})
+            planogram_loc = issue.get('planogram_location', {})
+            return f"- {product}: Quantity mismatch at shelf {photo_loc.get('shelf', '?')}, position {photo_loc.get('position', '?')}. {details}\n"
+        elif issue_type == 'wrong_position':
+            return f"- {product}: Position mismatch - photo shows position {issue.get('photo_position', '?')} but planogram shows {issue.get('planogram_position', '?')}. {details}\n"
+        elif issue_type == 'missing':
+            return f"- Missing: {product} visible at shelf {issue.get('shelf', '?')}, position {issue.get('position', '?')} but not in extraction. {details}\n"
+        elif issue_type == 'extra':
+            return f"- Extra: {product} extracted at shelf {issue.get('shelf', '?')}, position {issue.get('position', '?')} but not visible in photo. {details}\n"
+        else:
+            return f"- {issue_type}: {product}. {details}\n"
+    
     async def _extract_actionable_feedback(self, comparison_result) -> List[Dict]:
-        """Extract actionable feedback from comparison result using orchestrator model"""
+        """Extract actionable feedback from comparison result focusing on structural errors"""
         
         actionable_feedback = []
         
-        # Handle ImageComparison object
+        # Process mismatches which now contain all issue types
+        if hasattr(comparison_result, 'mismatches'):
+            for mismatch in comparison_result.mismatches:
+                if isinstance(mismatch, dict):
+                    issue_type = mismatch.get('issue_type', 'unknown')
+                    
+                    feedback_item = {
+                        'type': issue_type,
+                        'product': mismatch.get('product', ''),
+                        'confidence': mismatch.get('confidence', 'medium'),
+                        'details': mismatch.get('details', '')
+                    }
+                    
+                    # Add location info based on issue type
+                    if issue_type == 'wrong_shelf':
+                        feedback_item['photo_shelf'] = mismatch.get('photo_location', {}).get('shelf', 0)
+                        feedback_item['planogram_shelf'] = mismatch.get('planogram_location', {}).get('shelf', 0)
+                    elif issue_type == 'wrong_position':
+                        feedback_item['photo_position'] = mismatch.get('photo_location', {}).get('position', 0)
+                        feedback_item['planogram_position'] = mismatch.get('planogram_location', {}).get('position', 0)
+                    elif issue_type == 'wrong_quantity':
+                        feedback_item['photo_location'] = mismatch.get('photo_location', {})
+                        feedback_item['planogram_location'] = mismatch.get('planogram_location', {})
+                    
+                    actionable_feedback.append(feedback_item)
+        
+        # Process missing products
         if hasattr(comparison_result, 'missing_products'):
             for missing in comparison_result.missing_products:
                 actionable_feedback.append({
-                    'type': 'missing_product',
-                    'shelf': missing.get('shelf', 0) if isinstance(missing, dict) else getattr(missing, 'shelf', 0),
-                    'position': missing.get('position', 0) if isinstance(missing, dict) else getattr(missing, 'position', 0),
-                    'description': missing.get('description', '') if isinstance(missing, dict) else getattr(missing, 'description', '')
+                    'type': 'missing',
+                    'product': missing.get('product_name', '') if isinstance(missing, dict) else '',
+                    'shelf': missing.get('shelf', 0) if isinstance(missing, dict) else 0,
+                    'position': missing.get('position', 0) if isinstance(missing, dict) else 0,
+                    'confidence': missing.get('confidence', 'medium') if isinstance(missing, dict) else 'medium',
+                    'details': missing.get('details', '') if isinstance(missing, dict) else ''
                 })
         
+        # Process extra products
         if hasattr(comparison_result, 'extra_products'):
             for extra in comparison_result.extra_products:
                 actionable_feedback.append({
-                    'type': 'extra_product',
-                    'product': extra.get('product_name', '') if isinstance(extra, dict) else getattr(extra, 'product_name', ''),
-                    'shelf': extra.get('shelf', 0) if isinstance(extra, dict) else getattr(extra, 'shelf', 0),
-                    'position': extra.get('position', 0) if isinstance(extra, dict) else getattr(extra, 'position', 0)
+                    'type': 'extra',
+                    'product': extra.get('product_name', '') if isinstance(extra, dict) else '',
+                    'shelf': extra.get('shelf', 0) if isinstance(extra, dict) else 0,
+                    'position': extra.get('position', 0) if isinstance(extra, dict) else 0,
+                    'confidence': extra.get('confidence', 'medium') if isinstance(extra, dict) else 'medium',
+                    'details': extra.get('details', '') if isinstance(extra, dict) else ''
                 })
-        
-        if hasattr(comparison_result, 'mismatches'):
-            for mismatch in comparison_result.mismatches:
-                actionable_feedback.append({
-                    'type': 'position_mismatch',
-                    'issue': mismatch.get('issue', '') if isinstance(mismatch, dict) else getattr(mismatch, 'issue', ''),
-                    'severity': mismatch.get('severity', 'medium') if isinstance(mismatch, dict) else getattr(mismatch, 'severity', 'medium')
-                })
-        
-        # Use orchestrator model to generate intelligent guidance
-        if actionable_feedback:
-            guidance = await self._generate_intelligent_guidance(actionable_feedback)
-            for i, feedback in enumerate(actionable_feedback):
-                if i < len(guidance):
-                    feedback['intelligent_guidance'] = guidance[i]
         
         return actionable_feedback
     
-    async def _generate_intelligent_guidance(self, feedback_items: List[Dict]) -> List[str]:
-        """Use orchestrator model to generate intelligent guidance for each issue"""
-        
-        # This would use the orchestrator model (Opus) to analyze the feedback
-        # and generate specific guidance for the next model
-        guidance = []
-        
-        for item in feedback_items:
-            if item['type'] == 'missing_product':
-                guidance.append(f"Focus on shelf {item['shelf']}, position {item['position']} - there may be a product obscured by shadow or at an angle")
-            elif item['type'] == 'extra_product':
-                guidance.append(f"Verify if '{item['product']}' at shelf {item['shelf']}, position {item['position']} is actually a promotional sign or different product")
-            else:
-                guidance.append("Double-check this area for accuracy")
-        
-        return guidance
     
     async def _apply_consensus_voting(
         self, 

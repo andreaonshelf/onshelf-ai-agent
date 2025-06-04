@@ -11,7 +11,7 @@ from datetime import datetime
 import uuid
 
 from ..config import SystemConfig
-from ..orchestrator.master_orchestrator import MasterOrchestrator
+from ..orchestrator.system_dispatcher import SystemDispatcher
 from ..orchestrator.extraction_orchestrator import ExtractionOrchestrator
 from ..systems.custom_consensus import CustomConsensusSystem
 from ..systems.langgraph_system import LangGraphConsensusSystem
@@ -29,7 +29,7 @@ class SystemDebugger:
     
     def __init__(self, config: SystemConfig):
         self.config = config
-        self.master_orchestrator = MasterOrchestrator(config)
+        self.master_orchestrator = SystemDispatcher(config)
         self.extraction_orchestrator = ExtractionOrchestrator(config)
         
         # Initialize actual systems

@@ -81,18 +81,76 @@ class BaseExtractionSystem(ABC):
         )
     
     @abstractmethod
-    async def extract_with_consensus(self, image_data: bytes, upload_id: str) -> ExtractionResult:
+    async def extract_with_consensus(self, image_data: bytes, upload_id: str, extraction_data: Optional[Dict] = None) -> ExtractionResult:
         """
         Main extraction method - all systems must implement this with identical output format
         
         Args:
             image_data: Raw image bytes
             upload_id: Unique identifier for this extraction
+            extraction_data: Optional dict containing iteration context, configuration, etc.
             
         Returns:
             ExtractionResult with unified format across all systems
         """
         pass
+    
+    async def extract_with_iterations(self, 
+                                    image_data: bytes, 
+                                    upload_id: str,
+                                    target_accuracy: float = 0.95,
+                                    max_iterations: int = 5,
+                                    configuration: Optional[Dict] = None) -> ExtractionResult:
+        """
+        Extract with iteration loop until target accuracy achieved
+        This is the REAL orchestration - iterations, visual feedback, decisions
+        """
+        best_result = None
+        best_accuracy = 0.0
+        iteration_history = []
+        
+        for iteration in range(1, max_iterations + 1):
+            logger.info(
+                f"Extraction iteration {iteration}/{max_iterations}",
+                component="base_system",
+                system_type=self.system_type,
+                current_accuracy=best_accuracy
+            )
+            
+            # Prepare extraction data
+            extraction_data = {
+                'configuration': configuration,
+                'iteration': iteration,
+                'previous_attempts': iteration_history,
+                'target_accuracy': target_accuracy
+            }
+            
+            # Extract using system's consensus method
+            result = await self.extract_with_consensus(
+                image_data=image_data,
+                upload_id=upload_id,
+                extraction_data=extraction_data
+            )
+            
+            # Check accuracy
+            if hasattr(result, 'overall_accuracy'):
+                current_accuracy = result.overall_accuracy
+                if current_accuracy > best_accuracy:
+                    best_accuracy = current_accuracy
+                    best_result = result
+                
+                # Stop if target reached
+                if current_accuracy >= target_accuracy:
+                    logger.info(
+                        f"Target accuracy reached: {current_accuracy:.2%}",
+                        component="base_system",
+                        iterations_used=iteration
+                    )
+                    break
+            
+            iteration_history.append(result)
+        
+        return best_result or result
     
     @abstractmethod
     async def get_cost_breakdown(self) -> CostBreakdown:
@@ -160,8 +218,8 @@ class ExtractionSystemFactory:
         )
         
         if system_type == "custom":
-            from .custom_consensus import CustomConsensusSystem
-            return CustomConsensusSystem(config)
+            from .custom_consensus_visual import CustomConsensusVisualSystem
+            return CustomConsensusVisualSystem(config)
         elif system_type == "langgraph":
             from .langgraph_system import LangGraphConsensusSystem
             return LangGraphConsensusSystem(config)

@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
 
-from ..orchestrator.master_orchestrator import MasterOrchestrator
+from ..orchestrator.system_dispatcher import SystemDispatcher
 from ..orchestrator.planogram_orchestrator import PlanogramOrchestrator
 from ..evaluation.human_evaluation import HumanEvaluationSystem
 from ..config import SystemConfig
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v2", tags=["Progressive Debugger"])
 
 # Initialize system components
 config = SystemConfig()
-master_orchestrator = MasterOrchestrator(config)
+master_orchestrator = SystemDispatcher(config)
 planogram_orchestrator = PlanogramOrchestrator(config)
 human_evaluation = HumanEvaluationSystem(config)
 

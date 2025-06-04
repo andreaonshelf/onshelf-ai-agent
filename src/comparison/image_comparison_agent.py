@@ -16,15 +16,22 @@ from ..orchestrator.feedback_manager import ImageComparison
 from ..utils import logger
 
 
-class ComparisonResult(BaseModel):
-    """Structured response from vision model comparison"""
-    overall_match_score: float = Field(description="Overall similarity score between 0 and 1")
-    products_correct: List[Dict] = Field(description="List of correctly placed products")
-    products_misplaced: List[Dict] = Field(description="List of misplaced products")
-    products_missing: List[Dict] = Field(description="Products in photo but not in planogram")
-    products_extra: List[Dict] = Field(description="Products in planogram but not in photo")
-    shelf_accuracy: Dict[int, float] = Field(description="Per-shelf accuracy scores")
-    specific_issues: List[str] = Field(description="Specific issues found in comparison")
+class ShelfMismatch(BaseModel):
+    """Specific mismatch found during comparison"""
+    product: str = Field(description="Product name")
+    issue_type: str = Field(description="Type: wrong_shelf, wrong_quantity, wrong_position, missing, extra")
+    photo_location: Dict[str, int] = Field(description="Where in photo: {shelf, position}")
+    planogram_location: Dict[str, int] = Field(description="Where in planogram: {shelf, position}")
+    confidence: str = Field(description="Confidence level: high, medium, low")
+    details: Optional[str] = Field(description="Additional context about the issue")
+
+class VisualComparisonResult(BaseModel):
+    """Structured error checking result from visual comparison"""
+    total_products_photo: int = Field(description="Total products counted in photo")
+    total_products_planogram: int = Field(description="Total products shown in planogram")
+    shelf_mismatches: List[ShelfMismatch] = Field(default_factory=list, description="List of specific mismatches found")
+    critical_issues: List[str] = Field(default_factory=list, description="Major structural problems")
+    overall_alignment: str = Field(description="Overall assessment: good, moderate, poor")
 
 
 class ImageComparisonAgent:
@@ -48,7 +55,8 @@ class ImageComparisonAgent:
                                        planogram: VisualPlanogram,
                                        structure_context: ShelfStructure,
                                        planogram_image: Optional[bytes] = None,
-                                       model: str = "gpt-4-vision-preview") -> ImageComparison:
+                                       model: str = "gpt-4-vision-preview",
+                                       comparison_prompt: Optional[str] = None) -> ImageComparison:
         """Compare original shelf image to generated planogram"""
         
         logger.info(
@@ -99,27 +107,37 @@ class ImageComparisonAgent:
             original_image_base64 = base64.b64encode(original_image).decode('utf-8')
             planogram_image_base64 = base64.b64encode(planogram_image).decode('utf-8')
             
-            # Create comparison prompt
-            comparison_prompt = """
-            Compare the retail shelf photo with the planogram representation.
-            
-            The planogram is an ABSTRACTION that should accurately represent:
-            1. Product positions (left to right order)
-            2. Shelf placement (which shelf each product is on)
-            3. Facing counts (how many units side by side)
-            4. Gaps between products
-            5. Product names and brands
-            
-            For each product in the planogram, determine:
-            - Is it in the correct position?
-            - Is it on the correct shelf?
-            - Is the facing count accurate?
-            - Are there any missing products in the planogram?
-            - Are there any extra products in the planogram that aren't in the photo?
-            
-            Be specific about position numbers and shelf numbers.
-            Consider that the planogram is a simplified grid representation.
-            """
+            # Use provided prompt or default
+            if not comparison_prompt:
+                comparison_prompt = """
+                Compare the original shelf photo with the generated planogram visualization.
+
+                CHECK THESE SPECIFIC THINGS:
+
+                1. SHELF ASSIGNMENT: Do all products appear on the correct shelf?
+                   - List any products that are on a different shelf in the photo vs planogram
+                   
+                2. QUANTITY CHECK: Are the facing counts roughly correct?
+                   - List any products where quantity is significantly off (±3 or more)
+                   
+                3. POSITION CHECK: Are products in the right general area of each shelf?
+                   - List any products that are in wrong section (left/center/right)
+                   
+                4. MISSING PRODUCTS: Any obvious products in photo but not in planogram?
+                   - List only if clearly visible and significant
+                   
+                5. EXTRA PRODUCTS: Any products in planogram but not visible in photo?
+                   - List only if you're confident they're not there
+
+                For each issue found, specify:
+                - What: [Product name]
+                - Where in photo: [Shelf X, Position Y]
+                - Where in planogram: [Shelf X, Position Y]
+                - Confidence: [High/Medium/Low]
+                
+                Also count total products in both photo and planogram.
+                Assess overall alignment as good/moderate/poor.
+                """
             
             # Handle different model providers
             if is_claude_model:
@@ -160,7 +178,7 @@ class ImageComparisonAgent:
                         ]
                     }
                 ],
-                response_model=ComparisonResult,
+                response_model=VisualComparisonResult,
                 max_tokens=2000,
                 temperature=0.1  # Very low temperature for consistent, factual comparison
             )
@@ -173,28 +191,58 @@ class ImageComparisonAgent:
             # Fallback to mock if vision fails
             return self._mock_comparison(planogram, structure_context)
     
-    def _parse_vision_response(self, vision_response: ComparisonResult, planogram, structure_context):
+    def _parse_vision_response(self, vision_response: VisualComparisonResult, planogram, structure_context):
         """Parse vision model response into ImageComparison format"""
         
-        # Convert structured response to ImageComparison format
-        matches = vision_response.products_correct
-        mismatches = vision_response.products_misplaced
-        missing_products = vision_response.products_missing
-        extra_products = vision_response.products_extra
+        # Convert new structured response to ImageComparison format for compatibility
+        matches = []
+        mismatches = []
+        missing_products = []
+        extra_products = []
         
-        # Use the actual similarity score from vision analysis
-        overall_similarity = vision_response.overall_match_score
+        # Process shelf mismatches into categories
+        for mismatch in vision_response.shelf_mismatches:
+            if mismatch.issue_type == "missing":
+                missing_products.append({
+                    'product_name': mismatch.product,
+                    'shelf': mismatch.photo_location.get('shelf', 0),
+                    'position': mismatch.photo_location.get('position', 0),
+                    'confidence': mismatch.confidence,
+                    'details': mismatch.details
+                })
+            elif mismatch.issue_type == "extra":
+                extra_products.append({
+                    'product_name': mismatch.product,
+                    'shelf': mismatch.planogram_location.get('shelf', 0),
+                    'position': mismatch.planogram_location.get('position', 0),
+                    'confidence': mismatch.confidence,
+                    'details': mismatch.details
+                })
+            else:  # wrong_shelf, wrong_quantity, wrong_position
+                mismatches.append({
+                    'product': mismatch.product,
+                    'issue_type': mismatch.issue_type,
+                    'photo_location': mismatch.photo_location,
+                    'planogram_location': mismatch.planogram_location,
+                    'confidence': mismatch.confidence,
+                    'details': mismatch.details
+                })
+        
+        # Calculate overall similarity based on alignment
+        alignment_scores = {"good": 0.85, "moderate": 0.65, "poor": 0.35}
+        overall_similarity = alignment_scores.get(vision_response.overall_alignment, 0.5)
         
         logger.info(
-            f"Vision comparison complete: {overall_similarity:.1%} match",
+            f"Vision comparison complete: {vision_response.overall_alignment} alignment",
             component="comparison_agent",
-            matches=len(matches),
-            mismatches=len(mismatches),
-            missing=len(missing_products),
-            extra=len(extra_products),
-            issues=vision_response.specific_issues[:3] if vision_response.specific_issues else []
+            total_photo=vision_response.total_products_photo,
+            total_planogram=vision_response.total_products_planogram,
+            mismatches=len(vision_response.shelf_mismatches),
+            critical_issues=len(vision_response.critical_issues),
+            alignment=vision_response.overall_alignment
         )
         
+        # Return compatibility format
         return ImageComparison(
             matches=matches,
             mismatches=mismatches,

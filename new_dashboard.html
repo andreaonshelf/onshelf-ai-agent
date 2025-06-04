@@ -1557,8 +1557,8 @@
             const [stages, setStages] = useState([
                 { id: 'structure', label: 'Structure Analysis', removable: true },
                 { id: 'products', label: 'Product Extraction', removable: false },
-                // Example removable stage for testing - remove this after verifying the UI works
-                { id: 'details', label: 'Detail Analysis', removable: true }
+                { id: 'details', label: 'Detail Analysis', removable: true },
+                { id: 'comparison', label: 'Visual Comparison', removable: false }
             ]);
             const [stageConfigs, setStageConfigs] = useState({});
             const [draggedStage, setDraggedStage] = useState(null);
@@ -1566,7 +1566,7 @@
             const [savedStages, setSavedStages] = useState(new Set());
             const [configPreview, setConfigPreview] = useState(null);
             const [saveMessage, setSaveMessage] = useState(null);
-            const [modelCreativity, setModelCreativity] = useState(0.7);
+            const [modelCreativity, setModelCreativity] = useState(0.1);
             const [orchestratorModel, setOrchestratorModel] = useState('claude-4-opus');
             const [orchestratorPrompt, setOrchestratorPrompt] = useState('');
             const [showConfigDropdown, setShowConfigDropdown] = useState(false);
@@ -1722,6 +1722,20 @@
                             { name: 'shelf_type', type: 'string', description: 'Type of fixture (gondola, wall, cooler)', required: true },
                             { name: 'width_estimate', type: 'float', description: 'Estimated width in feet', required: false },
                             { name: 'height_estimate', type: 'float', description: 'Estimated height in feet', required: false }
+                        ]
+                    }]);
+                } else if (activeStage === 'comparison') {
+                    setFields([{
+                        name: 'visual_comparison',
+                        type: 'object',
+                        description: 'Visual comparison between photo and planogram',
+                        required: true,
+                        nested_fields: [
+                            { name: 'missing_products', type: 'list', description: 'Products visible in photo but missing from planogram', required: true },
+                            { name: 'extra_products', type: 'list', description: 'Products in planogram but not visible in photo', required: true },
+                            { name: 'position_mismatches', type: 'list', description: 'Products in wrong positions', required: true },
+                            { name: 'quantity_discrepancies', type: 'list', description: 'Facing count differences', required: true },
+                            { name: 'overall_similarity', type: 'float', description: 'Overall similarity score 0-1', required: true }
                         ]
                     }]);
                 } else {

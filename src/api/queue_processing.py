@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from ..utils import logger
 from ..config import SystemConfig
-from ..orchestrator.master_orchestrator import MasterOrchestrator
+from ..orchestrator.system_dispatcher import SystemDispatcher
 from ..orchestrator.monitoring_hooks import monitoring_hooks
 
 router = APIRouter()
@@ -105,7 +105,7 @@ async def run_extraction(
         # Create orchestrator
         from supabase import create_client
         supabase = create_client(config.supabase_url, config.supabase_service_key)
-        orchestrator = MasterOrchestrator(config, supabase_client=supabase)
+        orchestrator = SystemDispatcher(config, supabase_client=supabase)
         
         # Set up monitoring callback
         def update_monitoring(queue_item_id: int, updates: Dict[str, Any]):

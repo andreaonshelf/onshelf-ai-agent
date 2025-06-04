@@ -114,8 +114,8 @@ class AIExtractionQueueProcessor:
             start_time = time.time()
             
             # Use the master orchestrator for real processing
-            from ..orchestrator.master_orchestrator import MasterOrchestrator
-            orchestrator = MasterOrchestrator(self.config, queue_item_id=queue_id)
+            from ..orchestrator.system_dispatcher import SystemDispatcher
+            orchestrator = SystemDispatcher(self.config, queue_item_id=queue_id)
             
             # Process with master orchestrator using upload_id
             upload_id = queue_item['upload_id']

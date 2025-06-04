@@ -10,7 +10,7 @@ from .config import SystemConfig
 from .agent.agent import OnShelfAIAgent
 from .agent.models import AgentResult
 from .websocket.manager import websocket_manager
-from .orchestrator.master_orchestrator import MasterOrchestrator
+from .orchestrator.system_dispatcher import SystemDispatcher
 from .queue_system.processor import AIExtractionQueueProcessor
 
 

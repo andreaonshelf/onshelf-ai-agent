@@ -111,21 +111,38 @@ class MasterOrchestrator:
         # Get images
         images = await self._get_images(upload_id)
         
-        # Initialize extraction orchestrator with queue item ID and configuration
-        from .extraction_orchestrator import ExtractionOrchestrator
-        self.extraction_orchestrator = ExtractionOrchestrator(self.config, queue_item_id=queue_item_id)
+        # Initialize the appropriate extraction system based on selection
+        from ..systems.base_system import ExtractionSystemFactory
         
-        # Load configuration into orchestrator
+        # Map UI system names to factory system names
+        system_type_map = {
+            'custom_consensus': 'custom',
+            'langgraph': 'langgraph',
+            'langgraph_based': 'langgraph',  # Legacy support
+            'hybrid': 'hybrid'
+        }
+        
+        system_type = system_type_map.get(system, 'custom')
+        
+        logger.info(
+            f"Initializing {system_type} extraction system",
+            component="master_orchestrator",
+            ui_system=system,
+            mapped_system=system_type
+        )
+        
+        # Create the selected extraction system
+        self.extraction_system = ExtractionSystemFactory.get_system(
+            system_type=system_type,
+            config=self.config
+        )
+        
+        # Pass configuration to the system
         if configuration:
-            self.extraction_orchestrator.model_config = configuration
-            self.extraction_orchestrator.temperature = configuration.get('temperature', 0.7)
-            self.extraction_orchestrator.orchestrator_model = configuration.get('orchestrator_model', 'claude-4-opus')
-            self.extraction_orchestrator.orchestrator_prompt = configuration.get('orchestrator_prompt', '')
-            self.extraction_orchestrator.stage_models = configuration.get('stage_models', {})
-            
-            # Reinitialize extraction engine with new temperature
-            from ..extraction.engine import ModularExtractionEngine
-            self.extraction_orchestrator.extraction_engine = ModularExtractionEngine(self.config, temperature=self.extraction_orchestrator.temperature)
+            self.extraction_system.configuration = configuration
+            self.extraction_system.temperature = configuration.get('temperature', 0.7)
+            self.extraction_system.stage_models = configuration.get('stage_models', {})
+            self.extraction_system.stage_prompts = configuration.get('stage_prompts', {})
         
         # Initialize tracking
         iteration_history = []
@@ -160,74 +177,36 @@ class MasterOrchestrator:
             )
         
         try:
-            for iteration in range(1, max_iterations + 1):
-                logger.info(
-                    f"Master Orchestrator Iteration {iteration}/{max_iterations}",
-                    component="master_orchestrator",
-                    iteration=iteration,
-                    current_accuracy=best_accuracy
-                )
-                
-                # Update monitoring for new iteration
-                if queue_item_id:
-                    locked_items = []
-                    if iteration > 1 and iteration_history:
-                        # Get locked items from previous iteration
-                        last_analysis = iteration_history[-1].get('accuracy_analysis')
-                        if last_analysis and hasattr(last_analysis, 'high_confidence_positions'):
-                            locked_items = [
-                                f"Shelf {pos.section.horizontal} products" 
-                                for pos in last_analysis.high_confidence_positions[:3]
-                            ]
-                            if structure_context:
-                                locked_items.insert(0, f"Structure ({structure_context.shelf_count} shelves) ✓")
-                    
-                    await monitoring_hooks.update_iteration(queue_item_id, iteration, locked_items)
-                    await monitoring_hooks.update_processing_detail(
-                        queue_item_id,
-                        f"Starting iteration {iteration} - extracting shelf structure and products"
-                    )
-                
-                # Update state: Starting structure extraction
-                if queue_item_id:
-                    await self.state_tracker.update_stage(
-                        run_id=run_id,
-                        stage=ExtractionStage.STRUCTURE_EXTRACTION
-                    )
-                    await monitoring_hooks.update_extraction_stage(
-                        queue_item_id,
-                        "Structure Analysis",
-                        {"iteration": iteration}
-                    )
-                
-                # Step 1: Extract with cumulative learning
-                extraction_start = time.time()
-                extraction_result = await self.extraction_orchestrator.extract_with_cumulative_learning(
-                    image=images['enhanced'],
-                    iteration=iteration,
-                    previous_attempts=previous_attempts,
-                    focus_areas=self._get_focus_areas_from_previous(iteration_history),
-                    locked_positions=self._get_locked_positions_from_previous(iteration_history),
-                    agent_id=agent_id,
-                    extraction_run_id=run_id
-                )
-                
-                # Record extraction metrics
-                if queue_item_id:
-                    extraction_time = time.time() - extraction_start
-                    await self.state_tracker.record_stage_metrics(
-                        run_id=run_id,
-                        stage=ExtractionStage.STRUCTURE_EXTRACTION,
-                        metrics={
-                            "duration_seconds": extraction_time,
-                            "tokens_used": getattr(extraction_result, 'token_count', 0),
-                            "cost": extraction_result.api_cost_estimate,
-                            "model_used": extraction_result.model_used
-                        }
-                    )
+            # Let the extraction system handle ALL orchestration
+            # It will manage iterations, visual feedback, and intelligent decisions
+            extraction_result = await self.extraction_system.extract_with_iterations(
+                image_data=images['enhanced'],
+                upload_id=upload_id,
+                target_accuracy=target_accuracy,
+                max_iterations=max_iterations,
+                configuration=configuration
+            )
             
-                if iteration == 1:
-                    structure_context = extraction_result.structure
+            # Create simplified result
+            total_duration = time.time() - start_time
+            
+            result = MasterResult(
+                final_accuracy=getattr(extraction_result, 'overall_accuracy', 0.8),
+                target_achieved=getattr(extraction_result, 'overall_accuracy', 0.8) >= target_accuracy,
+                iterations_completed=getattr(extraction_result, 'iteration_count', 1),
+                iteration_history=[],  # System manages its own history now
+                needs_human_review=getattr(extraction_result, 'overall_accuracy', 0.8) < target_accuracy,
+                structure_analysis=getattr(extraction_result, 'structure', None),
+                best_planogram=None,  # System generates planograms internally
+                total_duration=total_duration,
+                total_cost=getattr(extraction_result, 'api_cost_estimate', 0.0)
+            )
+            
+            return result
+            
+        except Exception as e:
+            # Re-raise the exception
+            raise
             
                 # Step 2: Generate planogram
                 # Get abstraction level from comparison config or use default
@@ -283,12 +262,18 @@ class MasterOrchestrator:
                         configuration.get('comparison_model', 'gpt-4-vision-preview') if configuration else 'gpt-4-vision-preview'
                     )
                     
+                    # Get comparison prompt from configuration
+                    comparison_prompt = None
+                    if configuration and 'stage_prompts' in configuration:
+                        comparison_prompt = configuration['stage_prompts'].get('comparison')
+                    
                     comparison_result = await self.comparison_agent.compare_image_vs_planogram(
                         original_image=images['enhanced'],
                         planogram=planogram_result.planogram,
                         structure_context=structure_context,
                         planogram_image=planogram_png,
-                        model=comparison_model
+                        model=comparison_model,
+                        comparison_prompt=comparison_prompt
                     )
                 else:
                     # Skip comparison entirely if no PNG - no API call

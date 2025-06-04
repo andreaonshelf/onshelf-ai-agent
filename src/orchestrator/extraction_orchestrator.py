@@ -8,7 +8,6 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime
 
 from ..config import SystemConfig
-from ..agents.structure_agent import StructureAnalysisAgent
 from ..models.extraction_models import (
     ExtractionResult, CumulativeExtractionContext, ValidationFlag
 )
@@ -26,7 +25,6 @@ class ExtractionOrchestrator:
     def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         self.config = config
         self.queue_item_id = queue_item_id
-        self.structure_agent = StructureAnalysisAgent(config)
         
         # Initialize model configuration defaults
         self.model_config = {}
@@ -77,7 +75,14 @@ class ExtractionOrchestrator:
         
         # Phase 0: Structure analysis (only on first iteration)
         if iteration == 1:
-            structure = await self.structure_agent.analyze_structure(image, agent_id)
+            # Use the stage-based structure extraction with UI prompts
+            model_id = self._select_model_for_agent(1, None, 'structure')
+            structure = await self._execute_structure_stage(
+                images={'main': image},
+                model_id=model_id,
+                previous_attempts=[],
+                agent_id=agent_id
+            )
             previous_attempts = []
         else:
             structure = previous_attempts[0].structure  # Use structure from first attempt

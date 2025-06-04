@@ -10,7 +10,7 @@ import time
 
 from ..config import SystemConfig
 from ..utils import logger
-from ..orchestrator.master_orchestrator import MasterOrchestrator
+from ..orchestrator.system_dispatcher import SystemDispatcher
 
 
 async def process_queue_item_with_config(queue_processor, queue_item: Dict[str, Any]):
@@ -71,7 +71,7 @@ async def process_queue_item_with_config(queue_processor, queue_item: Dict[str, 
                 if 'orchestrator_model' in pipeline:
                     config.orchestrator_model = pipeline['orchestrator_model']
         
-        orchestrator = MasterOrchestrator(config)
+        orchestrator = SystemDispatcher(config)
         
         # Process with master orchestrator using upload_id and configuration
         upload_id = queue_item['upload_id']
@@ -185,10 +185,10 @@ def patch_master_orchestrator_with_config():
     """
     Patch master orchestrator to pass configuration to sub-orchestrators
     """
-    from ..orchestrator.master_orchestrator import MasterOrchestrator
+    from ..orchestrator.system_dispatcher import SystemDispatcher
     
     # Store original method
-    original_achieve_target = MasterOrchestrator.achieve_target_accuracy
+    original_achieve_target = SystemDispatcher.achieve_target_accuracy
     
     async def patched_achieve_target_accuracy(self, upload_id: str, configuration: Optional[Dict] = None):
         """Enhanced version that uses configuration"""
@@ -208,7 +208,7 @@ def patch_master_orchestrator_with_config():
         return await original_achieve_target(self, upload_id, configuration)
     
     # Apply patch
-    MasterOrchestrator.achieve_target_accuracy = patched_achieve_target_accuracy
+    SystemDispatcher.achieve_target_accuracy = patched_achieve_target_accuracy
 
 
 # Apply patches when module is imported

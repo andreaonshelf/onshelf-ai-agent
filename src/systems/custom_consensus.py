@@ -238,7 +238,7 @@ class CustomConsensusSystem(BaseExtractionSystem):
             available_models=list(self.model_clients.keys())
         )
     
-    async def extract_with_consensus(self, image_data: bytes, upload_id: str) -> ExtractionResult:
+    async def extract_with_consensus(self, image_data: bytes, upload_id: str, extraction_data: Optional[Dict] = None) -> ExtractionResult:
         """Main extraction with cumulative building and end-to-end optimization"""
         
         start_time = time.time()
