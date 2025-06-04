@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drag and Drop Field Editor Test</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            padding: 40px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            margin-bottom: 30px;
+            color: #1e293b;
+        }
+        
+        /* Field Editor Styles */
+        .field-editor-container {
+            position: relative;
+        }
+        
+        .field-item-wrapper {
+            position: relative;
+            margin-bottom: 8px;
+        }
+        
+        .field-item-wrapper.dragging {
+            opacity: 0.4;
+            cursor: grabbing !important;
+        }
+        
+        .field-item-wrapper.drag-over::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: -2px;
+            height: 4px;
+            background: #3b82f6;
+            border-radius: 2px;
+            animation: pulse 1s infinite;
+        }
+        
+        .field-item-wrapper.drag-over-nested::after {
+            content: '';
+            position: absolute;
+            left: 24px;
+            right: 0;
+            top: 50%;
+            height: 2px;
+            background: #3b82f6;
+            opacity: 0.5;
+        }
+        
+        .field-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: grab;
+        }
+        
+        .field-content:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .field-content[draggable="true"]:active {
+            cursor: grabbing;
+        }
+        
+        .field-content.can-accept-drop {
+            border: 2px dashed #3b82f6 !important;
+            background: #f0f9ff !important;
+        }
+        
+        .field-content[data-type="object"] {
+            border-left: 3px solid #3b82f6 !important;
+        }
+        
+        .field-content[data-type="list"] {
+            border-left: 3px solid #22c55e !important;
+        }
+        
+        .field-drag-handle {
+            cursor: grab;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            user-select: none;
+            padding: 4px;
+            margin-right: 4px;
+        }
+        
+        .field-drag-handle:hover {
+            opacity: 1;
+        }
+        
+        .field-drag-handle:active {
+            cursor: grabbing;
+        }
+        
+        .field-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .field-details {
+            flex: 1;
+        }
+        
+        .field-name {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+        }
+        
+        .field-type {
+            font-size: 12px;
+            color: #64748b;
+            margin-left: 8px;
+        }
+        
+        .field-description {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        
+        .nested-fields {
+            margin-top: 8px;
+            margin-left: 40px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 12px;
+            background: #f0f9ff;
+            color: #3b82f6;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // Field Editor Component with full drag and drop
+        const FieldEditor = ({ fields, onFieldUpdate, onFieldMove, path = [] }) => {
+            const [draggedField, setDraggedField] = useState(null);
+            const [dragOverInfo, setDragOverInfo] = useState(null);
+            const level = path.length;
+            
+            // Handle drag start
+            const handleDragStart = (e, fieldPath, field) => {
+                e.stopPropagation();
+                setDraggedField({ path: fieldPath, field });
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', JSON.stringify({ path: fieldPath, field }));
+                
+                // Add dragging class
+                e.target.closest('.field-item-wrapper').classList.add('dragging');
+            };
+            
+            // Handle drag end
+            const handleDragEnd = (e) => {
+                e.stopPropagation();
+                setDraggedField(null);
+                setDragOverInfo(null);
+                
+                // Remove all drag-related classes
+                document.querySelectorAll('.dragging, .drag-over, .drag-over-nested, .can-accept-drop').forEach(el => {
+                    el.classList.remove('dragging', 'drag-over', 'drag-over-nested', 'can-accept-drop');
+                });
+            };
+            
+            // Check if a field can accept a drop (for nesting)
+            const canAcceptDrop = (targetField, draggedField) => {
+                if (!targetField || !draggedField) return false;
+                return targetField.type === 'object' || 
+                       (targetField.type === 'list' && targetField.list_item_type === 'object');
+            };
+            
+            // Handle drag over
+            const handleDragOver = (e, targetPath, targetField) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (!draggedField) return;
+                
+                // Don't allow dropping on itself or its children
+                if (isChildPath(targetPath, draggedField.path)) return;
+                
+                e.dataTransfer.dropEffect = 'move';
+                
+                // Update visual feedback
+                const wrapper = e.target.closest('.field-item-wrapper');
+                if (wrapper) {
+                    // Remove previous indicators
+                    document.querySelectorAll('.drag-over, .drag-over-nested').forEach(el => {
+                        el.classList.remove('drag-over', 'drag-over-nested');
+                    });
+                    
+                    // Check if we're over a nestable field
+                    const fieldContent = wrapper.querySelector('.field-content');
+                    const rect = fieldContent.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const threshold = rect.height / 3;
+                    
+                    if (canAcceptDrop(targetField, draggedField.field) && y > threshold && y < rect.height - threshold) {
+                        // Show nesting indicator
+                        wrapper.classList.add('drag-over-nested');
+                        fieldContent.classList.add('can-accept-drop');
+                        setDragOverInfo({ path: targetPath, position: 'nest' });
+                    } else {
+                        // Show reorder indicator
+                        wrapper.classList.add('drag-over');
+                        document.querySelectorAll('.can-accept-drop').forEach(el => {
+                            el.classList.remove('can-accept-drop');
+                        });
+                        setDragOverInfo({ path: targetPath, position: y < rect.height / 2 ? 'before' : 'after' });
+                    }
+                }
+            };
+            
+            // Handle drag leave
+            const handleDragLeave = (e) => {
+                e.stopPropagation();
+                const wrapper = e.target.closest('.field-item-wrapper');
+                if (wrapper) {
+                    wrapper.classList.remove('drag-over', 'drag-over-nested');
+                    wrapper.querySelector('.field-content')?.classList.remove('can-accept-drop');
+                }
+            };
+            
+            // Handle drop
+            const handleDrop = (e, targetPath, targetField) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (!draggedField || !dragOverInfo) return;
+                
+                // Don't allow dropping on itself or its children
+                if (isChildPath(targetPath, draggedField.path)) return;
+                
+                // Call the parent's move handler
+                if (onFieldMove) {
+                    onFieldMove(draggedField.path, dragOverInfo.path, dragOverInfo.position);
+                }
+                
+                // Clean up
+                handleDragEnd(e);
+            };
+            
+            // Helper to check if targetPath is a child of draggedPath
+            const isChildPath = (targetPath, draggedPath) => {
+                if (targetPath.length <= draggedPath.length) return false;
+                for (let i = 0; i < draggedPath.length; i++) {
+                    if (targetPath[i] !== draggedPath[i]) return false;
+                }
+                return true;
+            };
+            
+            return (
+                <div className="field-editor-container">
+                    {fields.map((field, index) => {
+                        const currentPath = [...path, index];
+                        const isNestable = field.type === 'object' || (field.type === 'list' && field.list_item_type === 'object');
+                        const hasNestedFields = field.nested_fields && field.nested_fields.length > 0;
+                        
+                        return (
+                            <div 
+                                key={field.id || index} 
+                                className="field-item-wrapper"
+                                draggable="true"
+                                onDragStart={(e) => handleDragStart(e, currentPath, field)}
+                                onDragEnd={handleDragEnd}
+                                onDragOver={(e) => handleDragOver(e, currentPath, field)}
+                                onDragLeave={handleDragLeave}
+                                onDrop={(e) => handleDrop(e, currentPath, field)}
+                            >
+                                <div className="field-content" data-type={field.type}>
+                                    <div className="field-drag-handle" title="Drag to reorder">
+                                        ⋮⋮
+                                    </div>
+                                    
+                                    <div className="field-icon" style={{
+                                        background: field.type === 'object' ? '#dbeafe' : 
+                                                   field.type === 'list' ? '#dcfce7' : 
+                                                   field.type === 'string' ? '#fef3c7' : '#e0e7ff',
+                                        color: field.type === 'object' ? '#3b82f6' : 
+                                               field.type === 'list' ? '#22c55e' : 
+                                               field.type === 'string' ? '#f59e0b' : '#6366f1'
+                                    }}>
+                                        {field.type === 'object' ? '{}' : 
+                                         field.type === 'list' ? '[]' : 
+                                         field.type === 'string' ? '""' : '#'}
+                                    </div>
+                                    
+                                    <div className="field-details">
+                                        <div>
+                                            <span className="field-name">{field.name}</span>
+                                            <span className="field-type">({field.type})</span>
+                                        </div>
+                                        {field.description && (
+                                            <div className="field-description">{field.description}</div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {hasNestedFields && (
+                                    <div className="nested-fields">
+                                        <FieldEditor
+                                            fields={field.nested_fields}
+                                            onFieldUpdate={onFieldUpdate}
+                                            onFieldMove={onFieldMove}
+                                            path={currentPath}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+        
+        // Test App
+        const App = () => {
+            const [fields, setFields] = useState([
+                {
+                    id: 'field1',
+                    name: 'product',
+                    type: 'object',
+                    description: 'Product information',
+                    nested_fields: [
+                        {
+                            id: 'field1_1',
+                            name: 'name',
+                            type: 'string',
+                            description: 'Product name'
+                        },
+                        {
+                            id: 'field1_2',
+                            name: 'price',
+                            type: 'string',
+                            description: 'Product price'
+                        }
+                    ]
+                },
+                {
+                    id: 'field2',
+                    name: 'shelf_number',
+                    type: 'string',
+                    description: 'Shelf identifier'
+                },
+                {
+                    id: 'field3',
+                    name: 'products_list',
+                    type: 'list',
+                    list_item_type: 'object',
+                    description: 'List of products',
+                    nested_fields: []
+                }
+            ]);
+            
+            const [statusMessage, setStatusMessage] = useState('');
+            
+            const handleFieldMove = (sourcePath, targetPath, position) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields));
+                
+                // Extract source field
+                let sourceArray = updatedFields;
+                for (let i = 0; i < sourcePath.length - 1; i++) {
+                    sourceArray = sourceArray[sourcePath[i]].nested_fields || sourceArray[sourcePath[i]];
+                }
+                const sourceIndex = sourcePath[sourcePath.length - 1];
+                const sourceField = sourceArray[sourceIndex];
+                
+                // Remove source field
+                sourceArray.splice(sourceIndex, 1);
+                
+                // Find target location
+                let targetArray = updatedFields;
+                for (let i = 0; i < targetPath.length - 1; i++) {
+                    targetArray = targetArray[targetPath[i]].nested_fields || targetArray[targetPath[i]];
+                }
+                
+                if (position === 'nest') {
+                    // Nesting into a field
+                    const targetIndex = targetPath[targetPath.length - 1];
+                    const targetField = targetArray[targetIndex];
+                    if (!targetField.nested_fields) {
+                        targetField.nested_fields = [];
+                    }
+                    targetField.nested_fields.push(sourceField);
+                    setStatusMessage(`Nested "${sourceField.name}" into "${targetField.name}"`);
+                } else {
+                    // Reordering at same level or different level
+                    const targetIndex = targetPath[targetPath.length - 1];
+                    const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+                    
+                    // Adjust index if moving within same array and source was before target
+                    const adjustedIndex = (sourceArray === targetArray && sourceIndex < insertIndex) 
+                        ? insertIndex - 1 
+                        : insertIndex;
+                    
+                    targetArray.splice(adjustedIndex, 0, sourceField);
+                    setStatusMessage(`Moved "${sourceField.name}" ${position} "${targetArray[targetIndex]?.name || 'end'}"`);
+                }
+                
+                setFields(updatedFields);
+                
+                // Clear status after 3 seconds
+                setTimeout(() => setStatusMessage(''), 3000);
+            };
+            
+            const handleAddField = () => {
+                const newField = {
+                    id: `field_${Date.now()}`,
+                    name: 'new_field',
+                    type: 'string',
+                    description: 'New field description'
+                };
+                setFields([...fields, newField]);
+            };
+            
+            return (
+                <div className="container">
+                    <h1>Drag and Drop Field Editor Test</h1>
+                    
+                    <FieldEditor 
+                        fields={fields}
+                        onFieldMove={handleFieldMove}
+                        path={[]}
+                    />
+                    
+                    <div style={{ marginTop: '20px' }}>
+                        <button className="btn btn-primary" onClick={handleAddField}>
+                            Add Field
+                        </button>
+                    </div>
+                    
+                    {statusMessage && (
+                        <div className="status-message">
+                            {statusMessage}
+                        </div>
+                    )}
+                    
+                    <div style={{ marginTop: '30px', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>
+                        <h3 style={{ marginBottom: '10px' }}>Field Structure:</h3>
+                        <pre style={{ fontSize: '12px', overflow: 'auto' }}>
+                            {JSON.stringify(fields, null, 2)}
+                        </pre>
+                    </div>
+                </div>
+            );
+        };
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

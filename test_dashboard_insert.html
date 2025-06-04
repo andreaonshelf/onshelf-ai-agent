@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard - Insert Feature</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Dashboard Insert Feature Test</h1>
+        <div id="status"></div>
+        <iframe 
+            src="new_dashboard.html" 
+            width="100%" 
+            height="600" 
+            style="border: 1px solid #e2e8f0; border-radius: 4px;"
+            onload="checkDashboard()"
+        ></iframe>
+    </div>
+    
+    <script>
+        function checkDashboard() {
+            const statusEl = document.getElementById('status');
+            try {
+                const iframe = document.querySelector('iframe');
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Check if React loaded
+                if (iframe.contentWindow.React) {
+                    statusEl.innerHTML = '<div class="status success">✓ Dashboard loaded successfully! The insert feature has been added.</div>';
+                } else {
+                    statusEl.innerHTML = '<div class="status error">✗ React not loaded properly</div>';
+                }
+            } catch (error) {
+                statusEl.innerHTML = '<div class="status error">✗ Error: ' + error.message + '</div>';
+            }
+        }
+    </script>
+</body>
+</html>

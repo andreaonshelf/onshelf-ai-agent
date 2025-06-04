@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Nested Drag Issue</title>
+</head>
+<body>
+    <h1>Troubleshooting Nested Drag & Drop</h1>
+    
+    <h2>Your scenario:</h2>
+    <pre style="background: #f0f0f0; padding: 20px; font-family: monospace;">
+Existing structure:
+- shelf_structure (Object - nested) ✓
+  └─ total_shelves (Number - integer) ✓
+
+You want:
+- structure_extraction (Object - nested) ✓  [NEW]
+  └─ shelf_structure (Object - nested) ✓  [MOVED HERE]
+       └─ total_shelves (Number - integer) ✓
+    </pre>
+    
+    <h2>Steps to achieve this:</h2>
+    <ol>
+        <li><strong>Create new field</strong>: Click "Add Field"</li>
+        <li><strong>Set name</strong>: Change name to "structure_extraction"</li>
+        <li><strong>Set type</strong>: Change type dropdown from "string" to "object"</li>
+        <li><strong>Save if needed</strong>: Some implementations might need you to save/apply changes</li>
+        <li><strong>Drag shelf_structure</strong>: 
+            <ul>
+                <li>Grab the drag handle (⋮⋮) next to shelf_structure</li>
+                <li>Drag over structure_extraction</li>
+                <li>Look for the <strong>middle third</strong> of structure_extraction to show a dashed border</li>
+                <li>Drop when you see the nesting indicator</li>
+            </ul>
+        </li>
+    </ol>
+    
+    <h2>Common issues:</h2>
+    <ul>
+        <li>❌ <strong>Not dropping in the middle</strong>: The top/bottom thirds reorder, only middle third nests</li>
+        <li>❌ <strong>Field not saved</strong>: Some changes might need to be saved before drag works</li>
+        <li>❌ <strong>Type not updated</strong>: Ensure the type dropdown shows "object", not "string"</li>
+    </ul>
+    
+    <h2>Debug in browser console:</h2>
+    <pre style="background: #f0f0f0; padding: 20px;">
+// Check if your new field is properly typed as object
+const fields = document.querySelectorAll('.field-content[data-type="object"]');
+console.log('Object fields found:', fields.length);
+fields.forEach(f => {
+    const name = f.querySelector('input[type="text"]')?.value;
+    console.log('Object field:', name);
+});
+
+// Check if drag handlers are attached
+const draggables = document.querySelectorAll('[draggable="true"]');
+console.log('Draggable fields:', draggables.length);
+
+// Force highlight drop zones
+document.querySelectorAll('.field-content[data-type="object"]').forEach(el => {
+    el.style.border = '3px dashed red';
+    el.style.background = 'rgba(255,0,0,0.1)';
+});
+    </pre>
+</body>
+</html>

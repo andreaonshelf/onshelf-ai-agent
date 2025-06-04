@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Insert Buttons</title>
+    <script>
+        // Test that the dashboard loads without JavaScript errors
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript Error:', e.message, 'at', e.filename, ':', e.lineno);
+            const errorDiv = document.getElementById('errors');
+            if (errorDiv) {
+                errorDiv.innerHTML += `<div style="color: red;">Error: ${e.message} at line ${e.lineno}</div>`;
+            }
+        });
+        
+        window.addEventListener('load', function() {
+            console.log('Page loaded successfully');
+            
+            // Check if React is loaded
+            if (typeof React !== 'undefined') {
+                console.log('React is loaded');
+            }
+            
+            // Look for insert buttons
+            setTimeout(() => {
+                const insertButtons = document.querySelectorAll('.insert-field-button');
+                console.log('Found', insertButtons.length, 'insert buttons');
+                
+                const insertWrappers = document.querySelectorAll('.insert-field-wrapper');
+                console.log('Found', insertWrappers.length, 'insert wrappers');
+                
+                // Check if they're visible
+                insertWrappers.forEach((wrapper, index) => {
+                    const computed = window.getComputedStyle(wrapper);
+                    console.log(`Wrapper ${index}: display=${computed.display}, opacity=${computed.opacity}, visibility=${computed.visibility}`);
+                });
+            }, 2000);
+        });
+    </script>
+</head>
+<body>
+    <h1>Testing Insert Buttons</h1>
+    <div id="errors"></div>
+    <iframe src="new_dashboard_working.html" width="100%" height="800" style="border: 1px solid #ccc;"></iframe>
+</body>
+</html>

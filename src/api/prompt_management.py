@@ -39,31 +39,40 @@ async def get_prompts_by_stage(stage: str):
         prompts = []
         
         if supabase:
-            # Map stage to prompt_type
-            stage_mapping = {
+            # Map stage to prompt_type for legacy prompts
+            stage_to_prompt_type = {
                 "structure": "structure",
                 "products": "position",
                 "details": "detail",
                 "validation": "validation"
             }
             
-            prompt_type = stage_mapping.get(stage, stage)
+            # Get prompts from prompt_templates table
+            # Query by BOTH stage_type (for v2 prompts) AND prompt_type (for legacy prompts)
+            prompt_type = stage_to_prompt_type.get(stage, stage)
             
-            # Get prompts from meta_prompts table
-            result = supabase.table("meta_prompts").select("*").eq("prompt_type", prompt_type).execute()
+            # First try to get by stage_type (v2 prompts)
+            result = supabase.table("prompt_templates").select("*").eq("stage_type", stage).eq("is_active", True).execute()
+            
+            # If no results, try legacy prompt_type
+            if not result.data:
+                result = supabase.table("prompt_templates").select("*").eq("prompt_type", prompt_type).eq("is_active", True).execute()
             
             for prompt in result.data:
                 prompts.append({
-                    "id": prompt['id'],
-                    "name": prompt['name'] or f"{prompt['prompt_type']} v{prompt['version']}",
-                    "content": prompt['content'],
+                    "id": prompt['prompt_id'],
+                    "name": prompt['name'] or f"{prompt['prompt_type']} v{prompt.get('prompt_version', '1.0')}",
+                    "content": prompt['prompt_text'],
                     "prompt_type": prompt['prompt_type'],
-                    "model_type": prompt['model_type'] or 'all',
-                    "version": prompt['version'],
-                    "accuracy": prompt.get('avg_accuracy', 0) * 100 if prompt.get('avg_accuracy') else 85,
+                    "model_type": prompt.get('model_type', 'all'),
+                    "version": prompt.get('prompt_version', '1.0'),
+                    "accuracy": prompt.get('performance_score', 0) * 100 if prompt.get('performance_score') else None,  # No fake data
                     "uses": prompt.get('usage_count', 0),
                     "created_at": prompt['created_at'],
-                    "is_active": prompt.get('is_active', True)
+                    "is_active": prompt.get('is_active', True),
+                    "fields": prompt.get('fields', []),  # Include Pydantic field definitions
+                    "tags": prompt.get('tags', []),
+                    "stage_type": prompt.get('stage_type', stage)
                 })
         
         # If no prompts from database, provide examples
@@ -166,9 +175,9 @@ async def get_active_prompts():
                         "content": template_content[:200] + "..." if len(template_content) > 200 else template_content,
                         "full_content": template_content,
                         "performance": {
-                            "success_rate": 85.0,
-                            "usage_count": 150,
-                            "avg_cost": 0.025
+                            "success_rate": None,  # No fake data
+                            "usage_count": 0,
+                            "avg_cost": None
                         },
                         "created_at": datetime.utcnow().isoformat(),
                         "created_from_feedback": False
@@ -213,7 +222,7 @@ async def get_available_prompts(
                     "model": prompt['model_type'],
                     "version": prompt['prompt_version'],
                     "performance_stats": {
-                        "success_rate": float(prompt['performance_score']) * 100 if prompt['performance_score'] else 85.0,
+                        "success_rate": float(prompt['performance_score']) * 100 if prompt['performance_score'] else None,
                         "usage_count": prompt['usage_count'] or 0,
                         "avg_cost": float(prompt['avg_token_cost']) if prompt['avg_token_cost'] else 0.025
                     },
@@ -258,7 +267,7 @@ async def get_available_prompts(
                                     "model": model_type,
                                     "version": "1.0",
                                     "performance_stats": {
-                                        "success_rate": 85.0,
+                                        "success_rate": None,
                                         "usage_count": 150,
                                         "avg_cost": 0.025
                                     },
@@ -303,7 +312,7 @@ async def get_available_prompts(
                             "model": model_type,
                             "version": "1.0",
                             "performance_stats": {
-                                "success_rate": 85.0,
+                                "success_rate": None,
                                 "usage_count": 150,
                                 "avg_cost": 0.025
                             },
@@ -971,7 +980,7 @@ async def get_prompt_details(prompt_id: str):
                     "id": prompt['prompt_id'],
                     "content": prompt['prompt_content'],
                     "performance_stats": {
-                        "success_rate": float(prompt['performance_score']) * 100 if prompt['performance_score'] else 85.0,
+                        "success_rate": float(prompt['performance_score']) * 100 if prompt['performance_score'] else None,
                         "usage_count": prompt['usage_count'] or 0,
                         "avg_cost": float(prompt['avg_token_cost']) if prompt['avg_token_cost'] else 0.025,
                         "error_rate": float(prompt['correction_rate']) if prompt['correction_rate'] else 0.15
@@ -1038,7 +1047,7 @@ async def get_prompt_details(prompt_id: str):
                         "content": content,
                         "full_content": content,  # Add full_content field
                         "performance_stats": {
-                            "success_rate": 85.0,
+                            "success_rate": None,
                             "usage_count": 150,
                             "avg_cost": 0.025,
                             "error_rate": 0.15
@@ -1523,7 +1532,7 @@ async def get_extraction_recommendations(context: dict):
                         'prompt_id': 'structure_claude_v1.0',
                         'name': 'Structure Analysis',
                         'version': '1.0',
-                        'performance': 0.85,
+                        'performance': 0.0,
                         'reason': 'Default structure prompt'
                     },
                     'products': {
@@ -1585,12 +1594,12 @@ async def get_extraction_recommendations(context: dict):
         
         # Calculate best performers
         best_system = "custom_consensus"
-        best_system_score = 0.85
+        best_system_score = 0.0
         
         if performance_by_system:
             best_system, scores = max(performance_by_system.items(), 
                                     key=lambda x: sum(x[1])/len(x[1]) if x[1] else 0)
-            best_system_score = sum(scores)/len(scores) if scores else 0.85
+            best_system_score = sum(scores)/len(scores) if scores else 0.0
         
         # Get best prompts for each type
         best_prompts = {}
@@ -1609,7 +1618,7 @@ async def get_extraction_recommendations(context: dict):
                     'prompt_id': prompt['prompt_id'],
                     'name': prompt.get('template_id', f'{prompt_type} Analysis'),
                     'version': prompt.get('prompt_version', '1.0'),
-                    'performance': float(prompt.get('performance_score', 0.85)),
+                    'performance': float(prompt.get('performance_score', 0.0)),
                     'reason': f"Best performer for {category or 'general'} category"
                 }
             else:
@@ -1618,7 +1627,7 @@ async def get_extraction_recommendations(context: dict):
                     'prompt_id': f'{prompt_type}_auto_v1.0',
                     'name': f'{prompt_type.title()} Analysis',
                     'version': '1.0',
-                    'performance': 0.85,
+                    'performance': 0.0,
                     'reason': f"Default {prompt_type} prompt"
                 }
         
@@ -1650,7 +1659,7 @@ async def get_extraction_recommendations(context: dict):
                     'prompt_id': 'structure_fallback',
                     'name': 'Structure Analysis',
                     'version': '1.0',
-                    'performance': 0.85,
+                    'performance': 0.0,
                     'reason': 'Fallback prompt'
                 },
                 'products': {
@@ -1683,7 +1692,7 @@ async def get_prompts_with_performance(prompt_type: str, model_type: str):
                 'prompt_id': f'{prompt_type}_{model_type}_v1.0',
                 'name': f'{prompt_type.title()} Analysis',
                 'version': '1.0',
-                'performance_score': 0.85,
+                'performance_score': 0.0,
                 'usage_count': 150,
                 'last_used': '2 hours ago',
                 'avg_token_cost': 0.025,
@@ -1708,12 +1717,12 @@ async def get_prompts_with_performance(prompt_type: str, model_type: str):
                 accuracies = [float(run['final_accuracy']) for run in recent_runs.data if run.get('final_accuracy')]
                 costs = [float(run['api_cost']) for run in recent_runs.data if run.get('api_cost')]
                 
-                prompt['recent_accuracy'] = sum(accuracies) / len(accuracies) if accuracies else 0.85
+                prompt['recent_accuracy'] = sum(accuracies) / len(accuracies) if accuracies else 0.0
                 prompt['recent_uses'] = len(recent_runs.data)
                 prompt['avg_token_cost'] = sum(costs) / len(costs) if costs else 0.025
                 prompt['last_used'] = max(run['created_at'] for run in recent_runs.data) if recent_runs.data else None
             else:
-                prompt['recent_accuracy'] = float(prompt.get('performance_score', 0.85))
+                prompt['recent_accuracy'] = float(prompt.get('performance_score', 0.0))
                 prompt['recent_uses'] = prompt.get('usage_count', 0)
                 prompt['avg_token_cost'] = float(prompt.get('avg_token_cost', 0.025))
                 prompt['last_used'] = prompt.get('created_at')
@@ -1817,7 +1826,7 @@ async def get_prompt_intelligence():
         # Basic statistics
         total_prompts = len(prompts.data)
         success_rates = [float(p['performance_score']) for p in prompts.data if p.get('performance_score')]
-        avg_success_rate = sum(success_rates) / len(success_rates) if success_rates else 0.85
+        avg_success_rate = sum(success_rates) / len(success_rates) if success_rates else 0.0
         
         # Find best performer
         best_performer = max(prompts.data, key=lambda p: float(p.get('performance_score', 0)))

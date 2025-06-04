@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal Insert Button Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .field-editor-container {
+            border: 2px solid #e5e7eb;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f9fafb;
+        }
+        
+        .insert-field-wrapper {
+            display: flex !important;
+            align-items: center;
+            gap: 12px;
+            margin: 12px 0;
+            padding: 8px;
+            background: rgba(251, 191, 36, 0.2);
+            border: 2px dashed #fbbf24;
+            border-radius: 8px;
+            visibility: visible !important;
+        }
+        
+        .insert-field-button {
+            padding: 8px 16px;
+            background: #fef3c7;
+            border: 2px solid #fbbf24;
+            border-radius: 6px;
+            color: #92400e;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .insert-field-button:hover {
+            background: #fde68a;
+            border-color: #f59e0b;
+            transform: scale(1.05);
+        }
+        
+        .field-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1f2937;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 300px;
+        }
+        
+        .debug-panel h3 {
+            margin: 0 0 10px 0;
+            color: #fbbf24;
+        }
+        
+        .debug-panel div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [fields, setFields] = useState([
+                { name: 'field1', type: 'string' },
+                { name: 'field2', type: 'integer' }
+            ]);
+            const [debugInfo, setDebugInfo] = useState({});
+            const containerRef = useRef(null);
+            
+            useEffect(() => {
+                // Update debug info
+                const updateDebugInfo = () => {
+                    const buttons = document.querySelectorAll('.insert-field-button');
+                    const wrappers = document.querySelectorAll('.insert-field-wrapper');
+                    
+                    setDebugInfo({
+                        buttonCount: buttons.length,
+                        wrapperCount: wrappers.length,
+                        fieldsCount: fields.length,
+                        expectedButtons: fields.length + 1,
+                        buttonsVisible: Array.from(buttons).map((btn, idx) => {
+                            const rect = btn.getBoundingClientRect();
+                            return {
+                                index: idx,
+                                visible: rect.width > 0 && rect.height > 0,
+                                position: `${Math.round(rect.top)}, ${Math.round(rect.left)}`
+                            };
+                        })
+                    });
+                };
+                
+                updateDebugInfo();
+                // Also update after a short delay to catch any async rendering
+                setTimeout(updateDebugInfo, 100);
+            }, [fields]);
+            
+            const handleInsertFieldAt = (index) => {
+                console.log('Insert clicked at index:', index);
+                const newField = {
+                    name: `new_field_${Date.now()}`,
+                    type: 'string'
+                };
+                const updatedFields = [...fields];
+                updatedFields.splice(index, 0, newField);
+                setFields(updatedFields);
+            };
+            
+            return (
+                <div className="container">
+                    <h1>Minimal Insert Button Test</h1>
+                    
+                    <div className="field-editor-container" ref={containerRef}>
+                        {/* First insert button */}
+                        <div className="insert-field-wrapper">
+                            <button
+                                className="insert-field-button"
+                                onClick={() => handleInsertFieldAt(0)}
+                            >
+                                + Insert field at position 0
+                            </button>
+                        </div>
+                        
+                        {fields.map((field, index) => (
+                            <React.Fragment key={index}>
+                                <div className="field-item">
+                                    <strong>{field.name}</strong> - Type: {field.type}
+                                </div>
+                                
+                                {/* Insert button after each field */}
+                                <div className="insert-field-wrapper">
+                                    <button
+                                        className="insert-field-button"
+                                        onClick={() => handleInsertFieldAt(index + 1)}
+                                    >
+                                        + Insert field at position {index + 1}
+                                    </button>
+                                </div>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                    
+                    <div className="debug-panel">
+                        <h3>Debug Info</h3>
+                        <div>Fields: {debugInfo.fieldsCount}</div>
+                        <div>Buttons found: {debugInfo.buttonCount}</div>
+                        <div>Wrappers found: {debugInfo.wrapperCount}</div>
+                        <div>Expected buttons: {debugInfo.expectedButtons}</div>
+                        {debugInfo.buttonsVisible && (
+                            <div>
+                                <strong>Button visibility:</strong>
+                                {debugInfo.buttonsVisible.map((btn, idx) => (
+                                    <div key={idx}>
+                                        Button {btn.index}: {btn.visible ? '✓' : '✗'} at {btn.position}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

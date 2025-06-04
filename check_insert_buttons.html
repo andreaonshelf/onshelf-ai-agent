@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Insert Buttons</title>
+</head>
+<body>
+    <h1>Check Insert Buttons in Dashboard</h1>
+    <p>Open this page, then navigate to <a href="http://localhost:8130" target="_blank">http://localhost:8130</a> in another tab.</p>
+    
+    <h2>Steps to Check:</h2>
+    <ol>
+        <li>Open the dashboard at http://localhost:8130</li>
+        <li>Click on "Extraction Config" tab</li>
+        <li>Open browser console (F12)</li>
+        <li>Run these commands:</li>
+    </ol>
+    
+    <pre style="background: #f0f0f0; padding: 20px; border-radius: 5px; font-family: monospace;">
+// 1. Check if FieldEditor component exists
+console.log('FieldEditor exists:', typeof FieldEditor !== 'undefined');
+
+// 2. Check if insert buttons are in DOM
+const insertButtons = document.querySelectorAll('.insert-field-button');
+console.log('Insert buttons found:', insertButtons.length);
+
+// 3. Check insert wrappers
+const insertWrappers = document.querySelectorAll('.insert-field-wrapper');
+console.log('Insert wrappers found:', insertWrappers.length);
+
+// 4. Make all insert buttons visible
+document.querySelectorAll('.insert-field-wrapper').forEach(el => {
+    el.style.opacity = '1';
+    el.style.background = 'yellow';
+    el.style.padding = '10px';
+    el.style.border = '2px solid red';
+});
+
+// 5. Check if field editor container exists
+const fieldEditor = document.querySelector('.field-editor-container');
+console.log('Field editor container:', fieldEditor);
+
+// 6. Check all buttons in the extraction config area
+const allButtons = document.querySelectorAll('.stage-content button');
+console.log('All buttons in stage content:', allButtons.length);
+allButtons.forEach(btn => console.log('Button text:', btn.textContent));
+
+// 7. Check if fields are being rendered
+const fieldItems = document.querySelectorAll('.field-item');
+console.log('Field items found:', fieldItems.length);
+
+// 8. Force create an insert button
+if (fieldEditor && insertButtons.length === 0) {
+    const testButton = document.createElement('div');
+    testButton.innerHTML = '<button style="background: red; color: white; padding: 10px;">TEST INSERT BUTTON</button>';
+    fieldEditor.insertBefore(testButton, fieldEditor.firstChild);
+    console.log('Test button added!');
+}
+    </pre>
+    
+    <h2>If no insert buttons found:</h2>
+    <p>The issue might be:</p>
+    <ul>
+        <li>The onInsertFieldAt prop is not being passed</li>
+        <li>The FieldEditor component is not rendering them</li>
+        <li>CSS is hiding them</li>
+        <li>JavaScript error preventing render</li>
+    </ul>
+</body>
+</html>

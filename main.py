@@ -3427,13 +3427,13 @@ async def root():
                             <!-- Prompt Preview Panel -->
                             <div id="preview-structure" class="prompt-preview-panel" style="display: none;">
                                 <div class="preview-header">
-                                    <span class="prompt-name">High Accuracy v2.1</span>
-                                    <span class="performance-badge">94% success</span>
+                                    <span class="prompt-name">Loading...</span>
+                                    <span class="performance-badge">No data yet</span>
                                 </div>
                                 <div class="preview-stats">
-                                    <span>📊 423 uses</span>
-                                    <span>⏱️ Last: 2 hours ago</span>
-                                    <span>💰 Avg cost: $0.12</span>
+                                    <span>📊 No usage data</span>
+                                    <span>⏱️ Never used</span>
+                                    <span>💰 No cost data</span>
                                 </div>
                                 <div class="preview-content">
                                     <pre class="prompt-snippet"><!-- First 150 chars --></pre>
@@ -7949,7 +7949,7 @@ async def root():
                                     <td style="padding: 8px;">Orange Juice 330ml</td>
                                     <td style="padding: 8px; text-align: center;">3</td>
                                     <td style="padding: 8px;">£2.29</td>
-                                    <td style="padding: 8px; color: #10b981; font-weight: bold; text-align: center;">94%</td>
+                                    <td style="padding: 8px; color: #64748b; text-align: center;">-</td>
                                 </tr>
                                 <tr style="border-bottom: 1px solid #e5e7eb;">
                                     <td style="padding: 8px;">4</td>
@@ -8027,7 +8027,7 @@ async def root():
                                     <td style="padding: 8px;">Energy Drink 500ml</td>
                                     <td style="padding: 8px; text-align: center;">2</td>
                                     <td style="padding: 8px;">£1.99</td>
-                                    <td style="padding: 8px; color: #3b82f6; font-weight: bold; text-align: center;">87%</td>
+                                    <td style="padding: 8px; color: #64748b; text-align: center;">-</td>
                                 </tr>
                             </table>
                         </div>
@@ -10521,7 +10521,7 @@ async def root():
                 // Update context display
                 document.getElementById('recStore').textContent = context.store || 'Tesco Metro';
                 document.getElementById('recCategory').textContent = context.category || 'Beverages';
-                document.getElementById('recHistory').textContent = context.history || '87% success with Claude';
+                document.getElementById('recHistory').textContent = context.history || 'No history available';
                 
                 // Generate auto-selection choices
                 const autoChoices = generateAutoSelectionChoices(context);
@@ -11761,7 +11761,7 @@ ${getOptimizationTips(goal, extractionType)}`;
                     showSmartRecommendations({
                         store: 'Tesco Metro',
                         category: 'Beverages',
-                        history: '87% success with Claude'
+                        history: 'No history available'
                     });
                     
                     // Initialize model dropdowns with default values

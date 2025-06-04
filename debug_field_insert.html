@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Field Insert</title>
+</head>
+<body>
+    <h1>Debug Field Insert Feature</h1>
+    <p>Open your main dashboard in a new tab, then open the browser console and run these commands to debug:</p>
+    
+    <pre style="background: #f0f0f0; padding: 20px; border-radius: 5px;">
+// 1. Check if insert buttons are in the DOM
+console.log('Insert buttons found:', document.querySelectorAll('.insert-field-button').length);
+
+// 2. Check opacity of insert wrappers
+document.querySelectorAll('.insert-field-wrapper').forEach((el, i) => {
+    console.log(`Insert wrapper ${i} opacity:`, el.style.opacity);
+});
+
+// 3. Force show all insert buttons
+document.querySelectorAll('.insert-field-wrapper').forEach(el => {
+    el.style.opacity = '1';
+    el.style.border = '2px solid red';
+});
+
+// 4. Check if hover events are working
+document.querySelectorAll('.insert-field-wrapper').forEach((el, i) => {
+    el.addEventListener('mouseenter', () => console.log(`Hovering insert ${i}`));
+});
+
+// 5. Check z-index issues
+document.querySelectorAll('.insert-field-wrapper').forEach(el => {
+    el.style.zIndex = '9999';
+});
+    </pre>
+    
+    <h2>Common Issues:</h2>
+    <ul>
+        <li><strong>Buttons not visible:</strong> Run command #3 to force show them</li>
+        <li><strong>Hover not working:</strong> Check console for hover logs (command #4)</li>
+        <li><strong>Z-index issues:</strong> Run command #5 to bring buttons to front</li>
+    </ul>
+    
+    <h2>Quick Fix - Add this CSS:</h2>
+    <pre style="background: #f0f0f0; padding: 20px; border-radius: 5px;">
+/* Add to your dashboard styles */
+.field-editor-container .insert-field-wrapper {
+    opacity: 0.3 !important;
+    display: flex !important;
+}
+
+.field-editor-container .insert-field-wrapper:hover {
+    opacity: 1 !important;
+}
+
+/* Always show first insert button */
+.field-editor-container > .insert-field-wrapper:first-child {
+    opacity: 0.5 !important;
+}
+    </pre>
+</body>
+</html>

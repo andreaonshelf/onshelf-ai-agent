@@ -5,10 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OnShelf AI - Unified Dashboard</title>
     
-    <!-- React and Dependencies -->
+    <!-- React and Dependencies with fallback -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+        // Debug loading
+        window.addEventListener('error', (e) => {
+            console.error('Script loading error:', e);
+        });
+        
+        // Check if React loaded
+        setTimeout(() => {
+            if (typeof React === 'undefined') {
+                document.body.innerHTML = '<h1 style="color: red; padding: 20px;">Error: React failed to load from CDN. Please check your internet connection.</h1>';
+            }
+        }, 3000);
+    </script>
     
     <!-- Chart.js for Analytics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -664,100 +677,83 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         
-        /* Drag and Drop Styles */
-        .field-item-wrapper.dragging {
-            opacity: 0.4;
-            cursor: grabbing !important;
+        /* Stage-based status indicators */
+        .status-active {
+            color: #3b82f6;
+            font-weight: 600;
+            animation: pulse 1.5s ease-in-out infinite;
         }
         
-        .field-item-wrapper.drag-over {
-            position: relative;
-        }
-        
-        .field-item-wrapper.drag-over::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            right: 0;
-            top: -2px;
-            height: 4px;
-            background: #3b82f6;
-            border-radius: 2px;
-            animation: pulse 1s infinite;
-        }
-        
-        .field-item-wrapper.drag-over-nested::after {
-            content: '';
-            position: absolute;
-            left: 24px;
-            right: 0;
-            top: 50%;
-            height: 2px;
-            background: #3b82f6;
-            opacity: 0.5;
-        }
-        
-        .field-content.can-accept-drop {
-            border: 2px dashed #3b82f6 !important;
-            background: #f0f9ff !important;
-        }
-        
-        .field-content[draggable="true"] {
-            cursor: grab;
-        }
-        
-        .field-content[draggable="true"]:active {
-            cursor: grabbing;
-        }
-        
-        .drag-ghost {
-            position: fixed;
-            pointer-events: none;
-            z-index: 9999;
-            opacity: 0.8;
-            transform: rotate(2deg);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        .status-complete {
+            color: #16a34a;
+            font-weight: 500;
         }
         
         @keyframes pulse {
-            0% { opacity: 0.4; }
-            50% { opacity: 1; }
-            100% { opacity: 0.4; }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
         
-        .drop-indicator {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: #3b82f6;
-            pointer-events: none;
-            transition: all 0.2s ease;
+        /* Insert button styles */
+        .insert-field-button {
+            padding: 6px 14px;
+            background: #fef3c7;
+            border: 2px dashed #fbbf24;
+            border-radius: 6px;
+            color: #92400e;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-block !important;
+            white-space: nowrap;
         }
         
-        .drop-indicator.top {
-            top: -1px;
+        .insert-field-button:hover {
+            background: #fde68a;
+            border-color: #f59e0b;
+            color: #78350f;
+            transform: scale(1.05);
         }
         
-        .drop-indicator.bottom {
-            bottom: -1px;
-        }
-        
-        .field-drag-handle {
-            cursor: grab;
-            opacity: 0.5;
+        .insert-field-wrapper {
+            display: flex !important;
+            align-items: center;
+            gap: 12px;
+            margin: 12px 0;
+            padding: 8px;
             transition: opacity 0.2s;
-            user-select: none;
-            padding: 4px;
-            margin-right: 4px;
+            position: relative;
+            z-index: 10;
+            height: auto !important;
+            visibility: visible !important;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px dashed rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
         }
         
-        .field-drag-handle:hover {
-            opacity: 1;
+        /* Ensure insert buttons are visible on hover */
+        .field-editor-container .insert-field-wrapper {
+            opacity: 0.3;
         }
         
-        .field-drag-handle:active {
-            cursor: grabbing;
+        .field-editor-container:hover .insert-field-wrapper {
+            opacity: 0.5;
+        }
+        
+        .field-editor-container .insert-field-wrapper:hover {
+            opacity: 1 !important;
+        }
+        
+        /* Always show the first insert button more prominently */
+        .field-editor-container > .insert-field-wrapper:first-child {
+            opacity: 0.6;
+        }
+        
+        .insert-field-line {
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
         }
     </style>
 </head>
@@ -922,12 +918,36 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
+                                // System configuration
                                 system: currentConfig.system,
                                 max_budget: currentConfig.budget,
+                                
+                                // Send the complete configuration object
+                                configuration: fullConfig || {
+                                    system: currentConfig.system,
+                                    max_budget: currentConfig.budget,
+                                    temperature: 0.7,
+                                    orchestrator_model: 'claude-4-opus',
+                                    orchestrator_prompt: '',
+                                    comparison_config: {
+                                        model: 'gpt-4-vision-preview',
+                                        prompt: DEFAULT_COMPARISON_PROMPT,
+                                        use_visual_comparison: true,
+                                        abstraction_layers: []
+                                    },
+                                    stages: {}
+                                },
+                                
+                                // Legacy fields for backward compatibility
                                 temperature: fullConfig?.temperature || 0.7,
-                                orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',
-                                orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
-                                stage_models: stageModels
+                                orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',                                orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
+                                stage_models: stageModels,
+                                comparison_config: fullConfig?.comparison_config || {
+                                    model: 'gpt-4-vision-preview',
+                                    prompt: DEFAULT_COMPARISON_PROMPT,
+                                    use_visual_comparison: true,
+                                    abstraction_layers: []
+                                }
                             })
                         });
                         
@@ -1413,7 +1433,6 @@
                     borderRadius: '8px',
                     border: '1px solid #e2e8f0'
                 }}>
-                    {/* Quick select buttons */}
                     <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                             className="btn btn-secondary"
@@ -1445,7 +1464,6 @@
                         </button>
                     </div>
                     
-                    {/* Model selection grid */}
                     {Object.entries(modelsByProvider).map(([provider, providerModels]) => (
                         <div key={provider} style={{ marginBottom: '20px' }}>
                             <h4 style={{ 
@@ -1515,7 +1533,6 @@
                         </div>
                     ))}
                     
-                    {/* Selected models summary */}
                     {selectedModels.length > 0 && (
                         <div style={{ 
                             marginTop: '16px', 
@@ -1569,6 +1586,49 @@
             const [orchestratorModel, setOrchestratorModel] = useState('claude-4-opus');
             const [orchestratorPrompt, setOrchestratorPrompt] = useState('');
             
+            // Comparison configuration states
+            const [comparisonModel, setComparisonModel] = useState('gpt-4-vision-preview');
+            const [comparisonPrompt, setComparisonPrompt] = useState('');
+            const [useVisualComparison, setUseVisualComparison] = useState(true);
+            const [abstractionLayers, setAbstractionLayers] = useState([
+                { id: 'confidence', label: 'Confidence Levels', enabled: true, color: '#3b82f6' },
+                { id: 'brand', label: 'Brand Grouping', enabled: true, color: '#16a34a' },
+                { id: 'product', label: 'Product View', enabled: true, color: '#f59e0b' },
+                { id: 'price_range', label: 'Price Ranges', enabled: false, color: '#ef4444' },
+                { id: 'category', label: 'Category Grouping', enabled: false, color: '#8b5cf6' }
+            ]);
+            const [newLayerName, setNewLayerName] = useState('');
+            const [showAddLayer, setShowAddLayer] = useState(false);
+            
+            // Prompt library states
+            const [showPromptLibrary, setShowPromptLibrary] = useState(false);
+            const [libraryPrompts, setLibraryPrompts] = useState([]);
+            const [savePromptName, setSavePromptName] = useState('');
+            const [savePromptDescription, setSavePromptDescription] = useState('');
+            const [showSavePromptDialog, setShowSavePromptDialog] = useState(false);
+            
+            // Default comparison prompt
+            const DEFAULT_COMPARISON_PROMPT = `Compare these two images:
+1. Original retail shelf photo
+2. Generated planogram representation
+
+The planogram is a simplified visual representation showing product positions.
+Each colored rectangle represents a product with its brand/name.
+
+Please analyze:
+- POSITION ACCURACY: Are products in the same relative positions?
+- PRODUCT IDENTIFICATION: Are the products correctly identified?
+- FACING COUNTS: Do the number of facings match?
+- MISSING/EXTRA: Any products in one image but not the other?
+
+Important: The planogram is abstract - focus on logical arrangement, not visual appearance.
+
+Provide structured output with:
+- Overall accuracy score (0-100%)
+- Per-shelf accuracy breakdown
+- Specific discrepancies found
+- Confidence in your assessment`;
+            
             const updateConfigPreview = () => {
                 const preview = {
                     system: selectedSystem,
@@ -1576,6 +1636,12 @@
                     temperature: modelCreativity,
                     orchestrator_model: orchestratorModel,
                     orchestrator_prompt: orchestratorPrompt,
+                    comparison_config: {
+                        model: comparisonModel,
+                        prompt: comparisonPrompt || DEFAULT_COMPARISON_PROMPT,
+                        use_visual_comparison: useVisualComparison,
+                        abstraction_layers: abstractionLayers.filter(layer => layer.enabled)
+                    },
                     stages: {}
                 };
                 
@@ -1712,20 +1778,27 @@
                 setShowPromptDropdown(false);
             };
             
-            const handleAddField = () => {
+            const handleAddField = (insertIndex = null) => {
                 const newField = {
-                    id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     name: 'new_field',
                     type: 'string',
                     description: 'Field description',
                     required: true,
-                    sort_order: fields.length,
                     nested_fields: [] // Initialize for potential nesting
                 };
-                setFields([...fields, newField]);
+                
+                if (insertIndex !== null) {
+                    // Insert at specific position
+                    const updatedFields = [...fields];
+                    updatedFields.splice(insertIndex, 0, newField);
+                    setFields(updatedFields);
+                } else {
+                    // Add at end (default behavior)
+                    setFields([...fields, newField]);
+                }
             };
             
-            const handleAddNestedField = (path) => {
+            const handleAddNestedField = (path, insertIndex = null) => {
                 const updatedFields = JSON.parse(JSON.stringify(fields)); // Deep clone
                 
                 // Navigate to the target field
@@ -1740,16 +1813,50 @@
                     targetField.nested_fields = [];
                 }
                 
-                // Add new field with sensible defaults
-                targetField.nested_fields.push({
-                    id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                // Create new field with sensible defaults
+                const newField = {
                     name: `field_${targetField.nested_fields.length + 1}`,
                     type: 'string',
                     description: '',
                     required: true,
-                    sort_order: targetField.nested_fields.length,
                     nested_fields: []
-                });
+                };
+                
+                if (insertIndex !== null) {
+                    // Insert at specific position
+                    targetField.nested_fields.splice(insertIndex, 0, newField);
+                } else {
+                    // Add at end (default behavior)
+                    targetField.nested_fields.push(newField);
+                }
+                
+                setFields(updatedFields);
+            };
+            
+            const handleInsertFieldAt = (path, index) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields)); // Deep clone
+                
+                // Create new field
+                const newField = {
+                    name: 'new_field',
+                    type: 'string',
+                    description: '',
+                    required: true,
+                    nested_fields: []
+                };
+                
+                if (path.length === 0) {
+                    // Insert at root level
+                    updatedFields.splice(index, 0, newField);
+                } else {
+                    // Navigate to parent array
+                    let targetArray = updatedFields;
+                    for (let i = 0; i < path.length; i++) {
+                        targetArray = targetArray[path[i]].nested_fields;
+                    }
+                    // Insert at specified index
+                    targetArray.splice(index, 0, newField);
+                }
                 
                 setFields(updatedFields);
             };
@@ -1771,90 +1878,6 @@
                 };
                 
                 setFields(updatedFields);
-            };
-            
-            const handleFieldMove = (sourcePath, targetPath, position) => {
-                const updatedFields = JSON.parse(JSON.stringify(fields)); // Deep clone
-                
-                // Extract source field
-                let sourceArray = updatedFields;
-                let sourceParentArray = null;
-                for (let i = 0; i < sourcePath.length - 1; i++) {
-                    sourceParentArray = sourceArray;
-                    sourceArray = sourceArray[sourcePath[i]].nested_fields || sourceArray[sourcePath[i]];
-                }
-                const sourceIndex = sourcePath[sourcePath.length - 1];
-                const sourceField = sourceArray[sourceIndex];
-                
-                // Remove source field
-                sourceArray.splice(sourceIndex, 1);
-                
-                // Find target location
-                let targetArray = updatedFields;
-                let targetParentField = null;
-                for (let i = 0; i < targetPath.length - 1; i++) {
-                    targetParentField = targetArray[targetPath[i]];
-                    targetArray = targetArray[targetPath[i]].nested_fields || targetArray[targetPath[i]];
-                }
-                
-                if (position === 'nest') {
-                    // Nesting into a field
-                    const targetIndex = targetPath[targetPath.length - 1];
-                    const targetField = targetArray[targetIndex];
-                    if (!targetField.nested_fields) {
-                        targetField.nested_fields = [];
-                    }
-                    targetField.nested_fields.push(sourceField);
-                } else {
-                    // Reordering at same level or different level
-                    const targetIndex = targetPath[targetPath.length - 1];
-                    const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
-                    
-                    // Adjust index if moving within same array and source was before target
-                    const adjustedIndex = (sourceArray === targetArray && sourceIndex < insertIndex) 
-                        ? insertIndex - 1 
-                        : insertIndex;
-                    
-                    targetArray.splice(adjustedIndex, 0, sourceField);
-                }
-                
-                // Update sort_order for all affected fields
-                const updateSortOrder = (fieldsArray, startOrder = 0) => {
-                    fieldsArray.forEach((field, index) => {
-                        field.sort_order = startOrder + index;
-                        if (field.nested_fields && field.nested_fields.length > 0) {
-                            updateSortOrder(field.nested_fields, 0);
-                        }
-                    });
-                };
-                
-                updateSortOrder(updatedFields);
-                setFields(updatedFields);
-                
-                // Save to backend
-                saveFieldsToBackend(updatedFields);
-            };
-            
-            const saveFieldsToBackend = async (fieldsToSave) => {
-                try {
-                    // Save field definitions to backend
-                    const response = await fetch(`${API_BASE}/field-definitions/stage/${activeStage}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            fields: fieldsToSave,
-                            stage_id: activeStage
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        console.error('Failed to save fields to backend');
-                    } else {
-                        console.log('Fields saved successfully');
-                    }
-                } catch (error) {
-                    console.error('Error saving fields:', error);
-                }
             };
             
             const handleDeleteField = (path) => {
@@ -2175,6 +2198,74 @@
                 setDragOverIndex(null);
             };
             
+            // Prompt library handlers
+            const handleSavePromptToLibrary = async () => {
+                setShowSavePromptDialog(true);
+            };
+            
+            const handleConfirmSavePrompt = async () => {
+                if (!savePromptName.trim()) {
+                    alert('Please enter a name for the prompt');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${API_BASE}/prompt-library/save`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: savePromptName,
+                            description: savePromptDescription,
+                            prompt_text: promptText,
+                            fields: fields,
+                            stage_type: activeStage,
+                            tags: [activeStage, 'custom']
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(`Prompt saved successfully!`);
+                        setShowSavePromptDialog(false);
+                        setSavePromptName('');
+                        setSavePromptDescription('');
+                    } else {
+                        const error = await response.text();
+                        alert(`Failed to save prompt: ${error}`);
+                    }
+                } catch (error) {
+                    console.error('Failed to save prompt:', error);
+                    alert('Failed to save prompt to library');
+                }
+            };
+            
+            const handleLoadFromLibrary = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/prompt-library/list/${activeStage}`);
+                    if (response.ok) {
+                        const result = await response.json();
+                        setLibraryPrompts(result.prompts || []);
+                        setShowPromptLibrary(true);
+                    }
+                } catch (error) {
+                    console.error('Failed to load prompt library:', error);
+                    alert('Failed to load prompt library');
+                }
+            };
+            
+            const handleSelectLibraryPrompt = async (prompt) => {
+                setPromptText(prompt.prompt_text);
+                setFields(prompt.fields || []);
+                setShowPromptLibrary(false);
+                
+                // Update usage count
+                try {
+                    await fetch(`${API_BASE}/prompt-library/get/${prompt.id}`);
+                } catch (error) {
+                    console.error('Failed to update usage count:', error);
+                }
+            };
+            
             const systems = [
                 { id: 'custom_consensus', label: 'Custom Consensus', description: 'All models vote at each stage' },
                 { id: 'langgraph', label: 'LangGraph', description: 'Sequential flow with conditions' },
@@ -2410,13 +2501,12 @@
                                         )}
                                     </div>
                                     
-                                    {/* Field Editor Component */}
                                     <FieldEditor 
                                         fields={fields}
                                         onFieldUpdate={handleFieldUpdate}
                                         onFieldDelete={handleDeleteField}
                                         onAddNestedField={handleAddNestedField}
-                                        onFieldMove={handleFieldMove}
+                                        onInsertFieldAt={handleInsertFieldAt}
                                         fieldTypes={fieldTypes}
                                         path={[]}
                                     />
@@ -2460,12 +2550,43 @@
                                     }}
                                     stageType={activeStage}
                                 />
+                            </div>
+                            
+                            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveStage}
+                                    style={{ 
+                                        background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
+                                    }}
+                                >
+                                    {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
+                                </button>
                                 
-                                {/* Model Creativity Slider */}
-                                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
-                                    <label style={{ display: 'block', marginBottom: '12px', fontWeight: 500 }}>
-                                        Model Creativity (Temperature): {modelCreativity.toFixed(1)}
-                                    </label>
+                                {saveMessage && (
+                                    <div style={{ 
+                                        fontSize: '14px', 
+                                        color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
+                                        fontWeight: 500
+                                    }}>
+                                        {saveMessage.text}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="card" style={{ marginTop: '20px' }}>
+                        <div className="card-header">Pipeline Configuration</div>
+                        <div className="card-body">
+                            <p style={{ marginBottom: '20px', color: '#64748b' }}>
+                                These settings apply to the entire extraction pipeline, not individual stages.
+                            </p>
+                            
+                            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                                <label style={{ display: 'block', marginBottom: '12px', fontWeight: 500 }}>
+                                    Model Creativity (Temperature): {modelCreativity.toFixed(1)}
+                                </label>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <span style={{ fontSize: '12px', color: '#64748b' }}>Precise</span>
                                         <input
@@ -2498,7 +2619,6 @@
                                     </div>
                                 </div>
                                 
-                                {/* Orchestrator Model Selection */}
                                 <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
                                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
                                         Orchestrator Model (Manages the extraction process):
@@ -2539,7 +2659,6 @@
                                         The orchestrator coordinates all stages, manages iterations, and ensures quality
                                     </div>
                                     
-                                    {/* Orchestrator Prompt */}
                                     <div style={{ marginTop: '16px' }}>
                                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
                                             Orchestrator Instructions (Optional):
@@ -2569,59 +2688,347 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <button 
-                                    className="btn btn-primary" 
-                                    onClick={handleSaveStage}
-                                    style={{ 
-                                        background: savedStages.has(activeStage) ? '#16a34a' : '#3b82f6' 
-                                    }}
-                                >
-                                    {savedStages.has(activeStage) ? '✓ Stage Saved' : 'Save Stage'}
-                                </button>
                                 
-                                {saveMessage && (
-                                    <div style={{ 
-                                        fontSize: '14px', 
-                                        color: saveMessage.type === 'success' ? '#16a34a' : '#dc2626',
-                                        fontWeight: 500
+                                <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+                                    <h3 style={{ 
+                                        margin: '0 0 16px 0', 
+                                        fontSize: '16px', 
+                                        fontWeight: 600,
+                                        color: '#1e293b' 
                                     }}>
-                                        {saveMessage.text}
+                                        Planogram Comparison Settings
+                                    </h3>
+                                    
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+                                            Comparison Model:
+                                        </label>
+                                        <select
+                                            value={comparisonModel}
+                                            onChange={(e) => setComparisonModel(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px 12px',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '6px',
+                                                background: 'white',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            <optgroup label="Vision Models">
+                                                <option value="gpt-4-vision-preview">GPT-4 Vision (Recommended)</option>
+                                                <option value="claude-3-opus">Claude 3 Opus Vision</option>
+                                                <option value="claude-4-opus">Claude 4 Opus Vision</option>
+                                                <option value="gemini-pro-vision">Gemini Pro Vision</option>
+                                            </optgroup>
+                                        </select>
+                                        <div style={{ 
+                                            marginTop: '4px', 
+                                            fontSize: '12px', 
+                                            color: '#64748b' 
+                                        }}>
+                                            Model used to compare the planogram with the original image
+                                        </div>
                                     </div>
-                                )}
+                                    
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '8px',
+                                            cursor: 'pointer'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={useVisualComparison}
+                                                onChange={(e) => setUseVisualComparison(e.target.checked)}
+                                                style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                                                Use Visual Comparison Mode
+                                            </span>
+                                        </label>
+                                        <div style={{ 
+                                            marginTop: '4px', 
+                                            marginLeft: '26px',
+                                            fontSize: '12px', 
+                                            color: '#64748b' 
+                                        }}>
+                                            {useVisualComparison 
+                                                ? 'Converts planogram to image for direct visual comparison' 
+                                                : 'Uses text description of planogram positions'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '14px' }}>
+                                            Comparison Prompt:
+                                        </label>
+                                        <textarea
+                                            placeholder={DEFAULT_COMPARISON_PROMPT}
+                                            value={comparisonPrompt}
+                                            onChange={(e) => setComparisonPrompt(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                minHeight: '150px',
+                                                padding: '12px',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '6px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '12px',
+                                                resize: 'vertical',
+                                                background: 'white'
+                                            }}
+                                        />
+                                        <div style={{ 
+                                            marginTop: '4px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                                Instructions for comparing planogram accuracy
+                                            </span>
+                                            <button
+                                                onClick={() => setComparisonPrompt(DEFAULT_COMPARISON_PROMPT)}
+                                                style={{
+                                                    fontSize: '11px',
+                                                    color: '#3b82f6',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    textDecoration: 'underline'
+                                                }}
+                                            >
+                                                Reset to default
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label style={{ 
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            marginBottom: '12px', 
+                                            fontWeight: 500, 
+                                            fontSize: '14px' 
+                                        }}>
+                                            <span>Visual Abstraction Layers:</span>
+                                            <button
+                                                onClick={() => setShowAddLayer(!showAddLayer)}
+                                                style={{
+                                                    fontSize: '12px',
+                                                    color: '#3b82f6',
+                                                    background: 'none',
+                                                    border: '1px solid #3b82f6',
+                                                    borderRadius: '4px',
+                                                    padding: '2px 8px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                + Add Layer
+                                            </button>
+                                        </label>
+                                        
+                                        {showAddLayer && (
+                                            <div style={{
+                                                marginBottom: '12px',
+                                                padding: '12px',
+                                                background: '#f1f5f9',
+                                                borderRadius: '6px',
+                                                display: 'flex',
+                                                gap: '8px',
+                                                alignItems: 'center'
+                                            }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Layer name (e.g., 'Target Customer')"
+                                                    value={newLayerName}
+                                                    onChange={(e) => setNewLayerName(e.target.value)}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '6px 10px',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px'
+                                                    }}
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter' && newLayerName.trim()) {
+                                                            const newLayer = {
+                                                                id: newLayerName.toLowerCase().replace(/\s+/g, '_'),
+                                                                label: newLayerName,
+                                                                enabled: true,
+                                                                color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                                                            };
+                                                            setAbstractionLayers([...abstractionLayers, newLayer]);
+                                                            setNewLayerName('');
+                                                            setShowAddLayer(false);
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        if (newLayerName.trim()) {
+                                                            const newLayer = {
+                                                                id: newLayerName.toLowerCase().replace(/\s+/g, '_'),
+                                                                label: newLayerName,
+                                                                enabled: true,
+                                                                color: '#' + Math.floor(Math.random()*16777215).toString(16)
+                                                            };
+                                                            setAbstractionLayers([...abstractionLayers, newLayer]);
+                                                            setNewLayerName('');
+                                                            setShowAddLayer(false);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        background: '#3b82f6',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Add
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setNewLayerName('');
+                                                        setShowAddLayer(false);
+                                                    }}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        background: '#94a3b8',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        )}
+                                        
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            flexDirection: 'column', 
+                                            gap: '8px',
+                                            maxHeight: '200px',
+                                            overflowY: 'auto'
+                                        }}>
+                                            {abstractionLayers.map((layer, index) => (
+                                                <div
+                                                    key={layer.id}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        padding: '8px 12px',
+                                                        background: layer.enabled ? 'white' : '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '6px',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={layer.enabled}
+                                                        onChange={(e) => {
+                                                            const updated = [...abstractionLayers];
+                                                            updated[index].enabled = e.target.checked;
+                                                            setAbstractionLayers(updated);
+                                                        }}
+                                                        style={{
+                                                            marginRight: '12px',
+                                                            width: '16px',
+                                                            height: '16px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    />
+                                                    <div
+                                                        style={{
+                                                            width: '12px',
+                                                            height: '12px',
+                                                            borderRadius: '2px',
+                                                            backgroundColor: layer.color,
+                                                            marginRight: '12px'
+                                                        }}
+                                                    />
+                                                    <span style={{
+                                                        flex: 1,
+                                                        fontSize: '14px',
+                                                        color: layer.enabled ? '#1e293b' : '#94a3b8'
+                                                    }}>
+                                                        {layer.label}
+                                                    </span>
+                                                    {index >= 5 && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const updated = abstractionLayers.filter((_, i) => i !== index);
+                                                                setAbstractionLayers(updated);
+                                                            }}
+                                                            style={{
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                color: '#dc2626',
+                                                                cursor: 'pointer',
+                                                                padding: '4px',
+                                                                fontSize: '16px',
+                                                                lineHeight: '1'
+                                                            }}
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{ 
+                                            marginTop: '8px', 
+                                            fontSize: '12px', 
+                                            color: '#64748b' 
+                                        }}>
+                                            Selected layers will be visualized in the planogram for better analysis
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    {/* Configuration Preview */}
                     {configPreview && Object.keys(configPreview.stages).length > 0 && (
-                        <div className="card" style={{ marginTop: '20px' }}>
-                            <div className="card-header">Configuration Preview</div>
-                            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
-                                <div><strong>System:</strong> {configPreview.system}</div>
-                                <div><strong>Max Budget:</strong> £{configPreview.max_budget} GBP</div>
-                                <div><strong>Temperature:</strong> {configPreview.temperature}</div>
-                                <div><strong>Orchestrator:</strong> {configPreview.orchestrator_model}</div>
-                                <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
-                                {Object.entries(configPreview.stages).map(([stageId, config]) => (
-                                    <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>
-                                        <div style={{ fontWeight: 600 }}>• {stages.find(s => s.id === stageId)?.label || stageId}:</div>
-                                        <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
-                                            - Prompt: {config.prompt_id ? `ID ${config.prompt_id}` : 'Custom'}<br/>
-                                            - Fields: {config.fields?.length || 0} defined<br/>
-                                            - Models: {config.models && config.models.length > 0 
-                                                ? `${config.models.length} selected${config.models.length > 1 ? ' (voting)' : ''}` 
-                                                : 'None selected'}
+                            <div className="card" style={{ marginTop: '20px' }}>
+                                <div className="card-header">Configuration Preview</div>
+                                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
+                                    <div><strong>System:</strong> {configPreview.system}</div>
+                                    <div><strong>Max Budget:</strong> £{configPreview.max_budget} GBP</div>
+                                    <div><strong>Temperature:</strong> {configPreview.temperature}</div>
+                                    <div><strong>Orchestrator:</strong> {configPreview.orchestrator_model}</div>
+                                    <div style={{ marginTop: '12px' }}><strong>Configured Stages:</strong></div>
+                                    {Object.entries(configPreview.stages).map(([stageId, config]) => (
+                                        <div key={stageId} style={{ marginLeft: '20px', marginTop: '8px' }}>
+                                            <div style={{ fontWeight: 600 }}>• {stages.find(s => s.id === stageId)?.label || stageId}:</div>
+                                            <div style={{ marginLeft: '20px', fontSize: '12px', color: '#64748b' }}>
+                                                - Prompt: {config.prompt_id ? `ID ${config.prompt_id}` : 'Custom'}<br/>
+                                                - Fields: {config.fields?.length || 0} defined<br/>
+                                                - Models: {config.models && config.models.length > 0 
+                                                    ? `${config.models.length} selected${config.models.length > 1 ? ' (voting)' : ''}` 
+                                                    : 'None selected'}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                        )}
+                        
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
                         <button 
                             className="btn btn-primary" 
                             onClick={handleSaveConfiguration}
@@ -2636,6 +3043,148 @@
                             Load Previous Config
                         </button>
                     </div>
+                    
+                    {showPromptLibrary && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0, 0, 0, 0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000
+                        }}>
+                            <div style={{
+                                background: 'white',
+                                borderRadius: '8px',
+                                padding: '24px',
+                                maxWidth: '600px',
+                                width: '90%',
+                                maxHeight: '80vh',
+                                overflow: 'auto'
+                            }}>
+                                <h3 style={{ marginTop: 0 }}>Prompt Library - {activeStage}</h3>
+                                {libraryPrompts.length === 0 ? (
+                                    <p>No saved prompts for this stage yet.</p>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {libraryPrompts.map(prompt => (
+                                            <div 
+                                                key={prompt.id}
+                                                style={{
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '6px',
+                                                    padding: '12px',
+                                                    cursor: 'pointer',
+                                                    ':hover': { background: '#f8fafc' }
+                                                }}
+                                                onClick={() => handleSelectLibraryPrompt(prompt)}
+                                            >
+                                                <div style={{ fontWeight: 600 }}>{prompt.name}</div>
+                                                {prompt.description && (
+                                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                                                        {prompt.description}
+                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                                                    {prompt.fields?.length || 0} fields • Used {prompt.usage_count || 0} times
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <button 
+                                    className="btn btn-secondary"
+                                    style={{ marginTop: '16px' }}
+                                    onClick={() => setShowPromptLibrary(false)}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {showSavePromptDialog && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0, 0, 0, 0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000
+                        }}>
+                            <div style={{
+                                background: 'white',
+                                borderRadius: '8px',
+                                padding: '24px',
+                                maxWidth: '500px',
+                                width: '90%'
+                            }}>
+                                <h3 style={{ marginTop: 0 }}>Save Prompt to Library</h3>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                        Prompt Name:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={savePromptName}
+                                        onChange={(e) => setSavePromptName(e.target.value)}
+                                        placeholder="e.g., Advanced Beverage Extraction"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '6px'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                                        Description (optional):
+                                    </label>
+                                    <textarea
+                                        value={savePromptDescription}
+                                        onChange={(e) => setSavePromptDescription(e.target.value)}
+                                        placeholder="Describe what makes this prompt special..."
+                                        rows={3}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '6px',
+                                            resize: 'vertical'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                    <button 
+                                        className="btn btn-secondary"
+                                        onClick={() => {
+                                            setShowSavePromptDialog(false);
+                                            setSavePromptName('');
+                                            setSavePromptDescription('');
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        className="btn btn-primary"
+                                        onClick={handleConfirmSavePrompt}
+                                        disabled={!savePromptName.trim()}
+                                    >
+                                        Save Prompt
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -2932,7 +3481,6 @@
                                                 </div>
                                             </div>
                                             
-                                            {/* Stage Progress */}
                                             {iter.stages && (
                                                 <div style={{ fontSize: '12px', marginBottom: '8px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
@@ -2954,7 +3502,6 @@
                                                 </div>
                                             )}
                                             
-                                            {/* Model Consensus */}
                                             {iter.model_votes && (
                                                 <div style={{ fontSize: '12px', marginBottom: '8px' }}>
                                                     <strong>Model Consensus:</strong>
@@ -2968,7 +3515,6 @@
                                                 </div>
                                             )}
                                             
-                                            {/* Locked Items */}
                                             {iter.locked_from_previous && iter.locked_from_previous.length > 0 && (
                                                 <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
                                                     <strong>Locked from previous:</strong>
@@ -2980,7 +3526,6 @@
                                                 </div>
                                             )}
                                             
-                                            {/* Changes Made */}
                                             {iter.changes && (
                                                 <div style={{ fontSize: '12px', marginBottom: '8px' }}>
                                                     <strong>Changes:</strong>
@@ -2992,14 +3537,12 @@
                                                 </div>
                                             )}
                                             
-                                            {/* Fix Strategy */}
                                             {iter.fixes && (
                                                 <div style={{ fontSize: '12px', background: '#f8fafc', padding: '8px', borderRadius: '4px' }}>
                                                     <strong>🔧 Fix Strategy:</strong> {iter.fixes}
                                                 </div>
                                             )}
                                             
-                                            {/* Comparison Result */}
                                             {iter.comparison && (
                                                 <div style={{ fontSize: '12px', marginTop: '8px' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -3022,7 +3565,6 @@
                         )}
                     </div>
                     
-                    {/* Product Correction Modal */}
                     {showCorrectionModal && (
                         <div className="modal-backdrop" onClick={() => setShowCorrectionModal(null)}>
                             <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -3361,7 +3903,6 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {/* Will populate with real data from extraction patterns */}
                             </tbody>
                         </table>
                     </div>
@@ -3369,183 +3910,103 @@
             );
         };
         
-        // Field Editor Component - Wordware-style with full drag and drop
-        const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, fieldTypes, path = [], onFieldMove }) => {
-            const [draggedField, setDraggedField] = useState(null);
-            const [dragOverInfo, setDragOverInfo] = useState(null);
-            const [dropIndicator, setDropIndicator] = useState(null);
+        // Field Editor Component - Wordware-style with arbitrary nesting
+        const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, onInsertFieldAt, fieldTypes, path = [] }) => {
             const level = path.length;
+            const [hoveredInsertIndex, setHoveredInsertIndex] = useState(null);
             
-            // Handle drag start
-            const handleDragStart = (e, fieldPath, field) => {
-                e.stopPropagation();
-                setDraggedField({ path: fieldPath, field });
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', JSON.stringify({ path: fieldPath, field }));
-                
-                // Add dragging class
-                e.target.closest('.field-item-wrapper').classList.add('dragging');
-            };
-            
-            // Handle drag end
-            const handleDragEnd = (e) => {
-                e.stopPropagation();
-                setDraggedField(null);
-                setDragOverInfo(null);
-                setDropIndicator(null);
-                
-                // Remove all drag-related classes
-                document.querySelectorAll('.dragging, .drag-over, .drag-over-nested, .can-accept-drop').forEach(el => {
-                    el.classList.remove('dragging', 'drag-over', 'drag-over-nested', 'can-accept-drop');
+            // Debug logging
+            useEffect(() => {
+                console.log('FieldEditor rendered with:', {
+                    fieldsCount: fields.length,
+                    level,
+                    path,
+                    hoveredInsertIndex,
+                    hasOnInsertFieldAt: !!onInsertFieldAt
                 });
-            };
-            
-            // Check if a field can accept a drop (for nesting)
-            const canAcceptDrop = (targetField, draggedField) => {
-                if (!targetField || !draggedField) return false;
-                const canAccept = targetField.type === 'object' || 
-                       (targetField.type === 'list' && targetField.list_item_type === 'object');
-                console.log('Can accept drop?', {
-                    targetField: targetField.name,
-                    targetType: targetField.type,
-                    draggedField: draggedField.name,
-                    canAccept
-                });
-                return canAccept;
-            };
-            
-            // Handle drag over
-            const handleDragOver = (e, targetPath, targetField, position = 'before') => {
-                e.preventDefault();
-                e.stopPropagation();
                 
-                if (!draggedField) return;
-                
-                // Don't allow dropping on itself or its children
-                if (isChildPath(targetPath, draggedField.path)) return;
-                
-                e.dataTransfer.dropEffect = 'move';
-                
-                // Update visual feedback
-                const wrapper = e.target.closest('.field-item-wrapper');
-                if (wrapper) {
-                    // Remove previous indicators
-                    document.querySelectorAll('.drag-over, .drag-over-nested').forEach(el => {
-                        el.classList.remove('drag-over', 'drag-over-nested');
-                    });
-                    
-                    // Check if we're over a nestable field
-                    const fieldContent = wrapper.querySelector('.field-content');
-                    const rect = fieldContent.getBoundingClientRect();
-                    const y = e.clientY - rect.top;
-                    const threshold = rect.height / 3;
-                    
-                    if (canAcceptDrop(targetField, draggedField.field) && y > threshold && y < rect.height - threshold) {
-                        // Show nesting indicator
-                        wrapper.classList.add('drag-over-nested');
-                        fieldContent.classList.add('can-accept-drop');
-                        setDragOverInfo({ path: targetPath, position: 'nest' });
-                    } else {
-                        // Show reorder indicator
-                        wrapper.classList.add('drag-over');
-                        document.querySelectorAll('.can-accept-drop').forEach(el => {
-                            el.classList.remove('can-accept-drop');
+                // Check if insert buttons are in DOM
+                setTimeout(() => {
+                    const insertButtons = document.querySelectorAll('.insert-field-button');
+                    console.log(`Found ${insertButtons.length} insert buttons in DOM`);
+                    insertButtons.forEach((btn, idx) => {
+                        const wrapper = btn.closest('.insert-field-wrapper');
+                        const computed = window.getComputedStyle(wrapper);
+                        console.log(`Button ${idx}:`, {
+                            display: computed.display,
+                            visibility: computed.visibility,
+                            opacity: computed.opacity,
+                            height: computed.height,
+                            position: btn.getBoundingClientRect()
                         });
-                        setDragOverInfo({ path: targetPath, position: y < rect.height / 2 ? 'before' : 'after' });
-                    }
-                }
-            };
-            
-            // Handle drag leave
-            const handleDragLeave = (e) => {
-                e.stopPropagation();
-                const wrapper = e.target.closest('.field-item-wrapper');
-                if (wrapper) {
-                    wrapper.classList.remove('drag-over', 'drag-over-nested');
-                    wrapper.querySelector('.field-content')?.classList.remove('can-accept-drop');
-                }
-            };
-            
-            // Handle drop
-            const handleDrop = (e, targetPath, targetField) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (!draggedField || !dragOverInfo) return;
-                
-                // Don't allow dropping on itself or its children
-                if (isChildPath(targetPath, draggedField.path)) return;
-                
-                // Call the parent's move handler
-                if (onFieldMove) {
-                    onFieldMove(draggedField.path, dragOverInfo.path, dragOverInfo.position);
-                }
-                
-                // Clean up
-                handleDragEnd(e);
-            };
-            
-            // Helper to check if targetPath is a child of draggedPath
-            const isChildPath = (targetPath, draggedPath) => {
-                if (targetPath.length <= draggedPath.length) return false;
-                for (let i = 0; i < draggedPath.length; i++) {
-                    if (targetPath[i] !== draggedPath[i]) return false;
-                }
-                return true;
-            };
+                    });
+                }, 100);
+            }, [fields.length, hoveredInsertIndex]);
             
             return (
                 <div className="field-editor-container">
+                    {/* Insert button at the beginning - always show this one */}
+                    <div 
+                            className="insert-field-wrapper"
+                            style={{
+                                marginLeft: level * 24 + 'px'
+                            }}
+                            onMouseEnter={() => {
+                                console.log('Mouse enter insert button at index 0');
+                                setHoveredInsertIndex(0);
+                            }}
+                            onMouseLeave={() => {
+                                console.log('Mouse leave insert button at index 0');
+                                setHoveredInsertIndex(null);
+                            }}
+                        >
+                            <button
+                                className="insert-field-button"
+                                onClick={() => {
+                                    console.log('Insert button clicked at index 0');
+                                    onInsertFieldAt(path, 0);
+                                }}
+                            >
+                                + Insert field here
+                            </button>
+                            <div className="insert-field-line" />
+                        </div>
+                    
                     {fields.map((field, index) => {
                         const currentPath = [...path, index];
                         const isNestable = field.type === 'object' || (field.type === 'list' && field.list_item_type === 'object');
                         const hasNestedFields = field.nested_fields && field.nested_fields.length > 0;
                         
                         return (
-                            <div 
-                                key={field.id || index} 
-                                className="field-item-wrapper"
-                                draggable="true"
-                                onDragStart={(e) => handleDragStart(e, currentPath, field)}
-                                onDragEnd={handleDragEnd}
-                                onDragOver={(e) => handleDragOver(e, currentPath, field)}
-                                onDragLeave={handleDragLeave}
-                                onDrop={(e) => handleDrop(e, currentPath, field)}
-                            >
-                                <div className={`field-item level-${level}`} style={{
-                                    marginLeft: level * 24 + 'px',
-                                    marginBottom: hasNestedFields ? '8px' : '12px',
-                                    position: 'relative'
-                                }}>
-                                    {/* Connection line for nested fields */}
-                                    {level > 0 && (
-                                        <div className="field-connector" style={{
-                                            position: 'absolute',
-                                            left: '-20px',
-                                            top: '0',
-                                            bottom: '0',
-                                            width: '20px',
-                                            borderLeft: '2px solid #e2e8f0',
-                                            borderBottom: '2px solid #e2e8f0'
-                                        }} />
-                                    )}
-                                    
-                                    <div className="field-content" data-type={field.type} style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '12px 16px',
-                                        background: level === 0 ? 'white' : '#f8fafc',
-                                        border: `1px solid ${isNestable ? '#3b82f6' : '#e2e8f0'}`,
-                                        borderRadius: '8px',
-                                        transition: 'all 0.2s'
+                            <React.Fragment key={index}>
+                                <div className="field-item-wrapper">
+                                    <div className={`field-item level-${level}`} style={{
+                                        marginLeft: level * 24 + 'px',
+                                        marginBottom: hasNestedFields ? '8px' : '12px',
+                                        position: 'relative'
                                     }}>
-                                        {/* Drag Handle */}
-                                        <div className="field-drag-handle" title="Drag to reorder">
-                                            ⋮⋮
-                                        </div>
+                                        {level > 0 && (
+                                            <div className="field-connector" style={{
+                                                position: 'absolute',
+                                                left: '-20px',
+                                                top: '0',
+                                                bottom: '0',
+                                                width: '20px',
+                                                borderLeft: '2px solid #e2e8f0',
+                                                borderBottom: '2px solid #e2e8f0'
+                                            }} />
+                                        )}
                                         
-                                        {/* Field Icon */}
+                                        <div className="field-content" data-type={field.type} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            padding: '12px 16px',
+                                            background: level === 0 ? 'white' : '#f8fafc',
+                                            border: `1px solid ${isNestable ? '#3b82f6' : '#e2e8f0'}`,
+                                            borderRadius: '8px',
+                                            transition: 'all 0.2s'
+                                        }}>
                                         <div className="field-icon" style={{
                                             width: '32px',
                                             height: '32px',
@@ -3573,7 +4034,6 @@
                                              field.type === 'boolean' ? '?' : 'T'}
                                         </div>
                                         
-                                        {/* Field Details */}
                                         <div className="field-details" style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
                                                 <input
@@ -3667,7 +4127,6 @@
                                             />
                                         </div>
                                         
-                                        {/* Field Actions */}
                                         <div className="field-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <label style={{ 
                                                 display: 'flex', 
@@ -3740,7 +4199,6 @@
                                     </div>
                                 </div>
                                 
-                                {/* Nested fields */}
                                 {hasNestedFields && (
                                     <div className="nested-fields" style={{
                                         marginTop: '0',
@@ -3749,15 +4207,36 @@
                                         <FieldEditor
                                             fields={field.nested_fields}
                                             onFieldUpdate={onFieldUpdate}
-                                            onFieldMove={onFieldMove}
                                             onFieldDelete={onFieldDelete}
                                             onAddNestedField={onAddNestedField}
+                                            onInsertFieldAt={onInsertFieldAt}
                                             fieldTypes={fieldTypes}
                                             path={currentPath}
                                         />
                                     </div>
                                 )}
                             </div>
+                                
+                                {/* Insert button after this field */}
+                                <div 
+                                    className="insert-field-wrapper"
+                                    style={{
+                                        marginLeft: level * 24 + 'px',
+                                        marginTop: '8px',
+                                        marginBottom: '8px'
+                                    }}
+                                    onMouseEnter={() => setHoveredInsertIndex(index + 1)}
+                                    onMouseLeave={() => setHoveredInsertIndex(null)}
+                                >
+                                    <button
+                                        className="insert-field-button"
+                                        onClick={() => onInsertFieldAt(path, index + 1)}
+                                    >
+                                        + Insert field here
+                                    </button>
+                                    <div className="insert-field-line" />
+                                </div>
+                            </React.Fragment>
                         );
                     })}
                 </div>
@@ -3882,22 +4361,56 @@
                                 </div>
                                 
                                 <div style={{ marginBottom: '16px' }}>
-                                    <div style={{ fontWeight: 500, marginBottom: '8px' }}>
-                                        Current: Iteration {monitoringData.current_iteration}, {monitoringData.current_stage}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '8px', fontSize: '14px' }}>
-                                        <span className={monitoringData.structure_complete ? 'status-complete' : ''}>
-                                            Structure {monitoringData.structure_complete ? '✓' : '⚡'}
-                                        </span>
-                                        <span>→</span>
-                                        <span className={monitoringData.products_complete ? 'status-complete' : ''}>
-                                            Products {monitoringData.products_complete ? '✓' : '⚡'}
-                                        </span>
-                                        <span>→</span>
-                                        <span>Details</span>
-                                        <span>→</span>
-                                        <span>Validation</span>
-                                    </div>
+                                    {/* Stage-based or Iteration-based display */}
+                                    {monitoringData.execution_mode === 'stage-based' ? (
+                                        // Stage-based Progress
+                                        <div>
+                                            <div style={{ fontWeight: 500, marginBottom: '8px' }}>
+                                                Stage: {monitoringData.current_stage} (Attempt {monitoringData.stage_attempt}/{monitoringData.stage_total_attempts})
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '12px', fontSize: '14px', marginBottom: '12px' }}>
+                                                <span className={monitoringData.stages?.structure?.complete ? 'status-complete' : (monitoringData.current_stage === 'structure' ? 'status-active' : '')}>
+                                                    1. Structure {monitoringData.stages?.structure?.complete ? '✓' : (monitoringData.current_stage === 'structure' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.structure?.attempts && ` (${monitoringData.stages.structure.attempts} attempts)`}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.stages?.products?.complete ? 'status-complete' : (monitoringData.current_stage === 'products' ? 'status-active' : '')}>
+                                                    2. Products {monitoringData.stages?.products?.complete ? '✓' : (monitoringData.current_stage === 'products' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.products?.attempts && ` (${monitoringData.stages.products.attempts} attempts)`}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.stages?.details?.complete ? 'status-complete' : (monitoringData.current_stage === 'details' ? 'status-active' : '')}>
+                                                    3. Details {monitoringData.stages?.details?.complete ? '✓' : (monitoringData.current_stage === 'details' ? '⚡' : '○')}
+                                                    {monitoringData.stages?.details?.attempts && ` (${monitoringData.stages.details.attempts} attempts)`}
+                                                </span>
+                                            </div>
+                                            {monitoringData.current_model && (
+                                                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                                                    Using: {monitoringData.current_model}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        // Iteration-based Progress (existing)
+                                        <div>
+                                            <div style={{ fontWeight: 500, marginBottom: '8px' }}>
+                                                Current: Iteration {monitoringData.current_iteration}, {monitoringData.current_stage}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px', fontSize: '14px' }}>
+                                                <span className={monitoringData.structure_complete ? 'status-complete' : ''}>
+                                                    Structure {monitoringData.structure_complete ? '✓' : '⚡'}
+                                                </span>
+                                                <span>→</span>
+                                                <span className={monitoringData.products_complete ? 'status-complete' : ''}>
+                                                    Products {monitoringData.products_complete ? '✓' : '⚡'}
+                                                </span>
+                                                <span>→</span>
+                                                <span>Details</span>
+                                                <span>→</span>
+                                                <span>Validation</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {monitoringData.locked_items && monitoringData.locked_items.length > 0 && (
@@ -3953,8 +4466,18 @@
             );
         };
         
-        // Render the app
-        ReactDOM.render(<App />, document.getElementById('root'));
+        // Debug and render the app
+        console.log('React:', typeof React);
+        console.log('ReactDOM:', typeof ReactDOM);
+        console.log('Root element:', document.getElementById('root'));
+        
+        try {
+            ReactDOM.render(<App />, document.getElementById('root'));
+            console.log('App rendered successfully');
+        } catch (error) {
+            console.error('Error rendering app:', error);
+            document.getElementById('root').innerHTML = '<h1 style="color: red; padding: 20px;">Error rendering React app: ' + error.message + '</h1>';
+        }
     </script>
 </body>
 </html>

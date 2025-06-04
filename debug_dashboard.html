@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Dashboard</title>
+</head>
+<body>
+    <h1>Debug Dashboard Loading</h1>
+    
+    <h2>Steps to debug the white page:</h2>
+    <ol>
+        <li>Open http://localhost:8130 in your browser</li>
+        <li>Open Developer Console (F12)</li>
+        <li>Check the Console tab for any errors</li>
+        <li>Check the Network tab to see if React/Babel loaded properly</li>
+    </ol>
+    
+    <h2>Common issues:</h2>
+    <ul>
+        <li><strong>React not loading:</strong> CDN might be blocked or slow</li>
+        <li><strong>Babel compilation error:</strong> JSX syntax error in the code</li>
+        <li><strong>Script error:</strong> JavaScript syntax error</li>
+    </ul>
+    
+    <h2>Quick fix - Try this simplified version:</h2>
+    <button onclick="testDashboard()">Test Simplified Dashboard</button>
+    
+    <script>
+        function testDashboard() {
+            window.open('http://localhost:8130/test', '_blank');
+        }
+    </script>
+    
+    <h2>Check if the issue is with React CDN:</h2>
+    <pre style="background: #f0f0f0; padding: 10px;">
+// Run this in console:
+console.log('React loaded:', typeof React);
+console.log('ReactDOM loaded:', typeof ReactDOM);
+console.log('Babel loaded:', typeof Babel);
+    </pre>
+</body>
+</html>

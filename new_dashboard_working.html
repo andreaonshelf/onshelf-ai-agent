@@ -693,6 +693,68 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+        
+        /* Insert button styles */
+        .insert-field-button {
+            padding: 6px 14px;
+            background: #fef3c7;
+            border: 2px dashed #fbbf24;
+            border-radius: 6px;
+            color: #92400e;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-block !important;
+            white-space: nowrap;
+        }
+        
+        .insert-field-button:hover {
+            background: #fde68a;
+            border-color: #f59e0b;
+            color: #78350f;
+            transform: scale(1.05);
+        }
+        
+        .insert-field-wrapper {
+            display: flex !important;
+            align-items: center;
+            gap: 12px;
+            margin: 12px 0;
+            padding: 8px;
+            transition: opacity 0.2s;
+            position: relative;
+            z-index: 10;
+            height: auto !important;
+            visibility: visible !important;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px dashed rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+        }
+        
+        /* Ensure insert buttons are visible on hover */
+        .field-editor-container .insert-field-wrapper {
+            opacity: 0.3;
+        }
+        
+        .field-editor-container:hover .insert-field-wrapper {
+            opacity: 0.5;
+        }
+        
+        .field-editor-container .insert-field-wrapper:hover {
+            opacity: 1 !important;
+        }
+        
+        /* Always show the first insert button more prominently */
+        .field-editor-container > .insert-field-wrapper:first-child {
+            opacity: 0.6;
+        }
+        
+        .insert-field-line {
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
     </style>
 </head>
 <body>
@@ -878,8 +940,7 @@
                                 
                                 // Legacy fields for backward compatibility
                                 temperature: fullConfig?.temperature || 0.7,
-                                orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',
-                                orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
+                                orchestrator_model: fullConfig?.orchestrator_model || 'claude-4-opus',                                orchestrator_prompt: fullConfig?.orchestrator_prompt || '',
                                 stage_models: stageModels,
                                 comparison_config: fullConfig?.comparison_config || {
                                     model: 'gpt-4-vision-preview',
@@ -1685,12 +1746,12 @@ Provide structured output with:
                         required: true,
                         list_item_type: 'object',
                         nested_fields: [
-                            { name: 'name', type: 'string', description: 'Product name as shown on packaging', required: true },
-                            { name: 'brand', type: 'string', description: 'Brand name', required: true },
-                            { name: 'price', type: 'float', description: 'Price if visible', required: false },
-                            { name: 'shelf_number', type: 'integer', description: 'Shelf number from top', required: true },
-                            { name: 'position', type: 'integer', description: 'Position from left', required: true },
-                            { name: 'facings', type: 'integer', description: 'Number of identical products side by side', required: true }
+                            { name: 'name', type: 'string', description: 'Product name as shown on packaging', required: true, sort_order: 1 },
+                            { name: 'brand', type: 'string', description: 'Brand name', required: true, sort_order: 2 },
+                            { name: 'price', type: 'float', description: 'Price if visible', required: false, sort_order: 3 },
+                            { name: 'shelf_number', type: 'integer', description: 'Shelf number from top', required: true, sort_order: 4 },
+                            { name: 'position', type: 'integer', description: 'Position from left', required: true, sort_order: 5 },
+                            { name: 'facings', type: 'integer', description: 'Number of identical products side by side', required: true, sort_order: 6 }
                         ]
                     }]);
                 } else if (activeStage === 'structure') {
@@ -1700,10 +1761,10 @@ Provide structured output with:
                         description: 'Physical structure of the shelf',
                         required: true,
                         nested_fields: [
-                            { name: 'total_shelves', type: 'integer', description: 'Total number of shelves', required: true },
-                            { name: 'shelf_type', type: 'string', description: 'Type of fixture (gondola, wall, cooler)', required: true },
-                            { name: 'width_estimate', type: 'float', description: 'Estimated width in feet', required: false },
-                            { name: 'height_estimate', type: 'float', description: 'Estimated height in feet', required: false }
+                            { name: 'total_shelves', type: 'integer', description: 'Total number of shelves', required: true, sort_order: 1 },
+                            { name: 'shelf_type', type: 'string', description: 'Type of fixture (gondola, wall, cooler)', required: true, sort_order: 2 },
+                            { name: 'width_estimate', type: 'float', description: 'Estimated width in feet', required: false, sort_order: 3 },
+                            { name: 'height_estimate', type: 'float', description: 'Estimated height in feet', required: false, sort_order: 4 }
                         ]
                     }]);
                 } else {
@@ -1717,7 +1778,7 @@ Provide structured output with:
                 setShowPromptDropdown(false);
             };
             
-            const handleAddField = () => {
+            const handleAddField = (insertIndex = null) => {
                 const newField = {
                     name: 'new_field',
                     type: 'string',
@@ -1725,10 +1786,19 @@ Provide structured output with:
                     required: true,
                     nested_fields: [] // Initialize for potential nesting
                 };
-                setFields([...fields, newField]);
+                
+                if (insertIndex !== null) {
+                    // Insert at specific position
+                    const updatedFields = [...fields];
+                    updatedFields.splice(insertIndex, 0, newField);
+                    setFields(updatedFields);
+                } else {
+                    // Add at end (default behavior)
+                    setFields([...fields, newField]);
+                }
             };
             
-            const handleAddNestedField = (path) => {
+            const handleAddNestedField = (path, insertIndex = null) => {
                 const updatedFields = JSON.parse(JSON.stringify(fields)); // Deep clone
                 
                 // Navigate to the target field
@@ -1743,14 +1813,52 @@ Provide structured output with:
                     targetField.nested_fields = [];
                 }
                 
-                // Add new field with sensible defaults
-                targetField.nested_fields.push({
+                // Create new field with sensible defaults
+                const newField = {
                     name: `field_${targetField.nested_fields.length + 1}`,
                     type: 'string',
                     description: '',
                     required: true,
-                    nested_fields: []
-                });
+                    nested_fields: [],
+                    sort_order: targetField.nested_fields.length + 1
+                };
+                
+                if (insertIndex !== null) {
+                    // Insert at specific position
+                    targetField.nested_fields.splice(insertIndex, 0, newField);
+                } else {
+                    // Add at end (default behavior)
+                    targetField.nested_fields.push(newField);
+                }
+                
+                setFields(updatedFields);
+            };
+            
+            const handleInsertFieldAt = (path, index) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields)); // Deep clone
+                
+                // Create new field
+                const newField = {
+                    name: 'new_field',
+                    type: 'string',
+                    description: '',
+                    required: true,
+                    nested_fields: [],
+                    sort_order: index + 1
+                };
+                
+                if (path.length === 0) {
+                    // Insert at root level
+                    updatedFields.splice(index, 0, newField);
+                } else {
+                    // Navigate to parent array
+                    let targetArray = updatedFields;
+                    for (let i = 0; i < path.length; i++) {
+                        targetArray = targetArray[path[i]].nested_fields;
+                    }
+                    // Insert at specified index
+                    targetArray.splice(index, 0, newField);
+                }
                 
                 setFields(updatedFields);
             };
@@ -2400,6 +2508,7 @@ Provide structured output with:
                                         onFieldUpdate={handleFieldUpdate}
                                         onFieldDelete={handleDeleteField}
                                         onAddNestedField={handleAddNestedField}
+                                        onInsertFieldAt={handleInsertFieldAt}
                                         fieldTypes={fieldTypes}
                                         path={[]}
                                     />
@@ -2896,8 +3005,7 @@ Provide structured output with:
                         </div>
                     </div>
                     
-                    <>
-                        {configPreview && Object.keys(configPreview.stages).length > 0 && (
+                    {configPreview && Object.keys(configPreview.stages).length > 0 && (
                             <div className="card" style={{ marginTop: '20px' }}>
                                 <div className="card-header">Configuration Preview</div>
                                 <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px' }}>
@@ -2922,7 +3030,7 @@ Provide structured output with:
                             </div>
                         )}
                         
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
                         <button 
                             className="btn btn-primary" 
                             onClick={handleSaveConfiguration}
@@ -3079,7 +3187,6 @@ Provide structured output with:
                             </div>
                         </div>
                     )}
-                    </>
                 </div>
             );
         };
@@ -3806,45 +3913,114 @@ Provide structured output with:
         };
         
         // Field Editor Component - Wordware-style with arbitrary nesting
-        const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, fieldTypes, path = [] }) => {
+        const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, onInsertFieldAt, fieldTypes, path = [] }) => {
             const level = path.length;
+            const [hoveredInsertIndex, setHoveredInsertIndex] = useState(null);
+            
+            // Sort fields by sort_order before rendering
+            const sortedFields = React.useMemo(() => {
+                if (!fields || !Array.isArray(fields)) return [];
+                return [...fields].sort((a, b) => {
+                    const orderA = a.sort_order ?? 999;
+                    const orderB = b.sort_order ?? 999;
+                    return orderA - orderB;
+                });
+            }, [fields]);
+            
+            // Debug logging
+            useEffect(() => {
+                console.log('FieldEditor rendered with:', {
+                    fieldsCount: fields.length,
+                    level,
+                    path,
+                    hoveredInsertIndex,
+                    hasOnInsertFieldAt: !!onInsertFieldAt
+                });
+                
+                // Check if insert buttons are in DOM
+                setTimeout(() => {
+                    const insertButtons = document.querySelectorAll('.insert-field-button');
+                    console.log(`Found ${insertButtons.length} insert buttons in DOM`);
+                    insertButtons.forEach((btn, idx) => {
+                        const wrapper = btn.closest('.insert-field-wrapper');
+                        const computed = window.getComputedStyle(wrapper);
+                        console.log(`Button ${idx}:`, {
+                            display: computed.display,
+                            visibility: computed.visibility,
+                            opacity: computed.opacity,
+                            height: computed.height,
+                            position: btn.getBoundingClientRect()
+                        });
+                    });
+                }, 100);
+            }, [fields.length, hoveredInsertIndex]);
             
             return (
                 <div className="field-editor-container">
-                    {fields.map((field, index) => {
-                        const currentPath = [...path, index];
+                    {/* Insert button at the beginning - always show this one */}
+                    <div 
+                            className="insert-field-wrapper"
+                            style={{
+                                marginLeft: level * 24 + 'px'
+                            }}
+                            onMouseEnter={() => {
+                                console.log('Mouse enter insert button at index 0');
+                                setHoveredInsertIndex(0);
+                            }}
+                            onMouseLeave={() => {
+                                console.log('Mouse leave insert button at index 0');
+                                setHoveredInsertIndex(null);
+                            }}
+                        >
+                            <button
+                                className="insert-field-button"
+                                onClick={() => {
+                                    console.log('Insert button clicked at index 0');
+                                    onInsertFieldAt(path, 0);
+                                }}
+                            >
+                                + Insert field here
+                            </button>
+                            <div className="insert-field-line" />
+                        </div>
+                    
+                    {sortedFields.map((field, index) => {
+                        // Find the original index in the unsorted array for path purposes
+                        const originalIndex = fields.findIndex(f => f === field);
+                        const currentPath = [...path, originalIndex];
                         const isNestable = field.type === 'object' || (field.type === 'list' && field.list_item_type === 'object');
                         const hasNestedFields = field.nested_fields && field.nested_fields.length > 0;
                         
                         return (
-                            <div key={index} className="field-item-wrapper">
-                                <div className={`field-item level-${level}`} style={{
-                                    marginLeft: level * 24 + 'px',
-                                    marginBottom: hasNestedFields ? '8px' : '12px',
-                                    position: 'relative'
-                                }}>
-                                    {level > 0 && (
-                                        <div className="field-connector" style={{
-                                            position: 'absolute',
-                                            left: '-20px',
-                                            top: '0',
-                                            bottom: '0',
-                                            width: '20px',
-                                            borderLeft: '2px solid #e2e8f0',
-                                            borderBottom: '2px solid #e2e8f0'
-                                        }} />
-                                    )}
-                                    
-                                    <div className="field-content" data-type={field.type} style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '12px 16px',
-                                        background: level === 0 ? 'white' : '#f8fafc',
-                                        border: `1px solid ${isNestable ? '#3b82f6' : '#e2e8f0'}`,
-                                        borderRadius: '8px',
-                                        transition: 'all 0.2s'
+                            <React.Fragment key={index}>
+                                <div className="field-item-wrapper">
+                                    <div className={`field-item level-${level}`} style={{
+                                        marginLeft: level * 24 + 'px',
+                                        marginBottom: hasNestedFields ? '8px' : '12px',
+                                        position: 'relative'
                                     }}>
+                                        {level > 0 && (
+                                            <div className="field-connector" style={{
+                                                position: 'absolute',
+                                                left: '-20px',
+                                                top: '0',
+                                                bottom: '0',
+                                                width: '20px',
+                                                borderLeft: '2px solid #e2e8f0',
+                                                borderBottom: '2px solid #e2e8f0'
+                                            }} />
+                                        )}
+                                        
+                                        <div className="field-content" data-type={field.type} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            padding: '12px 16px',
+                                            background: level === 0 ? 'white' : '#f8fafc',
+                                            border: `1px solid ${isNestable ? '#3b82f6' : '#e2e8f0'}`,
+                                            borderRadius: '8px',
+                                            transition: 'all 0.2s'
+                                        }}>
                                         <div className="field-icon" style={{
                                             width: '32px',
                                             height: '32px',
@@ -3874,6 +4050,26 @@ Provide structured output with:
                                         
                                         <div className="field-details" style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                                                <input
+                                                    type="number"
+                                                    value={field.sort_order ?? index + 1}
+                                                    onChange={(e) => {
+                                                        const newOrder = parseInt(e.target.value) || 0;
+                                                        onFieldUpdate(currentPath, { sort_order: newOrder });
+                                                    }}
+                                                    placeholder="#"
+                                                    title="Position/Order"
+                                                    style={{
+                                                        width: '50px',
+                                                        padding: '4px 6px',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px',
+                                                        textAlign: 'center',
+                                                        background: '#f8fafc'
+                                                    }}
+                                                />
+                                                
                                                 <input
                                                     type="text"
                                                     value={field.name}
@@ -4047,12 +4243,34 @@ Provide structured output with:
                                             onFieldUpdate={onFieldUpdate}
                                             onFieldDelete={onFieldDelete}
                                             onAddNestedField={onAddNestedField}
+                                            onInsertFieldAt={onInsertFieldAt}
                                             fieldTypes={fieldTypes}
                                             path={currentPath}
                                         />
                                     </div>
                                 )}
                             </div>
+                                
+                                {/* Insert button after this field */}
+                                <div 
+                                    className="insert-field-wrapper"
+                                    style={{
+                                        marginLeft: level * 24 + 'px',
+                                        marginTop: '8px',
+                                        marginBottom: '8px'
+                                    }}
+                                    onMouseEnter={() => setHoveredInsertIndex(index + 1)}
+                                    onMouseLeave={() => setHoveredInsertIndex(null)}
+                                >
+                                    <button
+                                        className="insert-field-button"
+                                        onClick={() => onInsertFieldAt(path, index + 1)}
+                                    >
+                                        + Insert field here
+                                    </button>
+                                    <div className="insert-field-line" />
+                                </div>
+                            </React.Fragment>
                         );
                     })}
                 </div>

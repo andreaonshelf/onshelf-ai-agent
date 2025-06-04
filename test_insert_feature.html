@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Insert Feature</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .field-editor-container {
+            margin: 20px 0;
+        }
+        
+        .insert-field-button-container {
+            position: relative;
+        }
+        
+        .insert-field-button-container::before,
+        .insert-field-button-container::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background: #e2e8f0;
+            transition: all 0.2s;
+        }
+        
+        .insert-field-button-container::before {
+            left: 0;
+        }
+        
+        .insert-field-button-container::after {
+            right: 0;
+        }
+        
+        .insert-field-button-container:hover::before,
+        .insert-field-button-container:hover::after {
+            background: #c7d2fe;
+            width: 35%;
+        }
+        
+        pre {
+            background: #f3f4f6;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState } = React;
+        
+        // Test the insert functionality in isolation
+        const TestApp = () => {
+            const [fields, setFields] = useState([
+                { name: 'field1', type: 'string', description: 'First field', required: true, nested_fields: [] },
+                { name: 'field2', type: 'object', description: 'Object field', required: false, nested_fields: [
+                    { name: 'nested1', type: 'string', description: 'Nested field', required: true, nested_fields: [] }
+                ] },
+                { name: 'field3', type: 'list', description: 'List field', required: true, list_item_type: 'string', nested_fields: [] }
+            ]);
+            
+            const handleInsertFieldAt = (path, insertIndex) => {
+                const updatedFields = JSON.parse(JSON.stringify(fields));
+                
+                // Navigate to the parent array
+                let targetArray = updatedFields;
+                for (let i = 0; i < path.length; i++) {
+                    targetArray = targetArray[path[i]].nested_fields || targetArray;
+                }
+                
+                // Insert new field at specified index
+                const newField = {
+                    name: `new_field_${Date.now()}`,
+                    type: 'string',
+                    description: 'Newly inserted field',
+                    required: true,
+                    nested_fields: []
+                };
+                
+                targetArray.splice(insertIndex, 0, newField);
+                
+                setFields(updatedFields);
+            };
+            
+            const fieldTypes = [
+                { value: 'string', label: 'Text' },
+                { value: 'integer', label: 'Number' },
+                { value: 'float', label: 'Decimal' },
+                { value: 'boolean', label: 'Yes/No' },
+                { value: 'object', label: 'Object' },
+                { value: 'list', label: 'List' }
+            ];
+            
+            // Copy of the FieldEditor component
+            const FieldEditor = ({ fields, onFieldUpdate, onFieldDelete, onAddNestedField, onInsertFieldAt, fieldTypes, path = [] }) => {
+                const level = path.length;
+                
+                return (
+                    <div className="field-editor-container">
+                        {/* Insert button at the beginning */}
+                        {fields.length === 0 || (
+                            <div className="insert-field-button-container" style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '8px 0',
+                                marginLeft: level * 24 + 'px',
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                height: '24px'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
+                            >
+                                <button
+                                    onClick={() => onInsertFieldAt(path, 0)}
+                                    style={{
+                                        padding: '4px 12px',
+                                        background: '#e0e7ff',
+                                        color: '#4c1d95',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    + Insert field at start
+                                </button>
+                            </div>
+                        )}
+                        
+                        {fields.map((field, index) => (
+                            <div key={index} style={{ margin: '10px 0' }}>
+                                <div style={{
+                                    padding: '10px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '4px',
+                                    marginLeft: level * 24 + 'px'
+                                }}>
+                                    <strong>{field.name}</strong> ({field.type}) - {field.description}
+                                </div>
+                                
+                                {/* Insert button after each field */}
+                                {index < fields.length - 1 && (
+                                    <div className="insert-field-button-container" style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '8px 0',
+                                        marginLeft: level * 24 + 'px',
+                                        opacity: 0,
+                                        transition: 'opacity 0.2s',
+                                        height: '24px'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
+                                    >
+                                        <button
+                                            onClick={() => onInsertFieldAt(path.slice(0, -1), index + 1)}
+                                            style={{
+                                                padding: '4px 12px',
+                                                background: '#e0e7ff',
+                                                color: '#4c1d95',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px'
+                                            }}
+                                        >
+                                            + Insert after {field.name}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        
+                        {/* Insert button at the end */}
+                        {fields.length > 0 && (
+                            <div className="insert-field-button-container" style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '8px 0',
+                                marginLeft: level * 24 + 'px',
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                height: '24px'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0'}
+                            >
+                                <button
+                                    onClick={() => onInsertFieldAt(path, fields.length)}
+                                    style={{
+                                        padding: '4px 12px',
+                                        background: '#e0e7ff',
+                                        color: '#4c1d95',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    + Insert field at end
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            return (
+                <div className="container">
+                    <h1>Insert Feature Test</h1>
+                    <p>Hover over the areas between fields to see insert buttons</p>
+                    
+                    <FieldEditor
+                        fields={fields}
+                        onFieldUpdate={() => {}}
+                        onFieldDelete={() => {}}
+                        onAddNestedField={() => {}}
+                        onInsertFieldAt={handleInsertFieldAt}
+                        fieldTypes={fieldTypes}
+                        path={[]}
+                    />
+                    
+                    <h3>Current Fields Structure:</h3>
+                    <pre>{JSON.stringify(fields, null, 2)}</pre>
+                </div>
+            );
+        };
+        
+        ReactDOM.render(<TestApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

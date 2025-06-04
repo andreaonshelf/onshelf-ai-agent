@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Drag Drop Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .field-item {
+            background: #f0f0f0;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .field-item:active {
+            cursor: grabbing;
+        }
+        .field-item.dragging {
+            opacity: 0.5;
+        }
+        .field-item.drag-over {
+            border-top: 3px solid #3b82f6;
+        }
+        .field-item.can-nest {
+            background: #e0f2fe;
+            border: 2px dashed #3b82f6;
+        }
+        .drag-handle {
+            color: #999;
+            user-select: none;
+        }
+        .nested {
+            margin-left: 30px;
+        }
+        .field-type {
+            color: #666;
+            font-size: 12px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            background: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Drag and Drop Field Editor Demo</h2>
+        <div id="fields">
+            <div class="field-item" draggable="true" data-id="1" data-type="object">
+                <span class="drag-handle">⋮⋮</span>
+                <span>product</span>
+                <span class="field-type">(object - can nest)</span>
+            </div>
+            <div class="field-item" draggable="true" data-id="2" data-type="string">
+                <span class="drag-handle">⋮⋮</span>
+                <span>name</span>
+                <span class="field-type">(string)</span>
+            </div>
+            <div class="field-item" draggable="true" data-id="3" data-type="string">
+                <span class="drag-handle">⋮⋮</span>
+                <span>price</span>
+                <span class="field-type">(string)</span>
+            </div>
+            <div class="field-item" draggable="true" data-id="4" data-type="list">
+                <span class="drag-handle">⋮⋮</span>
+                <span>items</span>
+                <span class="field-type">(list - can nest)</span>
+            </div>
+        </div>
+        <div class="status" id="status"></div>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        
+        const fields = document.getElementById('fields');
+        const status = document.getElementById('status');
+        
+        function showStatus(message) {
+            status.textContent = message;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Add event listeners to all field items
+        document.querySelectorAll('.field-item').forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragend', handleDragEnd);
+            item.addEventListener('dragover', handleDragOver);
+            item.addEventListener('dragleave', handleDragLeave);
+            item.addEventListener('drop', handleDrop);
+        });
+        
+        function handleDragStart(e) {
+            draggedElement = e.target;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', e.target.innerHTML);
+        }
+        
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.drag-over, .can-nest').forEach(el => {
+                el.classList.remove('drag-over', 'can-nest');
+            });
+        }
+        
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            
+            const afterElement = getDragAfterElement(fields, e.clientY);
+            const currentElement = e.target.closest('.field-item');
+            
+            if (currentElement && currentElement !== draggedElement) {
+                // Check if we can nest
+                const targetType = currentElement.dataset.type;
+                const canNest = targetType === 'object' || targetType === 'list';
+                
+                // Get relative position
+                const rect = currentElement.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const threshold = rect.height / 3;
+                
+                if (canNest && y > threshold && y < rect.height - threshold) {
+                    currentElement.classList.add('can-nest');
+                    currentElement.classList.remove('drag-over');
+                } else {
+                    currentElement.classList.add('drag-over');
+                    currentElement.classList.remove('can-nest');
+                }
+            }
+            
+            return false;
+        }
+        
+        function handleDragLeave(e) {
+            const currentElement = e.target.closest('.field-item');
+            if (currentElement) {
+                currentElement.classList.remove('drag-over', 'can-nest');
+            }
+        }
+        
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            const dropTarget = e.target.closest('.field-item');
+            
+            if (draggedElement !== dropTarget && dropTarget) {
+                if (dropTarget.classList.contains('can-nest')) {
+                    // Nesting
+                    draggedElement.classList.add('nested');
+                    dropTarget.after(draggedElement);
+                    showStatus(`Nested "${draggedElement.querySelector('span:nth-child(2)').textContent}" into "${dropTarget.querySelector('span:nth-child(2)').textContent}"`);
+                } else {
+                    // Reordering
+                    const rect = dropTarget.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    
+                    if (y < rect.height / 2) {
+                        dropTarget.before(draggedElement);
+                    } else {
+                        dropTarget.after(draggedElement);
+                    }
+                    showStatus(`Moved "${draggedElement.querySelector('span:nth-child(2)').textContent}"`);
+                }
+            }
+            
+            return false;
+        }
+        
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.field-item:not(.dragging)')];
+            
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+    </script>
+</body>
+</html>

@@ -169,7 +169,10 @@ async def create_field_definition(definition: FieldDefinition):
         "data_type": definition.data_type,
         "is_required": definition.is_required,
         "is_active": definition.is_active,
-        "validation_rules": validation_rules_json
+        "validation_rules": validation_rules_json,
+        "category": definition.category,
+        "sort_order": definition.sort_order,
+        "parent_field": definition.parent_field
     }
     
     try:
@@ -208,7 +211,10 @@ async def update_field_definition(field_name: str, definition: FieldDefinition):
         "data_type": definition.data_type,
         "is_required": definition.is_required,
         "is_active": definition.is_active,
-        "validation_rules": validation_rules_json
+        "validation_rules": validation_rules_json,
+        "category": definition.category,
+        "sort_order": definition.sort_order,
+        "parent_field": definition.parent_field
     }
     
     try:

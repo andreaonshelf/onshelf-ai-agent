@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Field Ordering Test</title>
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        
+        const FieldOrderingDemo = () => {
+            const [fields, setFields] = useState([
+                { name: 'product_name', type: 'string', description: 'Product name', sort_order: 3 },
+                { name: 'brand', type: 'string', description: 'Brand name', sort_order: 1 },
+                { name: 'price', type: 'float', description: 'Product price', sort_order: 2 },
+                { name: 'category', type: 'string', description: 'Product category', sort_order: 4 }
+            ]);
+            
+            // Sort fields by sort_order
+            const sortedFields = useMemo(() => {
+                return [...fields].sort((a, b) => {
+                    const orderA = a.sort_order ?? 999;
+                    const orderB = b.sort_order ?? 999;
+                    return orderA - orderB;
+                });
+            }, [fields]);
+            
+            const updateFieldOrder = (index, newOrder) => {
+                const updatedFields = [...fields];
+                const originalIndex = fields.findIndex(f => f.name === sortedFields[index].name);
+                updatedFields[originalIndex] = {
+                    ...updatedFields[originalIndex],
+                    sort_order: parseInt(newOrder) || 0
+                };
+                setFields(updatedFields);
+            };
+            
+            return (
+                <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+                    <h2>Field Ordering Demo</h2>
+                    <p>Change the position numbers to reorder fields:</p>
+                    
+                    <div style={{ marginTop: '20px' }}>
+                        {sortedFields.map((field, index) => (
+                            <div key={field.name} style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '10px',
+                                padding: '10px',
+                                border: '1px solid #ddd',
+                                borderRadius: '5px',
+                                marginBottom: '10px',
+                                background: '#f9f9f9'
+                            }}>
+                                <input
+                                    type="number"
+                                    value={field.sort_order}
+                                    onChange={(e) => updateFieldOrder(index, e.target.value)}
+                                    style={{
+                                        width: '50px',
+                                        padding: '5px',
+                                        textAlign: 'center'
+                                    }}
+                                />
+                                <strong>{field.name}</strong>
+                                <span style={{ color: '#666' }}>- {field.description}</span>
+                                <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#999' }}>
+                                    Type: {field.type}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div style={{ marginTop: '30px', padding: '15px', background: '#e8f4fd', borderRadius: '5px' }}>
+                        <h3>Current Order (JSON):</h3>
+                        <pre style={{ background: 'white', padding: '10px', borderRadius: '3px' }}>
+                            {JSON.stringify(sortedFields.map(f => ({ name: f.name, sort_order: f.sort_order })), null, 2)}
+                        </pre>
+                    </div>
+                </div>
+            );
+        };
+        
+        ReactDOM.render(<FieldOrderingDemo />, document.getElementById('root'));
+    </script>
+</body>
+</html>
