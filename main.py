@@ -100,6 +100,10 @@ app.include_router(field_definitions_router)
 from src.api.extraction_config import router as extraction_config_router
 app.include_router(extraction_config_router)
 
+# Include diagnostics API
+from src.api.diagnostics import router as diagnostics_router
+app.include_router(diagnostics_router)
+
 # Include field schema builder API
 from src.api.field_schema_builder import router as schema_builder_router
 app.include_router(schema_builder_router)

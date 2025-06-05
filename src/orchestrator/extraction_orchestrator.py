@@ -17,14 +17,17 @@ from ..extraction.models import (
 )
 from ..models.shelf_structure import ShelfStructure
 from ..utils import logger
+from ..utils.extraction_analytics import get_extraction_analytics
 
 
 class ExtractionOrchestrator:
     """Orchestrates extraction with cumulative learning between agents"""
     
-    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None, 
+                 extraction_run_id: Optional[str] = None):
         self.config = config
         self.queue_item_id = queue_item_id
+        self.extraction_run_id = extraction_run_id
         
         # Initialize model configuration defaults
         self.model_config = {}
@@ -44,6 +47,18 @@ class ExtractionOrchestrator:
         # Pass queue context to engine if available
         if queue_item_id:
             self.extraction_engine.queue_item_id = queue_item_id
+        
+        # Initialize analytics if extraction_run_id provided
+        self.analytics = None
+        if extraction_run_id and queue_item_id:
+            from .analytics_integration import OrchestrationAnalytics
+            self.analytics = OrchestrationAnalytics(extraction_run_id, queue_item_id)
+            logger.info(
+                "Analytics tracking initialized",
+                component="extraction_orchestrator",
+                run_id=extraction_run_id,
+                queue_id=queue_item_id
+            )
         
         logger.info(
             "Extraction Orchestrator initialized with real extraction engine",
@@ -557,7 +572,28 @@ class ExtractionOrchestrator:
                     for p in existing_products:
                         shelf_prompt += f"- Position {p.get('position_on_shelf')}: {p.get('brand')} {p.get('name')}\n"
             
+            # Track iteration if analytics enabled
+            iteration_id = None
+            if self.analytics:
+                retry_context = {
+                    'shelf_number': shelf_num,
+                    'agent_number': agent_number,
+                    'existing_products': len([p for p in context.successful_extractions if p.get('shelf_level') == shelf_num])
+                }
+                
+                iteration_id = await self.analytics.track_products_extraction(
+                    shelf_num=shelf_num,
+                    model_id=model.value if hasattr(model, 'value') else str(model),
+                    model_index=agent_number - 1,
+                    attempt_number=1,  # Can be enhanced to track retries
+                    prompt_template=context.prompts.get('products', ''),
+                    processed_prompt=shelf_prompt,
+                    retry_context=retry_context
+                )
+            
             try:
+                start_time = datetime.utcnow()
+                
                 # Execute extraction for this shelf
                 # If we have a configured model from stage_models, use it
                 if context.structure and hasattr(self, 'stage_models') and 'products' in self.stage_models:
@@ -589,6 +625,20 @@ class ExtractionOrchestrator:
                         images={"main": image},
                         output_schema="List[ProductExtraction]",
                         agent_id=f"{agent_id}_shelf_{shelf_num}"
+                    )
+                
+                duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                
+                # Update analytics with results if enabled
+                if self.analytics and iteration_id:
+                    await self.analytics.analytics.update_iteration_result(
+                        iteration_id=iteration_id,
+                        extraction_result={'products': [p.dict() if hasattr(p, 'dict') else p for p in shelf_result]},
+                        products_found=len(shelf_result),
+                        accuracy_score=0.0,  # Can be calculated based on confidence scores
+                        api_cost=api_cost,
+                        tokens_used=len(shelf_prompt) // 4,  # Rough estimate
+                        duration_ms=duration_ms
                     )
                 
                 # Convert and add products from this shelf
@@ -835,13 +885,15 @@ class ExtractionOrchestrator:
         """Execute structure extraction stage"""
         from ..extraction.prompts import PromptTemplates
         
+        analytics = get_extraction_analytics()
+        
         # Get custom prompt if configured
         if hasattr(self, 'stage_prompts') and 'structure' in self.stage_prompts:
-            prompt = self.stage_prompts['structure']
+            prompt_template = self.stage_prompts['structure']
         else:
             # Fallback to default template
             prompt_templates = PromptTemplates()
-            prompt = prompt_templates.get_template('scaffolding_analysis')
+            prompt_template = prompt_templates.get_template('scaffolding_analysis')
         
         # Process {IF_RETRY} blocks based on attempt number
         attempt_number = len(previous_attempts) + 1 if previous_attempts else 1
@@ -854,21 +906,42 @@ class ExtractionOrchestrator:
             retry_context['shelves'] = last_attempt.shelf_count  # Alias for compatibility
             retry_context['problem_areas'] = "Check bottom shelf for floor products, verify top shelf visibility"
             
-        prompt = self.process_retry_blocks(prompt, attempt_number, retry_context)
+        prompt = self.process_retry_blocks(prompt_template, attempt_number, retry_context)
         
         # If we have previous attempts, build on them
         if previous_attempts:
             previous_structure = previous_attempts[-1]
             prompt += f"\n\nPrevious analysis found {previous_structure.shelf_count} shelves. Please verify and refine this analysis."
         
-        # Execute with the model
-        result, cost = await self.extraction_engine.execute_with_model_id(
-            model_id=model_id,
-            prompt=prompt,
-            images=images,
-            output_schema="ShelfStructure",
-            agent_id=agent_id
-        )
+        # Track iteration with analytics
+        async with analytics.track_iteration(
+            extraction_run_id=getattr(self, 'extraction_run_id', agent_id),
+            queue_item_id=getattr(self, 'queue_item_id', 0),
+            iteration_number=attempt_number,
+            stage='structure',
+            model_used=model_id,
+            model_index=1,
+            actual_prompt=prompt,
+            retry_context=retry_context if attempt_number > 1 else None
+        ) as iteration_id:
+            
+            # Execute with the model
+            result, cost = await self.extraction_engine.execute_with_model_id(
+                model_id=model_id,
+                prompt=prompt,
+                images=images,
+                output_schema="ShelfStructure",
+                agent_id=agent_id
+            )
+            
+            # Update iteration with results
+            await analytics.update_iteration_result(
+                iteration_id=iteration_id,
+                extraction_result={'shelf_count': result.shelf_count if hasattr(result, 'shelf_count') else 0},
+                accuracy_score=getattr(result, 'structure_confidence', 0.8),
+                api_cost=cost,
+                tokens_used=None  # Would need to get from extraction engine
+            )
         
         # Add confidence score
         if not hasattr(result, 'structure_confidence'):
