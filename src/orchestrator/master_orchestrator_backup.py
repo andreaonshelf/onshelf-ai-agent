@@ -509,13 +509,35 @@ class MasterOrchestrator:
         try:
             supabase = create_client(self.config.supabase_url, self.config.supabase_service_key)
             
-            # Get file path from queue item (more reliable than uploads table)
+            # First try to get from queue item's enhanced_image_path
             queue_result = supabase.table("ai_extraction_queue").select("enhanced_image_path").eq("upload_id", upload_id).execute()
             
-            if not queue_result.data:
-                raise Exception(f"No queue item found for upload {upload_id}")
+            file_path = None
+            if queue_result.data and queue_result.data[0].get("enhanced_image_path"):
+                file_path = queue_result.data[0]["enhanced_image_path"]
+                logger.info(f"Found image path in queue item: {file_path}")
             
-            file_path = queue_result.data[0]["enhanced_image_path"]
+            # If no path in queue item, get from media_files table (filter for images only)
+            if not file_path:
+                media_result = supabase.table("media_files").select("file_path").eq("upload_id", upload_id).eq("file_type", "image").neq("file_path", None).limit(1).execute()
+                
+                if media_result.data and media_result.data[0].get("file_path"):
+                    file_path = media_result.data[0]["file_path"]
+                    logger.info(f"Found image path in media_files: {file_path}")
+                    
+                    # Update queue item with this path for future use (only if queue item exists)
+                    if queue_result.data:
+                        try:
+                            supabase.table("ai_extraction_queue").update({
+                                "enhanced_image_path": file_path
+                            }).eq("upload_id", upload_id).execute()
+                            logger.info(f"Updated queue item with image path: {file_path}")
+                        except Exception as update_error:
+                            logger.warning(f"Failed to update queue item with image path: {update_error}")
+                    else:
+                        logger.warning(f"No queue item found for upload {upload_id}, cannot update enhanced_image_path")
+                else:
+                    raise Exception(f"No image files found for upload {upload_id}")
             
             if not file_path:
                 raise Exception(f"No image path found for upload {upload_id}")

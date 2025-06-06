@@ -98,14 +98,47 @@ class SystemDispatcher:
         self.extraction_system = ExtractionSystemFactory.get_system(
             system_type=system_type,
             config=self.config
-        )
+        ,
+            queue_item_id=queue_item_id)
         
         # Pass configuration to the system
         if configuration:
             self.extraction_system.configuration = configuration
             self.extraction_system.temperature = configuration.get('temperature', 0.7)
             self.extraction_system.stage_models = configuration.get('stage_models', {})
-            self.extraction_system.stage_prompts = configuration.get('stage_prompts', {})
+            
+            # Extract stage prompts from stages configuration
+            stage_prompts = {}
+            stages = configuration.get('stages', {})
+            
+            logger.info(f"Extracting prompts from configuration")
+            logger.info(f"Configuration keys: {list(configuration.keys())}")
+            logger.info(f"Stages found: {list(stages.keys())}")
+            
+            for stage_id, stage_config in stages.items():
+                logger.info(f"Processing stage {stage_id}: {type(stage_config)}")
+                if isinstance(stage_config, dict):
+                    logger.info(f"Stage {stage_id} config keys: {list(stage_config.keys())}")
+                    if 'prompt_text' in stage_config:
+                        stage_prompts[stage_id] = stage_config['prompt_text']
+                        logger.info(f"Found prompt_text for stage {stage_id}")
+                    else:
+                        logger.warning(f"No prompt_text found for stage {stage_id}")
+            
+            # Also check for direct stage_prompts (backward compatibility)
+            direct_prompts = configuration.get('stage_prompts', {})
+            stage_prompts.update(direct_prompts)
+            
+            self.extraction_system.stage_prompts = stage_prompts
+            
+            # Pass the full stage configurations for dynamic model building
+            self.extraction_system.stage_configs = stages
+            
+            logger.info(
+                f"Loaded {len(stage_prompts)} custom prompts from configuration",
+                stage_prompts_loaded=list(stage_prompts.keys()),
+                stage_configs_loaded=list(stages.keys())
+            )
         
         # Log configuration usage
         if configuration and queue_item_id:
@@ -165,16 +198,35 @@ class SystemDispatcher:
         try:
             supabase = create_client(self.config.supabase_url, self.config.supabase_service_key)
             
-            # Get file path from queue item (more reliable than uploads table)
+            # First try to get from queue item's enhanced_image_path
             queue_result = supabase.table("ai_extraction_queue").select("enhanced_image_path").eq("upload_id", upload_id).execute()
             
-            if not queue_result.data:
-                raise Exception(f"No queue item found for upload {upload_id}")
+            file_path = None
+            if queue_result.data and queue_result.data[0].get("enhanced_image_path"):
+                file_path = queue_result.data[0]["enhanced_image_path"]
+                logger.info(f"Found image path in queue item: {file_path}")
             
-            file_path = queue_result.data[0]["enhanced_image_path"]
-            
+            # If no path in queue item, get from media_files table (filter for images only)
             if not file_path:
-                raise Exception(f"No image path found for upload {upload_id}")
+                media_result = supabase.table("media_files").select("file_path").eq("upload_id", upload_id).eq("file_type", "image").neq("file_path", None).limit(1).execute()
+                
+                if media_result.data and media_result.data[0].get("file_path"):
+                    file_path = media_result.data[0]["file_path"]
+                    logger.info(f"Found image path in media_files: {file_path}")
+                    
+                    # Update queue item with this path for future use (only if queue item exists)
+                    if queue_result.data:
+                        try:
+                            supabase.table("ai_extraction_queue").update({
+                                "enhanced_image_path": file_path
+                            }).eq("upload_id", upload_id).execute()
+                            logger.info(f"Updated queue item with image path: {file_path}")
+                        except Exception as update_error:
+                            logger.warning(f"Failed to update queue item with image path: {update_error}")
+                    else:
+                        logger.warning(f"No queue item found for upload {upload_id}, cannot update enhanced_image_path")
+                else:
+                    raise Exception(f"No image files found for upload {upload_id}")
             
             # Download image from Supabase storage
             image_data = supabase.storage.from_("retail-captures").download(file_path)

@@ -68,6 +68,11 @@ class MonitoringHooks:
     
     async def update_extraction_stage(self, queue_item_id: int, stage: str, details: Dict[str, Any] = None):
         """Update extraction stage with details"""
+        # Ensure the monitor exists
+        if queue_item_id not in self.monitors:
+            logger.warning(f"Monitor not registered for queue item {queue_item_id}, registering now")
+            self.register_monitor(queue_item_id, {})
+        
         updates = {
             "current_stage": stage,
             "stage_details": details or {}
@@ -91,6 +96,11 @@ class MonitoringHooks:
     
     async def update_iteration(self, queue_item_id: int, iteration: int, locked_items: list = None):
         """Update iteration information"""
+        # Ensure the monitor exists
+        if queue_item_id not in self.monitors:
+            logger.warning(f"Monitor not registered for queue item {queue_item_id}, registering now")
+            self.register_monitor(queue_item_id, {})
+        
         updates = {
             "current_iteration": iteration,
             "locked_items": locked_items or []
@@ -99,6 +109,11 @@ class MonitoringHooks:
     
     async def update_models_status(self, queue_item_id: int, model_statuses: list):
         """Update model processing status"""
+        # Ensure the monitor exists
+        if queue_item_id not in self.monitors:
+            logger.warning(f"Monitor not registered for queue item {queue_item_id}, registering now")
+            self.register_monitor(queue_item_id, {})
+        
         updates = {
             "models_status": model_statuses
         }
@@ -106,6 +121,11 @@ class MonitoringHooks:
     
     async def update_processing_detail(self, queue_item_id: int, detail: str):
         """Update current processing detail"""
+        # Ensure the monitor exists
+        if queue_item_id not in self.monitors:
+            logger.warning(f"Monitor not registered for queue item {queue_item_id}, registering now")
+            self.register_monitor(queue_item_id, {})
+        
         updates = {
             "current_processing": detail
         }
@@ -115,6 +135,11 @@ class MonitoringHooks:
                                   attempt: int, total_attempts: int, 
                                   model: str = None, complete: bool = False):
         """Update stage-based progress for new pipeline"""
+        # Ensure the monitor exists
+        if queue_item_id not in self.monitors:
+            logger.warning(f"Monitor not registered for queue item {queue_item_id}, registering now")
+            self.register_monitor(queue_item_id, {})
+        
         updates = {
             "execution_mode": "stage-based",
             "current_stage": stage_name,
@@ -124,7 +149,7 @@ class MonitoringHooks:
         }
         
         # Update stage status
-        if "stages" not in self.monitors.get(queue_item_id, {}):
+        if "stages" not in self.monitors[queue_item_id]:
             self.monitors[queue_item_id]["stages"] = {}
         
         if stage_name not in self.monitors[queue_item_id]["stages"]:

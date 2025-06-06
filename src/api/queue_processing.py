@@ -4,6 +4,7 @@ Queue Processing API endpoints for the new unified dashboard
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any, Optional, List
+from pydantic import BaseModel
 import asyncio
 import time
 from datetime import datetime, timedelta
@@ -18,13 +19,21 @@ router = APIRouter()
 # Global store for monitoring data
 monitoring_data = {}
 
+class ProcessRequest(BaseModel):
+    """Request model for processing queue items"""
+    system: str = "custom_consensus"
+    max_budget: float = 1.50
+    temperature: float = 0.7
+    orchestrator_model: str = "claude-4-opus"
+    orchestrator_prompt: str = ""
+    stage_models: Optional[Dict[str, List[str]]] = None
+    configuration: Optional[Dict[str, Any]] = None
+
 @router.post("/process/{item_id}")
 async def process_queue_item(
     item_id: int,
     background_tasks: BackgroundTasks,
-    system: str = "custom_consensus",
-    max_budget: float = 1.50,
-    configuration: Optional[Dict[str, Any]] = None
+    request: ProcessRequest
 ):
     """Process a single queue item with specified configuration"""
     try:
@@ -45,7 +54,7 @@ async def process_queue_item(
         supabase.table("ai_extraction_queue").update({
             "status": "processing",
             "started_at": datetime.utcnow().isoformat(),
-            "current_extraction_system": system
+            "current_extraction_system": request.system
         }).eq("id", item_id).execute()
         
         # Initialize monitoring data
@@ -69,15 +78,36 @@ async def process_queue_item(
         monitoring_data[item_id] = initial_data
         monitoring_hooks.register_monitor(item_id, initial_data)
         
-        # Run extraction in background
+        # Build configuration with all the parameters
+        configuration = request.configuration or {}
+        
+        logger.info(f"Received configuration from UI: {configuration}")
+        logger.info(f"Configuration has stages: {'stages' in configuration}")
+        if 'stages' in configuration:
+            logger.info(f"Stages in configuration: {list(configuration.get('stages', {}).keys())}")
+        
+        configuration.update({
+            "temperature": request.temperature,
+            "orchestrator_model": request.orchestrator_model,
+            "orchestrator_prompt": request.orchestrator_prompt,
+            "stage_models": request.stage_models or {},
+            "max_budget": request.max_budget
+        })
+        
+        logger.info(f"Final configuration being passed: {configuration}")
+        
+        # Run extraction in background - use wrapper for async function
+        logger.info(f"Adding background task for item {item_id}, upload {queue_item['upload_id']}")
         background_tasks.add_task(
-            run_extraction,
+            run_extraction_wrapper,
             item_id=item_id,
             upload_id=queue_item["upload_id"],
-            system=system,
-            max_budget=max_budget,
-            configuration=configuration or {}
+            system=request.system,
+            max_budget=request.max_budget,
+            configuration=configuration
         )
+        
+        logger.info(f"Background task added successfully for item {item_id}")
         
         return {
             "status": "started",
@@ -90,6 +120,32 @@ async def process_queue_item(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def run_extraction_wrapper(
+    item_id: int,
+    upload_id: str,
+    system: str,
+    max_budget: float,
+    configuration: Dict[str, Any]
+):
+    """Wrapper to run async extraction in background"""
+    logger.info(f"🚀 run_extraction_wrapper started for item {item_id}, upload {upload_id}")
+    
+    # Create new event loop for the background task
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        logger.info(f"Running extraction coroutine for item {item_id}")
+        loop.run_until_complete(
+            run_extraction(item_id, upload_id, system, max_budget, configuration)
+        )
+        logger.info(f"✅ Extraction completed for item {item_id}")
+    except Exception as e:
+        logger.error(f"❌ Extraction wrapper failed for item {item_id}: {e}")
+        raise
+    finally:
+        loop.close()
+
+
 async def run_extraction(
     item_id: int,
     upload_id: str,
@@ -98,6 +154,10 @@ async def run_extraction(
     configuration: Dict[str, Any]
 ):
     """Run the extraction process in the background"""
+    logger.info(f"🚀 Starting extraction for item {item_id}, upload {upload_id}, system {system}")
+    logger.info(f"Configuration received in run_extraction: {configuration}")
+    logger.info(f"Configuration has stages: {'stages' in configuration}")
+    
     try:
         config = SystemConfig()
         config.max_budget = max_budget
@@ -178,15 +238,18 @@ async def run_extraction(
         )
         
     except Exception as e:
-        logger.error(f"Extraction failed for item {item_id}: {e}", exc_info=True)
+        logger.error(f"Extraction failed for item {item_id}: {e}")
+        logger.error(f"Full error details: {type(e).__name__}: {str(e)}")
         
         # Update status to failed
         try:
-            supabase.table("ai_extraction_queue").update({
+            logger.info(f"Updating status to 'failed' for item {item_id}")
+            update_result = supabase.table("ai_extraction_queue").update({
                 "status": "failed",
                 "error_message": str(e),
                 "completed_at": datetime.utcnow().isoformat()
             }).eq("id", item_id).execute()
+            logger.info(f"Status update result: {update_result}")
         except Exception as update_error:
             logger.error(f"Failed to update status: {update_error}")
         
@@ -194,9 +257,13 @@ async def run_extraction(
         if item_id in monitoring_data:
             monitoring_data[item_id]["status"] = "failed"
             monitoring_data[item_id]["error"] = str(e)
+            logger.info(f"Updated monitoring data to failed status for item {item_id}")
         
         # Clear monitoring hooks
         monitoring_hooks.clear_monitor(item_id)
+        
+        # Re-raise the exception to ensure it's logged at the wrapper level
+        raise
 
 
 @router.get("/monitor/{item_id}")

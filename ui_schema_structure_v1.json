@@ -1,0 +1,226 @@
+{
+  "name": "structure_extraction",
+  "type": "object",
+  "description": "Complete shelf structure analysis",
+  "required": true,
+  "sort_order": 0,
+  "nested_fields": [
+    {
+      "name": "shelf_structure",
+      "type": "object",
+      "description": "Physical structure of the shelf fixture",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "total_shelves",
+          "type": "integer",
+          "description": "Total number of horizontal shelves",
+          "required": true,
+          "sort_order": 0
+        },
+        {
+          "name": "fixture_id",
+          "type": "string",
+          "description": "Unique identifier for this shelf fixture (e.g., \"store123_aisle5_bay2\")",
+          "required": true,
+          "sort_order": 1
+        },
+        {
+          "name": "shelf_numbers",
+          "type": "list",
+          "description": "List of shelf numbers from bottom to top (must have length = total_shelves). Example: [1, 2, 3] for 3 shelves",
+          "required": true,
+          "sort_order": 2,
+          "list_item_type": "integer"
+        },
+        {
+          "name": "shelf_type",
+          "type": "literal",
+          "description": "Type of fixture",
+          "required": true,
+          "sort_order": 3,
+          "allowed_values": [
+            "wall_shelf",
+            "gondola",
+            "end_cap",
+            "cooler",
+            "freezer",
+            "bin",
+            "pegboard",
+            "other"
+          ]
+        },
+        {
+          "name": "width_meters",
+          "type": "float",
+          "description": "Estimated width of fixture in meters",
+          "required": true,
+          "sort_order": 4
+        },
+        {
+          "name": "height_meters",
+          "type": "float",
+          "description": "Estimated height of fixture in meters",
+          "required": true,
+          "sort_order": 5
+        },
+        {
+          "name": "shelves",
+          "type": "list",
+          "description": "Detailed information for each shelf level",
+          "required": true,
+          "sort_order": 6,
+          "nested_fields": [
+            {
+              "name": "shelf_number",
+              "type": "integer",
+              "description": "Shelf identifier (1=bottom, counting up) (Min: 1)",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "has_price_rail",
+              "type": "boolean",
+              "description": "Whether shelf has price label strip/rail",
+              "required": true,
+              "sort_order": 1
+            },
+            {
+              "name": "special_features",
+              "type": "string",
+              "description": "Unusual characteristics (slanted, wire mesh, divided sections, damaged)",
+              "required": false,
+              "sort_order": 2
+            },
+            {
+              "name": "has_empty_spaces",
+              "type": "boolean",
+              "description": "Whether significant gaps exist on this shelf",
+              "required": true,
+              "sort_order": 3
+            },
+            {
+              "name": "empty_space_details",
+              "type": "object",
+              "description": "Details about empty spaces",
+              "required": false,
+              "sort_order": 4,
+              "nested_fields": [
+                {
+                  "name": "sections_with_gaps",
+                  "type": "list",
+                  "description": "Which sections have gaps",
+                  "required": true,
+                  "sort_order": 0,
+                  "list_item_type": "literal",
+                  "allowed_values": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                {
+                  "name": "estimated_total_gap_cm",
+                  "type": "float",
+                  "description": "Total empty space in centimeters",
+                  "required": true,
+                  "sort_order": 1
+                }
+              ]
+            }
+          ],
+          "list_item_type": "object"
+        },
+        {
+          "name": "non_product_elements",
+          "type": "object",
+          "description": "Items on shelves that are not products",
+          "required": true,
+          "sort_order": 7,
+          "nested_fields": [
+            {
+              "name": "security_devices",
+              "type": "list",
+              "description": "Security measures (grids, magnetic tags, plastic cases, bottle locks)",
+              "required": false,
+              "sort_order": 0,
+              "nested_fields": [
+                {
+                  "name": "type",
+                  "type": "string",
+                  "description": "Type of security device",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "location",
+                  "type": "string",
+                  "description": "Where on shelf it's located",
+                  "required": true,
+                  "sort_order": 1
+                }
+              ],
+              "list_item_type": "object"
+            },
+            {
+              "name": "promotional_materials",
+              "type": "list",
+              "description": "Marketing materials (shelf wobblers, hanging signs, price cards, banners)",
+              "required": false,
+              "sort_order": 1,
+              "nested_fields": [
+                {
+                  "name": "type",
+                  "type": "string",
+                  "description": "Type of promotional material",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "location",
+                  "type": "string",
+                  "description": "Where positioned",
+                  "required": true,
+                  "sort_order": 1
+                },
+                {
+                  "name": "text_visible",
+                  "type": "string",
+                  "description": "Any readable promotional text",
+                  "required": false,
+                  "sort_order": 2
+                }
+              ],
+              "list_item_type": "object"
+            },
+            {
+              "name": "shelf_equipment",
+              "type": "list",
+              "description": "Shelf organization tools (dividers, pushers, price rails, shelf strips)",
+              "required": false,
+              "sort_order": 2,
+              "nested_fields": [
+                {
+                  "name": "type",
+                  "type": "string",
+                  "description": "Type of equipment",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "location",
+                  "type": "string",
+                  "description": "Where installed",
+                  "required": true,
+                  "sort_order": 1
+                }
+              ],
+              "list_item_type": "object"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

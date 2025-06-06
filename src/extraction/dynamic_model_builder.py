@@ -1,206 +1,159 @@
 """
-Dynamic Model Builder for Extraction Pipeline
-Correctly builds Pydantic models from field definitions without double nesting
+Dynamic Model Builder for User-Defined Fields
+Converts UI field definitions to Pydantic models for extraction
 """
 
-from pydantic import BaseModel, Field, create_model
 from typing import Dict, Any, List, Optional, Type, Union
-import json
+from pydantic import BaseModel, Field, create_model
 from enum import Enum
 
 from ..utils import logger
 
 
-class FieldType(str, Enum):
-    STRING = "string"
-    INTEGER = "integer" 
-    FLOAT = "float"
-    BOOLEAN = "boolean"
-    LIST = "list"
-    DICT = "dict"
-    OBJECT = "object"
-    NUMBER = "number"
-    ARRAY = "array"
-
-
-def build_extraction_model(stage_name: str, field_definitions: Dict[str, Any]) -> Type[BaseModel]:
-    """
-    Build a Pydantic model from field definitions for a specific extraction stage.
+class DynamicModelBuilder:
+    """Builds Pydantic models from user-defined field configurations"""
     
-    IMPORTANT: This creates a model with fields at the ROOT level, not nested
-    under the stage name. This prevents the double-nesting bug.
-    
-    Args:
-        stage_name: Name of the extraction stage (e.g., "structure_extraction")
-        field_definitions: Dictionary of field definitions from the database/config
+    @staticmethod
+    def build_model_from_config(stage_name: str, stage_config: Dict[str, Any]) -> Optional[Type[BaseModel]]:
+        """
+        Build a Pydantic model from stage configuration fields
         
-    Returns:
-        A Pydantic model class with fields at the root level
-    """
-    
-    def get_python_type(field_def: Dict[str, Any], field_name: str = "") -> Any:
-        """Convert field definition to Python type"""
-        if not isinstance(field_def, dict):
-            return Any
+        Args:
+            stage_name: Name of the stage (e.g., 'structure', 'products')
+            stage_config: Stage configuration containing fields definition
             
-        field_type = field_def.get('type', 'string').lower()
-        
-        if field_type in ['string', 'str']:
-            return str
-        elif field_type in ['integer', 'int']:
-            return int
-        elif field_type in ['number', 'float']:
-            return float
-        elif field_type in ['boolean', 'bool']:
-            return bool
-        elif field_type in ['array', 'list']:
-            item_def = field_def.get('items', {})
-            item_type = get_python_type(item_def, f"{field_name}_item")
-            return List[item_type]
-        elif field_type in ['object', 'dict']:
-            # For nested objects, check if properties are defined
-            properties = field_def.get('properties', {})
-            if properties:
-                # Create a nested model
-                nested_fields = {}
-                for prop_name, prop_def in properties.items():
-                    if isinstance(prop_def, dict):
-                        nested_type = get_python_type(prop_def, prop_name)
-                        nested_fields[prop_name] = (
-                            nested_type,
-                            Field(description=prop_def.get('description', ''))
-                        )
-                
-                # Create nested model with unique name
-                nested_model_name = f"{stage_name}_{field_name}_nested"
-                return create_model(nested_model_name, **nested_fields)
-            else:
-                # Generic dict if no properties specified
-                return Dict[str, Any]
-        else:
-            return Any
-    
-    # Build fields for the model
-    model_fields = {}
-    
-    for field_name, field_def in field_definitions.items():
-        # Skip invalid field definitions
-        if not isinstance(field_def, dict):
-            logger.warning(f"Skipping invalid field definition for {field_name}: {field_def}")
-            continue
-        
-        try:
-            # Get the Python type
-            python_type = get_python_type(field_def, field_name)
+        Returns:
+            Pydantic model class or None if no fields defined
+        """
+        fields = stage_config.get('fields', [])
+        if not fields:
+            logger.warning(
+                f"No fields defined for stage {stage_name}",
+                component="dynamic_model_builder"
+            )
+            return None
             
-            # Check if field is required
-            is_required = field_def.get('required', False)
-            
-            # Create field with metadata
-            field_description = field_def.get('description', f"Field {field_name}")
-            
-            if is_required:
-                model_fields[field_name] = (
-                    python_type,
-                    Field(description=field_description)
-                )
-            else:
-                # Make optional with default None
-                model_fields[field_name] = (
-                    Optional[python_type],
-                    Field(default=None, description=field_description)
-                )
-                
-        except Exception as e:
-            logger.error(f"Error building field {field_name}: {e}")
-            # Add as Any type to avoid breaking the model
-            model_fields[field_name] = (Any, Field(default=None))
-    
-    # Create the model with a clean name
-    model_name = f"{stage_name.replace('_', ' ').title().replace(' ', '')}Model"
-    
-    logger.info(
-        f"Building model {model_name} with fields: {list(model_fields.keys())}",
-        component="dynamic_model_builder"
-    )
-    
-    # Create model with fields at ROOT level - NO WRAPPING!
-    return create_model(model_name, **model_fields)
-
-
-def build_model_from_stage_config(stage_config: Dict[str, Any]) -> Type[BaseModel]:
-    """
-    Build a Pydantic model from a stage configuration.
-    
-    Args:
-        stage_config: Stage configuration with fields definition
-        
-    Returns:
-        A Pydantic model class
-    """
-    stage_name = stage_config.get('name', 'extraction')
-    fields = stage_config.get('fields', {})
-    
-    # Convert fields list to dict if necessary
-    if isinstance(fields, list):
-        fields_dict = {}
-        for field in fields:
-            if isinstance(field, dict) and 'name' in field:
-                field_name = field['name']
-                fields_dict[field_name] = {
-                    'type': field.get('type', 'string'),
-                    'description': field.get('description', ''),
-                    'required': field.get('required', False)
-                }
-        fields = fields_dict
-    
-    return build_extraction_model(stage_name, fields)
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Test with structure extraction fields
-    structure_fields = {
-        "total_shelves": {
-            "type": "integer",
-            "description": "Total number of shelves visible in the planogram",
-            "required": True
-        },
-        "shelves": {
-            "type": "array",
-            "description": "Array of shelf objects",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "shelf_number": {
-                        "type": "integer",
-                        "description": "Shelf number from top (1) to bottom"
-                    },
-                    "has_price_rail": {
-                        "type": "boolean",
-                        "description": "Whether shelf has a visible price rail"
-                    }
-                }
-            }
-        }
-    }
-    
-    # Build the model
-    StructureModel = build_extraction_model("structure_extraction", structure_fields)
-    
-    print("Model schema:")
-    print(json.dumps(StructureModel.model_json_schema(), indent=2))
-    
-    # Test instance creation
-    try:
-        instance = StructureModel(
-            total_shelves=3,
-            shelves=[
-                {"shelf_number": 1, "has_price_rail": True},
-                {"shelf_number": 2, "has_price_rail": False}
-            ]
+        logger.info(
+            f"Building dynamic model for stage {stage_name} with {len(fields)} fields",
+            component="dynamic_model_builder",
+            field_names=[f.get('name') for f in fields]
         )
-        print("\n✓ Instance created successfully!")
-        print(f"Data: {instance.model_dump()}")
-    except Exception as e:
-        print(f"\n✗ Error: {e}")
+        
+        model_fields = {}
+        
+        for field_def in fields:
+            field_name, field_info = DynamicModelBuilder._build_field(field_def)
+            if field_name and field_info:
+                model_fields[field_name] = field_info
+        
+        # Create the model with a descriptive name
+        model_name = f"{stage_name.title()}ExtractionModel"
+        model = create_model(
+            model_name,
+            __doc__=f"Dynamic model for {stage_name} extraction based on user-defined fields",
+            **model_fields
+        )
+        
+        logger.info(
+            f"Created dynamic model {model_name} with fields: {list(model_fields.keys())}",
+            component="dynamic_model_builder"
+        )
+        
+        return model
+    
+    @staticmethod
+    def _build_field(field_def: Dict[str, Any]) -> tuple:
+        """Build a single Pydantic field from field definition"""
+        
+        field_name = field_def.get('name')
+        field_type = field_def.get('type', 'string')
+        description = field_def.get('description', '')
+        required = field_def.get('required', True)
+        
+        if not field_name:
+            return None, None
+        
+        # Map field types to Python types
+        if field_type == 'string':
+            python_type = str
+        elif field_type == 'literal':
+            # Handle literal/enum types
+            allowed_values = field_def.get('allowed_values', [])
+            if allowed_values:
+                # Create enum
+                enum_class = Enum(f"{field_name}_enum", {v: v for v in allowed_values})
+                python_type = enum_class
+            else:
+                python_type = str
+        elif field_type == 'integer':
+            python_type = int
+        elif field_type == 'float':
+            python_type = float
+        elif field_type == 'boolean':
+            python_type = bool
+        elif field_type == 'list':
+            # Check for list item type
+            item_type = field_def.get('list_item_type', 'string')
+            nested_fields = field_def.get('nested_fields', [])
+            
+            if nested_fields:
+                # Build nested model for list items
+                nested_model = DynamicModelBuilder._build_nested_model(
+                    f"{field_name}_item",
+                    nested_fields
+                )
+                python_type = List[nested_model]
+            elif item_type == 'string':
+                python_type = List[str]
+            elif item_type == 'integer':
+                python_type = List[int]
+            elif item_type == 'object':
+                python_type = List[Dict[str, Any]]
+            else:
+                python_type = List[Any]
+        elif field_type == 'dict':
+            python_type = Dict[str, Any]
+        elif field_type == 'object':
+            # Build nested model
+            nested_fields = field_def.get('nested_fields', [])
+            if nested_fields:
+                python_type = DynamicModelBuilder._build_nested_model(field_name, nested_fields)
+            else:
+                python_type = Dict[str, Any]
+        else:
+            python_type = Any
+        
+        # Make optional if not required
+        if not required:
+            python_type = Optional[python_type]
+        
+        # Build field kwargs
+        field_kwargs = {
+            "description": description
+        }
+        
+        # Add default if not required
+        if not required:
+            field_kwargs["default"] = None
+        
+        return field_name, (python_type, Field(**field_kwargs))
+    
+    @staticmethod
+    def _build_nested_model(model_name: str, nested_fields: List[Dict[str, Any]]) -> Type[BaseModel]:
+        """Build a nested Pydantic model from nested field definitions"""
+        
+        nested_model_fields = {}
+        
+        for nested_field in nested_fields:
+            field_name, field_info = DynamicModelBuilder._build_field(nested_field)
+            if field_name and field_info:
+                nested_model_fields[field_name] = field_info
+        
+        # Create nested model with unique name
+        safe_name = model_name.replace(' ', '_').replace('-', '_')
+        nested_model = create_model(
+            f"{safe_name}_nested",
+            **nested_model_fields
+        )
+        
+        return nested_model

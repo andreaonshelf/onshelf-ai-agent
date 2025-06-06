@@ -1,0 +1,20 @@
+[
+  {
+    "name": "fixture_id",
+    "type": "string",
+    "required": true,
+    "description": "Unique identifier for this extraction (e.g., \"store123_aisle5_bay2\")"
+  },
+  {
+    "name": "total_shelves",
+    "type": "integer",
+    "required": true,
+    "description": "Total number of shelves being extracted (MUST equal {TOTAL_SHELVES} from Stage 1)"
+  },
+  {
+    "name": "shelves",
+    "type": "list",
+    "required": true,
+    "description": "Product data for each shelf (MUST have exactly total_shelves entries)"
+  }
+]

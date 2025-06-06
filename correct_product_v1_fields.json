@@ -1,0 +1,573 @@
+[
+  {
+    "name": "product_extraction",
+    "type": "object",
+    "required": true,
+    "description": "Complete product extraction for ALL shelves in the fixture",
+    "nested_fields": [
+      {
+        "name": "fixture_id",
+        "type": "string",
+        "required": true,
+        "description": "Unique identifier for this extraction (e.g., \"store123_aisle5_bay2\")"
+      },
+      {
+        "name": "total_shelves",
+        "type": "integer",
+        "required": true,
+        "description": "Total number of shelves being extracted (MUST equal {TOTAL_SHELVES} from Stage 1)"
+      },
+      {
+        "name": "shelves",
+        "type": "list",
+        "required": true,
+        "description": "Product data for each shelf (MUST have exactly total_shelves entries)",
+        "list_item_type": "object",
+        "nested_fields": [
+          {
+            "name": "shelf_number",
+            "type": "integer",
+            "required": true,
+            "description": "Which shelf this is (MUST match position in array + 1)"
+          },
+          {
+            "name": "extraction_status",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "has_products",
+              "empty_shelf",
+              "not_visible",
+              "blocked"
+            ],
+            "description": "Status of this shelf extraction"
+          },
+          {
+            "name": "products",
+            "type": "list",
+            "required": true,
+            "description": "All products found on this specific shelf",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "position",
+                "type": "integer",
+                "required": true,
+                "description": "Sequential position from left to right on THIS shelf"
+              },
+              {
+                "name": "section",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "left",
+                  "center",
+                  "right"
+                ],
+                "description": "Which third of the shelf this product is in"
+              },
+              {
+                "name": "brand",
+                "type": "string",
+                "required": true,
+                "description": "Product brand name"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "description": "Product name or variant"
+              },
+              {
+                "name": "product_type",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "can",
+                  "bottle",
+                  "box",
+                  "pouch",
+                  "jar",
+                  "other"
+                ],
+                "description": "Package type"
+              },
+              {
+                "name": "facings",
+                "type": "integer",
+                "required": true,
+                "description": "Number of units visible from front"
+              },
+              {
+                "name": "stack",
+                "type": "integer",
+                "required": true,
+                "description": "Number of units stacked vertically"
+              },
+              {
+                "name": "gaps",
+                "type": "list",
+                "required": false,
+                "description": "Empty spaces between products on this shelf",
+                "list_item_type": "object",
+                "nested_fields": [
+                  {
+                    "name": "after_position",
+                    "type": "integer",
+                    "required": true,
+                    "description": "Gap appears after this position number"
+                  },
+                  {
+                    "name": "gap_size",
+                    "type": "literal",
+                    "required": true,
+                    "allowed_values": [
+                      "small",
+                      "medium",
+                      "large"
+                    ],
+                    "description": "Approximate size of the gap"
+                  },
+                  {
+                    "name": "estimated_product_spaces",
+                    "type": "integer",
+                    "required": true,
+                    "description": "How many products could fit in this gap"
+                  },
+                  {
+                    "name": "extraction_notes",
+                    "type": "string",
+                    "required": false,
+                    "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+                  }
+                ]
+              },
+              {
+                "name": "after_position",
+                "type": "integer",
+                "required": true,
+                "description": "Gap appears after this position number"
+              },
+              {
+                "name": "gap_size",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "description": "Approximate size of the gap"
+              },
+              {
+                "name": "estimated_product_spaces",
+                "type": "integer",
+                "required": true,
+                "description": "How many products could fit in this gap"
+              },
+              {
+                "name": "extraction_notes",
+                "type": "string",
+                "required": false,
+                "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+              }
+            ]
+          },
+          {
+            "name": "position",
+            "type": "integer",
+            "required": true,
+            "description": "Sequential position from left to right on THIS shelf"
+          },
+          {
+            "name": "section",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "left",
+              "center",
+              "right"
+            ],
+            "description": "Which third of the shelf this product is in"
+          },
+          {
+            "name": "brand",
+            "type": "string",
+            "required": true,
+            "description": "Product brand name"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "required": true,
+            "description": "Product name or variant"
+          },
+          {
+            "name": "product_type",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "can",
+              "bottle",
+              "box",
+              "pouch",
+              "jar",
+              "other"
+            ],
+            "description": "Package type"
+          },
+          {
+            "name": "facings",
+            "type": "integer",
+            "required": true,
+            "description": "Number of units visible from front"
+          },
+          {
+            "name": "stack",
+            "type": "integer",
+            "required": true,
+            "description": "Number of units stacked vertically"
+          },
+          {
+            "name": "gaps",
+            "type": "list",
+            "required": false,
+            "description": "Empty spaces between products on this shelf",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "after_position",
+                "type": "integer",
+                "required": true,
+                "description": "Gap appears after this position number"
+              },
+              {
+                "name": "gap_size",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "description": "Approximate size of the gap"
+              },
+              {
+                "name": "estimated_product_spaces",
+                "type": "integer",
+                "required": true,
+                "description": "How many products could fit in this gap"
+              },
+              {
+                "name": "extraction_notes",
+                "type": "string",
+                "required": false,
+                "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+              }
+            ]
+          },
+          {
+            "name": "after_position",
+            "type": "integer",
+            "required": true,
+            "description": "Gap appears after this position number"
+          },
+          {
+            "name": "gap_size",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "description": "Approximate size of the gap"
+          },
+          {
+            "name": "estimated_product_spaces",
+            "type": "integer",
+            "required": true,
+            "description": "How many products could fit in this gap"
+          },
+          {
+            "name": "extraction_notes",
+            "type": "string",
+            "required": false,
+            "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+          }
+        ]
+      },
+      {
+        "name": "shelf_number",
+        "type": "integer",
+        "required": true,
+        "description": "Which shelf this is (MUST match position in array + 1)"
+      },
+      {
+        "name": "extraction_status",
+        "type": "literal",
+        "required": true,
+        "allowed_values": [
+          "has_products",
+          "empty_shelf",
+          "not_visible",
+          "blocked"
+        ],
+        "description": "Status of this shelf extraction"
+      },
+      {
+        "name": "products",
+        "type": "list",
+        "required": true,
+        "description": "All products found on this specific shelf",
+        "list_item_type": "object",
+        "nested_fields": [
+          {
+            "name": "position",
+            "type": "integer",
+            "required": true,
+            "description": "Sequential position from left to right on THIS shelf"
+          },
+          {
+            "name": "section",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "left",
+              "center",
+              "right"
+            ],
+            "description": "Which third of the shelf this product is in"
+          },
+          {
+            "name": "brand",
+            "type": "string",
+            "required": true,
+            "description": "Product brand name"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "required": true,
+            "description": "Product name or variant"
+          },
+          {
+            "name": "product_type",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "can",
+              "bottle",
+              "box",
+              "pouch",
+              "jar",
+              "other"
+            ],
+            "description": "Package type"
+          },
+          {
+            "name": "facings",
+            "type": "integer",
+            "required": true,
+            "description": "Number of units visible from front"
+          },
+          {
+            "name": "stack",
+            "type": "integer",
+            "required": true,
+            "description": "Number of units stacked vertically"
+          },
+          {
+            "name": "gaps",
+            "type": "list",
+            "required": false,
+            "description": "Empty spaces between products on this shelf",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "after_position",
+                "type": "integer",
+                "required": true,
+                "description": "Gap appears after this position number"
+              },
+              {
+                "name": "gap_size",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "description": "Approximate size of the gap"
+              },
+              {
+                "name": "estimated_product_spaces",
+                "type": "integer",
+                "required": true,
+                "description": "How many products could fit in this gap"
+              },
+              {
+                "name": "extraction_notes",
+                "type": "string",
+                "required": false,
+                "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+              }
+            ]
+          },
+          {
+            "name": "after_position",
+            "type": "integer",
+            "required": true,
+            "description": "Gap appears after this position number"
+          },
+          {
+            "name": "gap_size",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "description": "Approximate size of the gap"
+          },
+          {
+            "name": "estimated_product_spaces",
+            "type": "integer",
+            "required": true,
+            "description": "How many products could fit in this gap"
+          },
+          {
+            "name": "extraction_notes",
+            "type": "string",
+            "required": false,
+            "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+          }
+        ]
+      },
+      {
+        "name": "position",
+        "type": "integer",
+        "required": true,
+        "description": "Sequential position from left to right on THIS shelf"
+      },
+      {
+        "name": "section",
+        "type": "literal",
+        "required": true,
+        "allowed_values": [
+          "left",
+          "center",
+          "right"
+        ],
+        "description": "Which third of the shelf this product is in"
+      },
+      {
+        "name": "brand",
+        "type": "string",
+        "required": true,
+        "description": "Product brand name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "description": "Product name or variant"
+      },
+      {
+        "name": "product_type",
+        "type": "literal",
+        "required": true,
+        "allowed_values": [
+          "can",
+          "bottle",
+          "box",
+          "pouch",
+          "jar",
+          "other"
+        ],
+        "description": "Package type"
+      },
+      {
+        "name": "facings",
+        "type": "integer",
+        "required": true,
+        "description": "Number of units visible from front"
+      },
+      {
+        "name": "stack",
+        "type": "integer",
+        "required": true,
+        "description": "Number of units stacked vertically"
+      },
+      {
+        "name": "gaps",
+        "type": "list",
+        "required": false,
+        "description": "Empty spaces between products on this shelf",
+        "list_item_type": "object",
+        "nested_fields": [
+          {
+            "name": "after_position",
+            "type": "integer",
+            "required": true,
+            "description": "Gap appears after this position number"
+          },
+          {
+            "name": "gap_size",
+            "type": "literal",
+            "required": true,
+            "allowed_values": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "description": "Approximate size of the gap"
+          },
+          {
+            "name": "estimated_product_spaces",
+            "type": "integer",
+            "required": true,
+            "description": "How many products could fit in this gap"
+          },
+          {
+            "name": "extraction_notes",
+            "type": "string",
+            "required": false,
+            "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+          }
+        ]
+      },
+      {
+        "name": "after_position",
+        "type": "integer",
+        "required": true,
+        "description": "Gap appears after this position number"
+      },
+      {
+        "name": "gap_size",
+        "type": "literal",
+        "required": true,
+        "allowed_values": [
+          "small",
+          "medium",
+          "large"
+        ],
+        "description": "Approximate size of the gap"
+      },
+      {
+        "name": "estimated_product_spaces",
+        "type": "integer",
+        "required": true,
+        "description": "How many products could fit in this gap"
+      },
+      {
+        "name": "extraction_notes",
+        "type": "string",
+        "required": false,
+        "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")"
+      }
+    ]
+  }
+]

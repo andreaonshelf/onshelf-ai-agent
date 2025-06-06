@@ -22,6 +22,7 @@ class FieldType(str, Enum):
     LIST = "list"
     DICT = "dict"
     OBJECT = "object"
+    LITERAL = "literal"
 
 
 class FieldDefinition(BaseModel):
@@ -49,7 +50,7 @@ def build_pydantic_field(field_def: FieldDefinition) -> tuple:
     """Build a Pydantic field from field definition"""
     
     # Determine the Python type
-    if field_def.type == FieldType.STRING:
+    if field_def.type == FieldType.STRING or field_def.type == FieldType.LITERAL or field_def.type == "literal":
         if field_def.enum_values:
             # Create enum type
             enum_class = Enum(f"{field_def.name}_enum", {v: v for v in field_def.enum_values})
@@ -143,8 +144,12 @@ async def build_schema(schema_def: SchemaDefinition):
             for field in fields:
                 if field.examples and len(field.examples) > 0:
                     data[field.name] = field.examples[0]
-                elif field.type == FieldType.STRING:
-                    data[field.name] = "example"
+                elif field.type == FieldType.STRING or field.type == FieldType.LITERAL or field.type == "literal":
+                    if field.enum_values and len(field.enum_values) > 0:
+                        # Use first enum value for literal/enum fields
+                        data[field.name] = field.enum_values[0]
+                    else:
+                        data[field.name] = "example"
                 elif field.type == FieldType.INTEGER:
                     data[field.name] = 1
                 elif field.type == FieldType.FLOAT:

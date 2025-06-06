@@ -1,0 +1,178 @@
+[
+  {
+    "name": "shelf_structure",
+    "type": "object",
+    "required": true,
+    "description": "Physical structure of the shelf fixture",
+    "nested_fields": [
+      {
+        "name": "total_shelves",
+        "type": "integer",
+        "required": true,
+        "description": "Total number of horizontal shelves"
+      },
+      {
+        "name": "fixture_id",
+        "type": "string",
+        "required": true,
+        "description": "Unique identifier for this shelf fixture (e.g., \"store123_aisle5_bay2\")"
+      },
+      {
+        "name": "shelf_numbers",
+        "type": "list",
+        "required": true,
+        "description": "List of shelf numbers from bottom to top (must have length = total_shelves)"
+      },
+      {
+        "name": "shelf_type",
+        "type": "literal",
+        "required": true,
+        "allowed_values": [
+          "wall_shelf",
+          "gondola",
+          "end_cap",
+          "cooler",
+          "freezer",
+          "bin",
+          "pegboard",
+          "other"
+        ],
+        "description": "Type of fixture"
+      },
+      {
+        "name": "width_meters",
+        "type": "float",
+        "required": true,
+        "description": "Estimated width of fixture in meters"
+      },
+      {
+        "name": "height_meters",
+        "type": "float",
+        "required": true,
+        "description": "Estimated height of fixture in meters"
+      },
+      {
+        "name": "shelves",
+        "type": "list",
+        "required": true,
+        "description": "Detailed information for each shelf level",
+        "list_item_type": "object",
+        "nested_fields": [
+          {
+            "name": "shelf_number",
+            "type": "integer",
+            "required": true,
+            "description": "Shelf identifier (1=bottom, counting up)"
+          },
+          {
+            "name": "has_price_rail",
+            "type": "boolean",
+            "required": true,
+            "description": "Whether shelf has price label strip/rail"
+          },
+          {
+            "name": "special_features",
+            "type": "string",
+            "required": false,
+            "description": "Unusual characteristics (slanted, wire mesh, divided sections, damaged)"
+          },
+          {
+            "name": "has_empty_spaces",
+            "type": "boolean",
+            "required": true,
+            "description": "Whether significant gaps exist on this shelf"
+          },
+          {
+            "name": "empty_space_details",
+            "type": "object",
+            "required": false,
+            "description": "Details about empty spaces",
+            "nested_fields": [
+              {
+                "name": "sections_with_gaps",
+                "type": "list",
+                "required": true
+              },
+              {
+                "name": "estimated_total_gap_cm",
+                "type": "float",
+                "required": true,
+                "description": "Total empty space in centimeters"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "non_product_elements",
+        "type": "object",
+        "required": true,
+        "description": "Items on shelves that are not products",
+        "nested_fields": [
+          {
+            "name": "security_devices",
+            "type": "list",
+            "required": false,
+            "description": "Security measures (grids, magnetic tags, plastic cases, bottle locks)",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "type",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "location",
+                "type": "string",
+                "required": true
+              }
+            ]
+          },
+          {
+            "name": "promotional_materials",
+            "type": "list",
+            "required": false,
+            "description": "Marketing materials (shelf wobblers, hanging signs, price cards, banners)",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "type",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "location",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "text_visible",
+                "type": "string",
+                "required": true
+              }
+            ]
+          },
+          {
+            "name": "shelf_equipment",
+            "type": "list",
+            "required": false,
+            "description": "Shelf organization tools (dividers, pushers, price rails, shelf strips)",
+            "list_item_type": "object",
+            "nested_fields": [
+              {
+                "name": "type",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "location",
+                "type": "string",
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

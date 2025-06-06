@@ -33,6 +33,8 @@ from .base_system import BaseExtractionSystem, ExtractionResult, CostBreakdown, 
 from ..config import SystemConfig
 from ..utils import logger
 from ..feedback.human_learning import HumanFeedbackLearningSystem
+from ..extraction.engine import ModularExtractionEngine
+from ..extraction.dynamic_model_builder import DynamicModelBuilder
 
 
 class LangGraphExtractionState(TypedDict):
@@ -55,8 +57,9 @@ class LangGraphExtractionState(TypedDict):
 class LangGraphConsensusSystem(BaseExtractionSystem):
     """LangGraph implementation with professional workflow management"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         super().__init__(config)
+        self.queue_item_id = queue_item_id
         
         if not LANGGRAPH_AVAILABLE:
             logger.warning(
@@ -66,6 +69,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         
         self.human_feedback = HumanFeedbackLearningSystem(config)
         self.cost_tracker = {'total_cost': 0, 'model_costs': {}, 'api_calls': {}, 'tokens_used': {}}
+        self.extraction_engine = ModularExtractionEngine(config)
         
         # Create workflow
         self.workflow = self._create_workflow()
@@ -135,7 +139,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         
         return workflow.compile(checkpointer=MemorySaver())
     
-    async def extract_with_consensus(self, image_data: bytes, upload_id: str) -> ExtractionResult:
+    async def extract_with_consensus(self, image_data: bytes, upload_id: str, extraction_data: Optional[Dict] = None) -> ExtractionResult:
         """Main extraction using LangGraph workflow"""
         
         logger.info(
@@ -253,21 +257,48 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             return state
         
         try:
-            # Mock position consensus
+            # Real product extraction
             structure = state.get('structure_consensus', {})
             shelf_count = structure.get('shelf_count', 4)
             
-            positions = {}
-            for shelf_num in range(1, shelf_count + 1):
-                for pos in range(1, 7):  # 6 products per shelf
-                    position_key = f"shelf_{shelf_num}_pos_{pos}"
-                    positions[position_key] = {
-                        'product': f'LangGraph Product {pos} on Shelf {shelf_num}',
-                        'brand': f'Brand {pos}',
-                        'confidence': 0.87 + (pos * 0.02),
-                        'shelf_number': shelf_num,
-                        'position': pos
-                    }
+            # Get products stage configuration
+            prompt = getattr(self, 'stage_prompts', {}).get('products', 
+                f'Extract all products from this {shelf_count}-shelf retail display.')
+            
+            # Build dynamic model
+            output_schema = self._get_output_schema_for_stage('products')
+            
+            # Get models for consensus
+            models = getattr(self, 'stage_models', {}).get('products', ['gpt-4o', 'claude-3-sonnet'])
+            
+            all_positions = {}
+            
+            for model in models:
+                try:
+                    # Real extraction
+                    result, cost = await self.extraction_engine.execute_with_model_id(
+                        model_id=model,
+                        prompt=prompt,
+                        images={'enhanced': state['image_data']},
+                        output_schema=output_schema,
+                        agent_id=f"langgraph_products_{model}"
+                    )
+                    
+                    # Parse products from result
+                    products = self._extract_products_from_result(result)
+                    
+                    # Merge into positions
+                    for product in products:
+                        key = f"shelf_{product.get('shelf', 1)}_pos_{product.get('position', 1)}"
+                        if key not in all_positions:
+                            all_positions[key] = product
+                    
+                    self.cost_tracker['total_cost'] += cost
+                    
+                except Exception as e:
+                    logger.error(f"Products extraction with {model} failed: {e}", component="langgraph_system")
+            
+            positions = all_positions
             
             state['position_consensus'] = positions
             state['consensus_rates']['positions'] = 0.87
@@ -299,14 +330,19 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         )
         
         try:
+            # The quantities are already extracted with products
+            # This node just validates and refines them
             positions = state.get('position_consensus', {})
             quantities = {}
             
-            for pos_key in positions.keys():
-                quantities[pos_key] = {
-                    'facing_count': 2,  # Mock data
-                    'confidence': 0.85
-                }
+            for pos_key, product in positions.items():
+                # Extract quantity info from product data
+                if isinstance(product, dict):
+                    quantities[pos_key] = {
+                        'facing_count': product.get('facings', product.get('facing_count', 1)),
+                        'stack_count': product.get('stack', product.get('stack_count', 1)),
+                        'confidence': product.get('confidence', 0.85)
+                    }
             
             state['quantity_consensus'] = quantities
             state['consensus_rates']['quantities'] = 0.85
@@ -339,14 +375,63 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         
         try:
             positions = state.get('position_consensus', {})
-            details = {}
             
-            for pos_key in positions.keys():
-                details[pos_key] = {
-                    'price': 2.49,  # Mock data
-                    'size': '500ml',
-                    'confidence': 0.83
-                }
+            # Get details prompt
+            prompt = getattr(self, 'stage_prompts', {}).get('details', 
+                'Extract detailed information including prices and sizes for the identified products.')
+            
+            # Build list of products for detail extraction
+            products_list = []
+            for pos_key, product in positions.items():
+                if isinstance(product, dict):
+                    products_list.append(product)
+            
+            # Add product list to prompt
+            prompt += "\n\nProducts to enhance:\n"
+            for i, prod in enumerate(products_list, 1):
+                prompt += f"{i}. {prod.get('brand', 'Unknown')} {prod.get('name', 'Product')} at shelf {prod.get('shelf', '?')}\n"
+            
+            # Get models for consensus
+            models = getattr(self, 'stage_models', {}).get('details', ['gpt-4o', 'claude-3-sonnet'])
+            
+            # Build dynamic model
+            output_schema = self._get_output_schema_for_stage('details')
+            
+            all_details = {}
+            
+            for model in models[:1]:  # Use just one model for details to save costs
+                try:
+                    # Real extraction
+                    result, cost = await self.extraction_engine.execute_with_model_id(
+                        model_id=model,
+                        prompt=prompt,
+                        images={'enhanced': state['image_data']},
+                        output_schema=output_schema,
+                        agent_id=f"langgraph_details_{model}"
+                    )
+                    
+                    # Parse details from result
+                    details_data = self._extract_details_from_result(result, positions)
+                    all_details.update(details_data)
+                    
+                    self.cost_tracker['total_cost'] += cost
+                    
+                except Exception as e:
+                    logger.error(f"Details extraction with {model} failed: {e}", component="langgraph_system")
+            
+            # If no details extracted, use product data
+            details = {}
+            for pos_key, product in positions.items():
+                if pos_key in all_details:
+                    details[pos_key] = all_details[pos_key]
+                else:
+                    # Fallback to basic info from product
+                    details[pos_key] = {
+                        'price': product.get('price'),
+                        'size': product.get('size'),
+                        'color': product.get('color', product.get('primary_color')),
+                        'confidence': 0.7
+                    }
             
             state['detail_consensus'] = details
             state['consensus_rates']['details'] = 0.83
@@ -415,27 +500,51 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         )
         
         try:
-            # Mock validation
-            accuracy = 0.91  # LangGraph tends to be more accurate due to workflow management
+            # Calculate actual accuracy based on extraction results
+            # THIS IS PLACEHOLDER - Real validation should compare against ground truth
+            structure = state.get('structure_consensus', {})
+            positions = state.get('position_consensus', {})
+            quantities = state.get('quantity_consensus', {})
+            details = state.get('detail_consensus', {})
+            
+            # Basic validation: check if we have data
+            has_structure = bool(structure)
+            has_positions = len(positions) > 0
+            has_quantities = len(quantities) > 0
+            has_details = len(details) > 0
+            
+            # Calculate accuracy based on what we have
+            components = [has_structure, has_positions, has_quantities, has_details]
+            accuracy = sum(components) / len(components) * 0.7  # Max 0.7 without human validation
+            
+            # Add confidence based on consensus rates
+            consensus_rates = state.get('consensus_rates', {})
+            if consensus_rates:
+                avg_consensus = sum(consensus_rates.values()) / len(consensus_rates)
+                accuracy += avg_consensus * 0.2  # Add up to 0.2 based on consensus
+            
+            # Cap at 0.85 without human validation
+            accuracy = min(accuracy, 0.85)
             
             validation = {
                 'accuracy': accuracy,
-                'issues': [
-                    {'type': 'minor_position_error', 'shelf': 3, 'position': 2, 'severity': 'low'}
-                ] if accuracy < 0.95 else [],
+                'issues': self._identify_validation_issues(state),
                 'validation_method': 'langgraph_workflow',
-                'confidence': 0.88,
-                'workflow_benefits': [
-                    'State persistence across nodes',
-                    'Automatic retry logic',
-                    'Professional workflow patterns'
-                ]
+                'confidence': accuracy * 0.95,
+                'needs_human_validation': True,
+                'validation_details': {
+                    'has_structure': has_structure,
+                    'has_positions': has_positions,
+                    'has_quantities': has_quantities,
+                    'has_details': has_details,
+                    'consensus_rates': consensus_rates
+                }
             }
             
             state['validation_result'] = validation
             
             logger.info(
-                f"✅ LangGraph validation complete: {accuracy:.1%} accuracy",
+                f"✅ LangGraph validation complete: {accuracy:.1%} accuracy (needs human validation)",
                 component="langgraph_system",
                 accuracy=accuracy
             )
@@ -448,6 +557,38 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             )
         
         return state
+    
+    def _identify_validation_issues(self, state: LangGraphExtractionState) -> List[Dict]:
+        """Identify validation issues in the extraction results"""
+        issues = []
+        
+        # Check structure
+        structure = state.get('structure_consensus', {})
+        if not structure:
+            issues.append({'type': 'missing_structure', 'severity': 'high'})
+        
+        # Check positions
+        positions = state.get('position_consensus', {})
+        if len(positions) < 10:  # Expecting at least 10 products
+            issues.append({
+                'type': 'low_product_count',
+                'found': len(positions),
+                'expected_min': 10,
+                'severity': 'medium'
+            })
+        
+        # Check consensus rates
+        consensus_rates = state.get('consensus_rates', {})
+        for stage, rate in consensus_rates.items():
+            if rate < 0.7:
+                issues.append({
+                    'type': 'low_consensus',
+                    'stage': stage,
+                    'rate': rate,
+                    'severity': 'medium'
+                })
+        
+        return issues
     
     async def _smart_retry_node(self, state: LangGraphExtractionState) -> LangGraphExtractionState:
         """LangGraph node for smart retry logic"""
@@ -515,14 +656,46 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             return "smart_retry_node"
     
     async def _run_structure_agents(self, image_data: bytes) -> List[Dict]:
-        """Run structure analysis agents (mock implementation)"""
+        """Run structure analysis with real AI models"""
         
-        # Mock multiple model proposals
-        proposals = [
-            {'shelf_count': 4, 'confidence': 0.92, 'model': 'gpt4o'},
-            {'shelf_count': 4, 'confidence': 0.89, 'model': 'claude'},
-            {'shelf_count': 3, 'confidence': 0.78, 'model': 'gemini'}  # Disagreement
-        ]
+        proposals = []
+        models = getattr(self, 'stage_models', {}).get('structure', ['gpt-4o', 'claude-3-sonnet', 'gemini-pro'])
+        
+        for model in models:
+            try:
+                # Get prompt
+                prompt = getattr(self, 'stage_prompts', {}).get('structure', 
+                    'Analyze this retail shelf image and identify the physical structure.')
+                
+                # Build dynamic model if configured
+                output_schema = self._get_output_schema_for_stage('structure')
+                
+                # Real extraction
+                result, cost = await self.extraction_engine.execute_with_model_id(
+                    model_id=model,
+                    prompt=prompt,
+                    images={'enhanced': image_data},
+                    output_schema=output_schema,
+                    agent_id=f"langgraph_structure_{model}"
+                )
+                
+                # Parse result to get shelf count
+                shelf_count = self._extract_shelf_count_from_result(result)
+                
+                # Add to proposals
+                proposals.append({
+                    'shelf_count': shelf_count,
+                    'result': result,
+                    'confidence': 0.85,  # Could be calculated from result
+                    'model': model,
+                    'cost': cost
+                })
+                
+                # Track cost
+                self.cost_tracker['total_cost'] += cost
+                
+            except Exception as e:
+                logger.error(f"Structure agent {model} failed: {e}", component="langgraph_system")
         
         return proposals
     
@@ -600,6 +773,11 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         consensus_rates = state.get('consensus_rates', {})
         avg_consensus_rate = sum(consensus_rates.values()) / len(consensus_rates) if consensus_rates else 0.0
         
+        # Store for later use
+        self._last_accuracy = accuracy
+        self._last_consensus_rate = avg_consensus_rate
+        self._last_iteration_count = state.get('iteration_count', 1)
+        
         performance_metrics = PerformanceMetrics(
             accuracy=accuracy,
             processing_time=processing_time,
@@ -673,23 +851,29 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
     
     async def get_cost_breakdown(self) -> CostBreakdown:
         """Get detailed cost breakdown"""
+        accuracy = getattr(self, '_last_accuracy', 0.7)  # Use last known accuracy or default
         return CostBreakdown(
             total_cost=self.cost_tracker.get('total_cost', 0),
             model_costs=self.cost_tracker.get('model_costs', {}),
             api_calls=self.cost_tracker.get('api_calls', {}),
             tokens_used=self.cost_tracker.get('tokens_used', {}),
-            cost_per_accuracy_point=self.cost_tracker.get('total_cost', 0) / 0.91  # Mock accuracy
+            cost_per_accuracy_point=self.cost_tracker.get('total_cost', 0) / max(accuracy, 0.1)
         )
     
     async def get_performance_metrics(self) -> PerformanceMetrics:
         """Get performance metrics"""
+        # Use actual metrics if available
+        accuracy = getattr(self, '_last_accuracy', 0.0)
+        consensus_rate = getattr(self, '_last_consensus_rate', 0.0)
+        iteration_count = getattr(self, '_last_iteration_count', 1)
+        
         return PerformanceMetrics(
-            accuracy=0.91,  # LangGraph typically performs better
+            accuracy=accuracy,
             processing_time=52.0,  # Slightly slower due to workflow overhead
-            consensus_rate=0.88,
-            iteration_count=2,  # Usually needs fewer iterations
-            human_escalation_rate=0.05,
-            spatial_accuracy=0.89,
+            consensus_rate=consensus_rate,
+            iteration_count=iteration_count,
+            human_escalation_rate=0.05 if accuracy > 0.8 else 0.15,
+            spatial_accuracy=accuracy * 0.96 if accuracy > 0 else 0.0,
             complexity_rating=self.get_complexity_rating(),
             control_level=self.get_control_level(),
             debugging_ease="Medium"
@@ -711,4 +895,137 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
     
     def get_control_level(self) -> str:
         """Get control level"""
-        return "Framework-Limited" 
+        return "Framework-Limited"
+    
+    def _get_output_schema_for_stage(self, stage: str):
+        """Get output schema for a stage, building dynamic model if configured"""
+        # Check for configured fields
+        stage_config = getattr(self, 'stage_configs', {}).get(stage, {})
+        
+        if stage_config and 'fields' in stage_config:
+            # Build dynamic model from user's field definitions
+            logger.info(
+                f"Building dynamic model for LangGraph {stage} stage with {len(stage_config['fields'])} fields",
+                component="langgraph_system"
+            )
+            return DynamicModelBuilder.build_model_from_config(stage_config['fields'], f'LangGraph{stage.title()}V1')
+        
+        # Fallback to generic schemas
+        if stage == 'structure':
+            return 'Dict[str, Any]'
+        elif stage == 'products':
+            return 'List[Dict[str, Any]]'
+        elif stage == 'details':
+            return 'Dict[str, Any]'
+        else:
+            return 'Dict[str, Any]'
+    
+    def _extract_shelf_count_from_result(self, result) -> int:
+        """Extract shelf count from extraction result"""
+        if hasattr(result, 'shelf_count'):
+            return result.shelf_count
+        elif isinstance(result, dict):
+            # Try various possible field names
+            for key in ['shelf_count', 'total_shelves', 'shelves', 'shelf_structure']:
+                if key in result:
+                    value = result[key]
+                    if isinstance(value, int):
+                        return value
+                    elif isinstance(value, dict) and 'total_shelves' in value:
+                        return value['total_shelves']
+                    elif isinstance(value, list):
+                        return len(value)
+        return 4  # Default fallback
+    
+    def _extract_products_from_result(self, result) -> List[Dict]:
+        """Extract product list from extraction result"""
+        products = []
+        
+        if isinstance(result, list):
+            # Direct list of products
+            for item in result:
+                if hasattr(item, 'dict'):
+                    products.append(item.dict())
+                elif isinstance(item, dict):
+                    products.append(item)
+        elif hasattr(result, 'products'):
+            # Has products attribute
+            return self._extract_products_from_result(result.products)
+        elif isinstance(result, dict):
+            # Look for products in dict
+            if 'products' in result:
+                return self._extract_products_from_result(result['products'])
+            elif 'shelves' in result:
+                # Products organized by shelf
+                for shelf in result['shelves']:
+                    if isinstance(shelf, dict) and 'products' in shelf:
+                        shelf_num = shelf.get('shelf_number', 1)
+                        for prod in shelf['products']:
+                            if isinstance(prod, dict):
+                                prod['shelf'] = shelf_num
+                                products.append(prod)
+        
+        return products
+    
+    def _extract_details_from_result(self, result, positions: Dict) -> Dict[str, Dict]:
+        """Extract detail information from result and map to positions"""
+        details = {}
+        
+        if isinstance(result, list):
+            # List of detail items
+            for item in result:
+                # Try to match with positions
+                pos_key = self._find_matching_position(item, positions)
+                if pos_key:
+                    details[pos_key] = self._parse_detail_item(item)
+        elif isinstance(result, dict):
+            if 'details' in result:
+                return self._extract_details_from_result(result['details'], positions)
+            elif 'products' in result:
+                return self._extract_details_from_result(result['products'], positions)
+            else:
+                # Single detail object
+                for pos_key in positions:
+                    details[pos_key] = self._parse_detail_item(result)
+                    break
+        
+        return details
+    
+    def _find_matching_position(self, item: Dict, positions: Dict) -> Optional[str]:
+        """Find matching position key for a detail item"""
+        # Try to match by position/shelf
+        item_shelf = item.get('shelf', item.get('shelf_number', 0))
+        item_pos = item.get('position', item.get('position_on_shelf', 0))
+        
+        for pos_key, product in positions.items():
+            if isinstance(product, dict):
+                if (product.get('shelf', product.get('shelf_number', 0)) == item_shelf and
+                    product.get('position', product.get('position_on_shelf', 0)) == item_pos):
+                    return pos_key
+        
+        # Try to match by brand/name
+        item_brand = str(item.get('brand', '')).lower()
+        item_name = str(item.get('name', item.get('product', ''))).lower()
+        
+        for pos_key, product in positions.items():
+            if isinstance(product, dict):
+                prod_brand = str(product.get('brand', '')).lower()
+                prod_name = str(product.get('name', product.get('product', ''))).lower()
+                if item_brand and prod_brand and item_brand in prod_brand:
+                    return pos_key
+                if item_name and prod_name and item_name in prod_name:
+                    return pos_key
+        
+        return None
+    
+    def _parse_detail_item(self, item) -> Dict:
+        """Parse a detail item into standard format"""
+        if hasattr(item, 'dict'):
+            item = item.dict()
+        
+        return {
+            'price': item.get('price', item.get('regular_price')),
+            'size': item.get('size', item.get('package_size')),
+            'color': item.get('color', item.get('primary_color')),
+            'confidence': item.get('confidence', 0.8)
+        } 

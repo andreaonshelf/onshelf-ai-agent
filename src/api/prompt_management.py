@@ -42,9 +42,10 @@ async def get_prompts_by_stage(stage: str):
             # Map stage to prompt_type for legacy prompts
             stage_to_prompt_type = {
                 "structure": "structure",
-                "products": "position",
+                "products": "product",  # Fixed: was "position", should be "product" to match database
                 "details": "detail",
-                "validation": "validation"
+                "validation": "validation",
+                "comparison": "visual"  # Added: comparison agent prompts
             }
             
             # Get prompts from prompt_templates table
@@ -59,10 +60,35 @@ async def get_prompts_by_stage(stage: str):
                 result = supabase.table("prompt_templates").select("*").eq("prompt_type", prompt_type).eq("is_active", True).execute()
             
             for prompt in result.data:
+                # Try to extract name from various sources
+                prompt_name = prompt.get('name')
+                if not prompt_name:
+                    # Try to extract from template_id if it's a user prompt
+                    template_id = prompt.get('template_id', '')
+                    if template_id.startswith('user_'):
+                        # Extract name from template_id: user_name_version_timestamp
+                        parts = template_id.split('_')
+                        if len(parts) >= 3:
+                            prompt_name = ' '.join(parts[1:-2]).replace('_', ' ').title()
+                    
+                    if not prompt_name:
+                        prompt_name = f"{prompt['prompt_type']} v{prompt.get('prompt_version', '1.0')}"
+                
+                # Extract fields from various sources
+                fields = prompt.get('fields', [])
+                
+                # Extract tags from retailer_context if no tags field
+                tags = prompt.get('tags', [])
+                if not tags and prompt.get('retailer_context'):
+                    tags = prompt.get('retailer_context', [])
+                
+                # Get the prompt content from either column
+                prompt_content = prompt.get('prompt_content') or prompt.get('prompt_text', '')
+                
                 prompts.append({
                     "id": prompt['prompt_id'],
-                    "name": prompt['name'] or f"{prompt['prompt_type']} v{prompt.get('prompt_version', '1.0')}",
-                    "content": prompt['prompt_text'],
+                    "name": prompt_name,
+                    "content": prompt_content,
                     "prompt_type": prompt['prompt_type'],
                     "model_type": prompt.get('model_type', 'all'),
                     "version": prompt.get('prompt_version', '1.0'),
@@ -70,10 +96,11 @@ async def get_prompts_by_stage(stage: str):
                     "uses": prompt.get('usage_count', 0),
                     "created_at": prompt['created_at'],
                     "is_active": prompt.get('is_active', True),
-                    "fields": prompt.get('fields', []),  # Include Pydantic field definitions
-                    "tags": prompt.get('tags', []),
+                    "fields": fields,  # Include Pydantic field definitions
+                    "tags": tags,
                     "stage_type": prompt.get('stage_type', stage)
                 })
+            
         
         # Return empty list if no prompts - no fake data
         # User explicitly deleted all prompts to start fresh
@@ -2334,3 +2361,112 @@ def incrementVersion(version: str) -> str:
     except:
         pass
     return "1.1" 
+
+
+@router.post("")
+async def save_prompt_to_library(request: Dict[str, Any]):
+    """Save a prompt to the prompt library (matches frontend expectations)"""
+    
+    try:
+        # Extract fields from request
+        name = request.get("name")
+        stage = request.get("stage") or request.get("stage_type")
+        content = request.get("content")
+        fields = request.get("fields", [])
+        version = request.get("version", "1.0")
+        tags = request.get("tags", [])
+        
+        if not all([name, stage, content]):
+            raise HTTPException(status_code=400, detail="name, stage, and content are required")
+        
+        if supabase:
+            # Save to prompt_templates table with proper schema
+            # Map stage to prompt_type for compatibility
+            stage_to_prompt_type = {
+                "structure": "structure",
+                "products": "position",
+                "prices": "detail",
+                "promotions": "detail",
+                "details": "detail",
+                "validation": "validation"
+            }
+            
+            prompt_type = stage_to_prompt_type.get(stage, stage)
+            
+            # Generate a unique template_id
+            template_id = f"user_{name.lower().replace(' ', '_')}_{version}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            
+            # First, try to understand the actual schema
+            try:
+                # Check if prompt_templates uses prompt_text or prompt_content
+                test_query = supabase.table("prompt_templates").select("*").limit(1).execute()
+                
+                # Determine the correct column name
+                prompt_column = "prompt_content"  # Default
+                if test_query.data:
+                    if "prompt_text" in test_query.data[0]:
+                        prompt_column = "prompt_text"
+                    elif "prompt_content" not in test_query.data[0]:
+                        # Neither exists, might be a different column
+                        logger.warning("Neither prompt_text nor prompt_content found in prompt_templates")
+            except:
+                pass  # Use default
+            
+            prompt_data = {
+                "template_id": template_id,
+                "prompt_type": prompt_type,
+                "model_type": "all",  # User prompts work with all models
+                "prompt_version": version,
+                prompt_column: content,  # Use the correct column name
+                "performance_score": 0.0,
+                "usage_count": 0,
+                "correction_rate": 0.0,
+                "is_active": True,
+                "created_from_feedback": False,
+                "retailer_context": tags,  # Store tags as retailer context
+                "category_context": [stage],  # Store stage as category context
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            # Check if we have any additional columns (name, fields, etc.) by checking existing data
+            try:
+                # First, check if the table has been extended with new columns
+                check_result = supabase.table("prompt_templates").select("*").limit(1).execute()
+                if check_result.data and 'name' in check_result.data[0]:
+                    # Table has been extended with new columns
+                    prompt_data['name'] = name
+                    prompt_data['fields'] = fields
+                    prompt_data['stage_type'] = stage
+                    prompt_data['tags'] = tags
+            except:
+                pass  # Ignore if check fails
+            
+            # Insert the prompt
+            result = supabase.table("prompt_templates").insert(prompt_data).execute()
+            
+            if result.data:
+                logger.info(f"Saved prompt to prompt_templates: {name}", 
+                          component="prompt_management",
+                          stage=stage,
+                          template_id=template_id)
+                
+                return {
+                    "success": True,
+                    "prompt_id": result.data[0]['prompt_id'],
+                    "message": f"Prompt '{name}' saved successfully"
+                }
+            else:
+                raise Exception("No data returned from insert")
+        
+        # Fallback if no database
+        return {
+            "success": True,
+            "prompt_id": f"local_{stage}_{name}",
+            "message": "Prompt saved locally (no database connection)"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save prompt to library: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save prompt: {str(e)}")

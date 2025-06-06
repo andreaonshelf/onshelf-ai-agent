@@ -1,0 +1,148 @@
+{
+  "name": "visual_comparison",
+  "type": "object",
+  "description": "Comparison between original photo and generated planogram",
+  "required": true,
+  "sort_order": 0,
+  "nested_fields": [
+    {
+      "name": "overview",
+      "type": "object",
+      "description": "Overall comparison metrics",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "total_products_photo",
+          "type": "integer",
+          "description": "Total products counted in original photo",
+          "required": true,
+          "sort_order": 0
+        },
+        {
+          "name": "total_products_planogram",
+          "type": "integer",
+          "description": "Total products shown in planogram",
+          "required": true,
+          "sort_order": 1
+        },
+        {
+          "name": "overall_alignment",
+          "type": "literal",
+          "description": "Overall quality assessment",
+          "required": true,
+          "sort_order": 2,
+          "allowed_values": [
+            "good",
+            "moderate",
+            "poor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shelf_mismatches",
+      "type": "list",
+      "description": "Specific products with placement or quantity issues",
+      "required": false,
+      "sort_order": 1,
+      "nested_fields": [
+        {
+          "name": "product",
+          "type": "string",
+          "description": "Product name",
+          "required": true,
+          "sort_order": 0
+        },
+        {
+          "name": "issue_type",
+          "type": "literal",
+          "description": "Type of mismatch",
+          "required": true,
+          "sort_order": 1,
+          "allowed_values": [
+            "wrong_shelf",
+            "wrong_quantity",
+            "wrong_position",
+            "missing",
+            "extra"
+          ]
+        },
+        {
+          "name": "photo_location",
+          "type": "object",
+          "description": "Where product appears in photo",
+          "required": true,
+          "sort_order": 2,
+          "nested_fields": [
+            {
+              "name": "shelf",
+              "type": "integer",
+              "description": "Shelf number",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "position",
+              "type": "integer",
+              "description": "Position number",
+              "required": true,
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "name": "planogram_location",
+          "type": "object",
+          "description": "Where product appears in planogram",
+          "required": true,
+          "sort_order": 3,
+          "nested_fields": [
+            {
+              "name": "shelf",
+              "type": "integer",
+              "description": "Shelf number",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "position",
+              "type": "integer",
+              "description": "Position number",
+              "required": true,
+              "sort_order": 1
+            }
+          ]
+        },
+        {
+          "name": "confidence",
+          "type": "literal",
+          "description": "Confidence in this mismatch",
+          "required": true,
+          "sort_order": 4,
+          "allowed_values": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        {
+          "name": "details",
+          "type": "string",
+          "description": "Additional context about the mismatch",
+          "required": false,
+          "sort_order": 5
+        }
+      ],
+      "list_item_type": "object"
+    },
+    {
+      "name": "critical_issues",
+      "type": "list",
+      "description": "Major structural problems",
+      "required": false,
+      "sort_order": 2,
+      "list_item_type": "string"
+    }
+  ]
+}

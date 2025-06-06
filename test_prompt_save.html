@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Prompt Save</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .success {
+            color: green;
+            padding: 10px;
+            background: #e7f5e7;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background: #ffe7e7;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        #console {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Prompt Save Functionality</h1>
+
+    <div class="section">
+        <h2>1. Save a Test Prompt</h2>
+        <button onclick="saveTestPrompt()">Save Test Prompt</button>
+        <div id="saveResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Fetch Prompts for Stage</h2>
+        <button onclick="fetchPrompts('products')">Fetch Products Prompts</button>
+        <button onclick="fetchPrompts('prices')">Fetch Prices Prompts</button>
+        <button onclick="fetchPrompts('structure')">Fetch Structure Prompts</button>
+        <div id="fetchResult"></div>
+        <select id="promptDropdown" size="10">
+            <option>Prompts will appear here...</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <h2>3. Check Database Tables</h2>
+        <button onclick="checkTables()">Check Tables</button>
+        <div id="tableResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Console Output</h2>
+        <div id="console"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let savedPromptId = null;
+
+        function log(message, data = null) {
+            const consoleDiv = document.getElementById('console');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (data) {
+                entry.textContent += '\n' + JSON.stringify(data, null, 2);
+            }
+            consoleDiv.appendChild(entry);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            console.log(message, data);
+        }
+
+        async function saveTestPrompt() {
+            const resultDiv = document.getElementById('saveResult');
+            resultDiv.innerHTML = '<div class="info">Saving prompt...</div>';
+            
+            const testPrompt = {
+                name: `Test Prompt ${Date.now()}`,
+                stage: 'products',
+                content: 'Extract all products from this image. Focus on brand names and prices.',
+                fields: [
+                    { name: 'brand', type: 'string', required: true },
+                    { name: 'name', type: 'string', required: true },
+                    { name: 'price', type: 'number', required: false }
+                ],
+                version: '1.0',
+                is_active: true,
+                stage_type: 'products',
+                prompt_type: 'products',
+                tags: ['test', 'debug']
+            };
+
+            log('Sending prompt to save:', testPrompt);
+
+            try {
+                const response = await fetch(`${API_BASE}/prompts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testPrompt)
+                });
+
+                const responseText = await response.text();
+                log(`Response status: ${response.status}`, responseText);
+
+                if (response.ok) {
+                    const data = JSON.parse(responseText);
+                    savedPromptId = data.prompt_id;
+                    resultDiv.innerHTML = `<div class="success">Success! Prompt saved with ID: ${savedPromptId}</div>`;
+                    log('Prompt saved successfully:', data);
+                } else {
+                    resultDiv.innerHTML = `<div class="error">Error: ${responseText}</div>`;
+                    log('Failed to save prompt:', responseText);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                log('Exception while saving:', error);
+            }
+        }
+
+        async function fetchPrompts(stage) {
+            const resultDiv = document.getElementById('fetchResult');
+            const dropdown = document.getElementById('promptDropdown');
+            
+            resultDiv.innerHTML = '<div class="info">Fetching prompts...</div>';
+            dropdown.innerHTML = '<option>Loading...</option>';
+
+            log(`Fetching prompts for stage: ${stage}`);
+
+            try {
+                const response = await fetch(`${API_BASE}/prompts/by-stage/${stage}`);
+                const responseText = await response.text();
+                
+                log(`Response status: ${response.status}`);
+
+                if (response.ok) {
+                    const data = JSON.parse(responseText);
+                    log('Prompts fetched:', data);
+                    
+                    if (data.prompts && data.prompts.length > 0) {
+                        resultDiv.innerHTML = `<div class="success">Found ${data.prompts.length} prompts</div>`;
+                        
+                        dropdown.innerHTML = '';
+                        data.prompts.forEach(prompt => {
+                            const option = document.createElement('option');
+                            option.value = prompt.id;
+                            option.textContent = `${prompt.name} (ID: ${prompt.id})`;
+                            dropdown.appendChild(option);
+                        });
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">No prompts found</div>';
+                        dropdown.innerHTML = '<option>No prompts found</option>';
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="error">Error: ${responseText}</div>`;
+                    dropdown.innerHTML = '<option>Error loading prompts</option>';
+                    log('Failed to fetch prompts:', responseText);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                dropdown.innerHTML = '<option>Error loading prompts</option>';
+                log('Exception while fetching:', error);
+            }
+        }
+
+        async function checkTables() {
+            const resultDiv = document.getElementById('tableResult');
+            resultDiv.innerHTML = '<div class="info">Checking database tables...</div>';
+            
+            // This is a placeholder - you would need a dedicated endpoint to check tables
+            log('Checking database tables...');
+            
+            // Try to fetch from different endpoints to see what works
+            const endpoints = [
+                '/api/prompts/library',
+                '/api/prompt-library/list/products',
+                '/api/prompts/available'
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    log(`Trying endpoint: ${endpoint}`);
+                    const response = await fetch(`${window.location.origin}${endpoint}`);
+                    const status = response.status;
+                    const text = await response.text();
+                    log(`${endpoint} - Status: ${status}`, text.substring(0, 200));
+                } catch (error) {
+                    log(`${endpoint} - Error: ${error.message}`);
+                }
+            }
+            
+            resultDiv.innerHTML = '<div class="success">Check console for results</div>';
+        }
+
+        // Run initial fetch on load
+        window.addEventListener('load', () => {
+            log('Page loaded, ready for testing');
+        });
+    </script>
+</body>
+</html>

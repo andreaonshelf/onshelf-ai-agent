@@ -226,17 +226,30 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             raise HTTPException(status_code=400, detail="At least one system must be selected")
         
         # Extract configuration data
-        extraction_config = {
-            "system": system,
-            "max_budget": request_data.get('max_budget', 2.0),
-            "temperature": request_data.get('temperature', 0.1),
-            "orchestrators": request_data.get('orchestrators', {
-                "master": { "model": "claude-4-opus", "prompt": "" },
-                "extraction": { "model": "claude-4-sonnet", "prompt": "" },
-                "planogram": { "model": "gpt-4o-mini", "prompt": "" }
-            }),
-            "stage_models": request_data.get('stage_models', {})
-        }
+        # First check if we have a complete extraction_config with field definitions
+        extraction_config = request_data.get('extraction_config')
+        if not extraction_config:
+            # Build basic config if none provided
+            extraction_config = {
+                "system": system,
+                "max_budget": request_data.get('max_budget', 2.0),
+                "temperature": request_data.get('temperature', 0.1),
+                "orchestrators": request_data.get('orchestrators', {
+                    "master": { "model": "claude-4-opus", "prompt": "" },
+                    "extraction": { "model": "claude-4-sonnet", "prompt": "" },
+                    "planogram": { "model": "gpt-4o-mini", "prompt": "" }
+                }),
+                "stage_models": request_data.get('stage_models', {})
+            }
+        
+        # Log what we received
+        logger.info(
+            f"Processing item {item_id} with extraction config",
+            component="queue_api",
+            has_stages=bool(extraction_config.get('stages')),
+            stages_list=list(extraction_config.get('stages', {}).keys()) if extraction_config.get('stages') else [],
+            system=extraction_config.get('system', system)
+        )
         
         # Generate comparison group ID
         import uuid
@@ -291,12 +304,62 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
             f"Started processing for item {item_id} with system {system}",
             component="queue_api",
             comparison_group_id=comparison_group_id,
-            extraction_config=extraction_config,
+            has_extraction_config=bool(extraction_config),
+            extraction_config_stages=list(extraction_config.get('stages', {}).keys()) if extraction_config else [],
             model_config=model_config
         )
         
-        # TODO: Trigger actual processing pipeline here
-        # For now, we'll simulate processing by updating status after a delay
+        # Log detailed extraction config info
+        if extraction_config and extraction_config.get('stages'):
+            for stage_name, stage_config in extraction_config['stages'].items():
+                logger.info(
+                    f"Stage {stage_name} configured",
+                    component="queue_api",
+                    queue_item_id=item_id,
+                    has_prompt=bool(stage_config.get('prompt_text')),
+                    prompt_length=len(stage_config.get('prompt_text', '')),
+                    has_fields=bool(stage_config.get('fields'))
+                )
+        
+        # Trigger actual processing via the queue-process API
+        from fastapi import BackgroundTasks
+        from ..api.queue_processing import run_extraction
+        
+        try:
+            logger.info(f"Triggering extraction for queue item {item_id}", component="queue_api")
+            
+            # Get the queue item data
+            queue_result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+            if not queue_result.data:
+                logger.error(f"Queue item {item_id} not found", component="queue_api")
+                return
+                
+            queue_item = queue_result.data[0]
+            upload_id = queue_item.get("upload_id")
+            
+            if not upload_id:
+                logger.error(f"No upload_id for queue item {item_id}", component="queue_api")
+                return
+            
+            # Start the extraction in a background task
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            # Create a task to run the extraction
+            task = loop.create_task(
+                run_extraction(
+                    item_id=item_id,
+                    upload_id=upload_id,
+                    system=system,
+                    max_budget=model_config.get("max_budget", 2.0),
+                    configuration=model_config
+                )
+            )
+            
+            logger.info(f"Extraction task created for item {item_id}", component="queue_api")
+            
+        except Exception as e:
+            logger.error(f"Failed to trigger extraction: {e}", component="queue_api", exc_info=True)
         
         return {
             "success": True,
@@ -432,6 +495,62 @@ async def remove_item(item_id: int):
     except Exception as e:
         logger.error(f"Failed to remove item {item_id}: {e}", component="queue_api")
         raise HTTPException(status_code=500, detail=f"Failed to remove item: {str(e)}")
+
+
+@router.post("/reset-all")
+async def reset_all_items():
+    """Reset ALL queue items to pending status"""
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+    
+    try:
+        # Get all items regardless of status
+        result = supabase.table("ai_extraction_queue").select("*").execute()
+        
+        if not result.data:
+            return {
+                "success": True,
+                "message": "No items found in queue",
+                "reset_count": 0
+            }
+        
+        # Reset ALL items
+        reset_data = {
+            "status": "pending",
+            "extraction_result": None,
+            "planogram_result": None,
+            "final_accuracy": None,
+            "started_at": None,
+            "completed_at": None,
+            "error_message": None,
+            "iterations_completed": None,
+            "processing_duration_seconds": None,
+            "api_cost": None,
+            "human_review_required": False,
+            "escalation_reason": None,
+            "processing_attempts": 0
+        }
+        
+        reset_ids = [item["id"] for item in result.data]
+        
+        # Update all items
+        for item_id in reset_ids:
+            supabase.table("ai_extraction_queue").update(reset_data).eq("id", item_id).execute()
+        
+        logger.info(f"Reset {len(reset_ids)} items to pending", component="queue_api")
+        
+        return {
+            "success": True,
+            "message": f"Successfully reset {len(reset_ids)} items to pending",
+            "reset_count": len(reset_ids),
+            "reset_ids": reset_ids,
+            "reset_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to reset all items: {e}", component="queue_api")
+        raise HTTPException(status_code=500, detail=f"Failed to reset all items: {str(e)}")
 
 
 @router.post("/reset-all-failed")

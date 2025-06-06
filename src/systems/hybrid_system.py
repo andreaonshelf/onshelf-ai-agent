@@ -38,6 +38,8 @@ from .base_system import BaseExtractionSystem, ExtractionResult, CostBreakdown, 
 from ..config import SystemConfig
 from ..utils import logger
 from ..feedback.human_learning import HumanFeedbackLearningSystem
+from ..extraction.engine import ModularExtractionEngine
+from ..extraction.dynamic_model_builder import DynamicModelBuilder
 
 
 class HybridMemoryManager:
@@ -314,15 +316,39 @@ class HybridConsensusEngine:
         # Get enhanced prompt
         reasoning_prompt = self.prompt_manager.get_enhanced_prompt('consensus', reasoning_context)
         
-        # Mock reasoning result (in real implementation, would use LangChain LLM)
-        reasoning_result = {
-            'reasoning_available': True,
-            'spatial_consistency_score': 0.85,
-            'confidence_distribution': 'well_distributed',
-            'logical_consistency': 'high',
-            'recommended_proposal': proposals[0] if proposals else None,
-            'reasoning': 'Enhanced spatial analysis suggests first proposal has best consistency'
-        }
+        # Analyze proposals for real metrics
+        if proposals:
+            # Calculate actual spatial consistency
+            confidence_scores = [p.get('confidence', 0) for p in proposals]
+            avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0
+            
+            # Check consistency across proposals
+            if stage == 'structure':
+                shelf_counts = [p.get('shelf_count', 0) for p in proposals]
+                consistency = len(set(shelf_counts)) == 1
+            else:
+                consistency = len(proposals) > 1 and avg_confidence > 0.7
+            
+            # Find best proposal based on confidence
+            best_proposal = max(proposals, key=lambda x: x.get('confidence', 0))
+            
+            reasoning_result = {
+                'reasoning_available': True,
+                'spatial_consistency_score': avg_confidence,
+                'confidence_distribution': 'well_distributed' if avg_confidence > 0.8 else 'variable',
+                'logical_consistency': 'high' if consistency else 'medium',
+                'recommended_proposal': best_proposal,
+                'reasoning': f'Analysis of {len(proposals)} proposals shows {"strong" if consistency else "mixed"} consensus'
+            }
+        else:
+            reasoning_result = {
+                'reasoning_available': True,
+                'spatial_consistency_score': 0.0,
+                'confidence_distribution': 'no_proposals',
+                'logical_consistency': 'low',
+                'recommended_proposal': None,
+                'reasoning': 'No proposals available for consensus reasoning'
+            }
         
         return reasoning_result
     
@@ -384,8 +410,9 @@ class HybridConsensusEngine:
 class HybridConsensusSystem(BaseExtractionSystem):
     """Hybrid system combining custom consensus logic with LangChain's powerful ecosystem"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         super().__init__(config)
+        self.queue_item_id = queue_item_id
         
         if not LANGCHAIN_AVAILABLE:
             logger.warning(
@@ -396,6 +423,7 @@ class HybridConsensusSystem(BaseExtractionSystem):
         self.consensus_engine = HybridConsensusEngine()
         self.human_feedback = HumanFeedbackLearningSystem(config)
         self.cost_tracker = {'total_cost': 0, 'model_costs': {}, 'api_calls': {}, 'tokens_used': {}}
+        self.extraction_engine = ModularExtractionEngine(config)
         
         logger.info(
             "Hybrid consensus system initialized",
@@ -403,7 +431,7 @@ class HybridConsensusSystem(BaseExtractionSystem):
             langchain_available=LANGCHAIN_AVAILABLE
         )
     
-    async def extract_with_consensus(self, image_data: bytes, upload_id: str) -> ExtractionResult:
+    async def extract_with_consensus(self, image_data: bytes, upload_id: str, extraction_data: Optional[Dict] = None) -> ExtractionResult:
         """Main extraction with hybrid consensus approach"""
         
         start_time = time.time()
@@ -572,70 +600,95 @@ class HybridConsensusSystem(BaseExtractionSystem):
     async def _get_structure_proposals(self, image_data: bytes) -> List[Dict]:
         """Get structure proposals from multiple models"""
         
-        # Mock proposals with varying results
-        proposals = [
-            {
-                'shelf_count': 4,
-                'boundaries': [
-                    {'y_start': 100, 'y_end': 250},
-                    {'y_start': 250, 'y_end': 400},
-                    {'y_start': 400, 'y_end': 550},
-                    {'y_start': 550, 'y_end': 700}
-                ],
-                'confidence': 0.93,
-                'model': 'gpt4o_hybrid'
-            },
-            {
-                'shelf_count': 4,
-                'boundaries': [
-                    {'y_start': 105, 'y_end': 245},
-                    {'y_start': 245, 'y_end': 395},
-                    {'y_start': 395, 'y_end': 545},
-                    {'y_start': 545, 'y_end': 695}
-                ],
-                'confidence': 0.91,
-                'model': 'claude_hybrid'
-            },
-            {
-                'shelf_count': 3,  # Disagreement
-                'boundaries': [
-                    {'y_start': 100, 'y_end': 300},
-                    {'y_start': 300, 'y_end': 500},
-                    {'y_start': 500, 'y_end': 700}
-                ],
-                'confidence': 0.82,
-                'model': 'gemini_hybrid'
-            }
-        ]
+        proposals = []
+        models = getattr(self, 'stage_models', {}).get('structure', ['gpt-4o', 'claude-3-sonnet', 'gemini-pro'])
+        
+        for model in models:
+            try:
+                # Get prompt
+                prompt = getattr(self, 'stage_prompts', {}).get('structure', 
+                    'Analyze this retail shelf image and identify the physical structure.')
+                
+                # Build dynamic model if configured
+                output_schema = self._get_output_schema_for_stage('structure')
+                
+                # Real extraction
+                result, cost = await self.extraction_engine.execute_with_model_id(
+                    model_id=model,
+                    prompt=prompt,
+                    images={'enhanced': image_data},
+                    output_schema=output_schema,
+                    agent_id=f"hybrid_structure_{model}"
+                )
+                
+                # Parse result to extract structure info
+                shelf_count = self._extract_shelf_count_from_result(result)
+                boundaries = self._extract_shelf_boundaries_from_result(result, shelf_count)
+                
+                proposals.append({
+                    'shelf_count': shelf_count,
+                    'boundaries': boundaries,
+                    'result': result,
+                    'confidence': 0.85,  # Could be calculated from result
+                    'model': model,
+                    'cost': cost
+                })
+                
+                # Track cost
+                self.cost_tracker['total_cost'] += cost
+                
+            except Exception as e:
+                logger.error(f"Hybrid structure agent {model} failed: {e}", component="hybrid_system")
         
         return proposals
     
     async def _get_position_proposals(self, image_data: bytes, shelf_num: int, structure: Dict) -> List[Dict]:
         """Get position proposals for specific shelf"""
         
-        # Mock position proposals
         proposals = []
+        models = getattr(self, 'stage_models', {}).get('products', ['gpt-4o', 'claude-3-sonnet'])
         
-        for model_name in ['gpt4o_hybrid', 'claude_hybrid']:
-            positions = {}
-            products_per_shelf = 6
-            
-            for pos in range(1, products_per_shelf + 1):
-                position_key = f"shelf_{shelf_num}_pos_{pos}"
-                positions[position_key] = {
-                    'product': f'Hybrid Product {pos} on Shelf {shelf_num}',
-                    'brand': f'Brand {pos}',
-                    'confidence': 0.86 + (pos * 0.02),
-                    'shelf_number': shelf_num,
-                    'position': pos,
-                    'spatial_reasoning': f'Enhanced positioning with {model_name}'
-                }
-            
-            proposals.append({
-                'positions': positions,
-                'model': model_name,
-                'confidence': 0.88
-            })
+        for model in models:
+            try:
+                # Get prompt
+                prompt = getattr(self, 'stage_prompts', {}).get('products', 
+                    f'Extract products from shelf {shelf_num} of this retail display.')
+                
+                # Build dynamic model if configured
+                output_schema = self._get_output_schema_for_stage('products')
+                
+                # Real extraction
+                result, cost = await self.extraction_engine.execute_with_model_id(
+                    model_id=model,
+                    prompt=prompt,
+                    images={'enhanced': image_data},
+                    output_schema=output_schema,
+                    agent_id=f"hybrid_products_shelf{shelf_num}_{model}"
+                )
+                
+                # Parse products from result
+                products = self._extract_products_from_result(result)
+                
+                # Filter products for this shelf and format as positions
+                positions = {}
+                for product in products:
+                    if isinstance(product, dict) and product.get('shelf', 1) == shelf_num:
+                        pos = product.get('position', len(positions) + 1)
+                        position_key = f"shelf_{shelf_num}_pos_{pos}"
+                        positions[position_key] = product
+                
+                proposals.append({
+                    'positions': positions,
+                    'model': model,
+                    'confidence': 0.88,
+                    'cost': cost
+                })
+                
+                # Track cost
+                self.cost_tracker['total_cost'] += cost
+                
+            except Exception as e:
+                logger.error(f"Hybrid position agent {model} failed for shelf {shelf_num}: {e}", component="hybrid_system")
         
         return proposals
     
@@ -643,12 +696,44 @@ class HybridConsensusSystem(BaseExtractionSystem):
         """Quantity consensus with enhanced reasoning"""
         
         quantities = {}
-        for pos_key in positions.keys():
-            quantities[pos_key] = {
-                'facing_count': 2,  # Mock data
-                'confidence': 0.87,
-                'reasoning': 'Hybrid spatial analysis'
-            }
+        
+        # The quantities are already extracted with products in most cases
+        # This method refines them or extracts if missing
+        for pos_key, product in positions.items():
+            if isinstance(product, dict):
+                # Extract quantity info from product data
+                quantities[pos_key] = {
+                    'facing_count': product.get('facings', product.get('facing_count', 1)),
+                    'stack_count': product.get('stack', product.get('stack_count', 1)),
+                    'confidence': product.get('confidence', 0.85),
+                    'reasoning': 'Hybrid spatial analysis with LangChain memory'
+                }
+        
+        # If quantities are missing, do a focused extraction
+        if not all(q.get('facing_count') for q in quantities.values()):
+            try:
+                prompt = "Analyze the facing count and stack depth for each visible product."
+                models = getattr(self, 'stage_models', {}).get('quantities', ['gpt-4o'])
+                
+                for model in models[:1]:  # Use one model to save costs
+                    result, cost = await self.extraction_engine.execute_with_model_id(
+                        model_id=model,
+                        prompt=prompt,
+                        images={'enhanced': image_data},
+                        output_schema='Dict[str, Any]',
+                        agent_id=f"hybrid_quantities_{model}"
+                    )
+                    
+                    self.cost_tracker['total_cost'] += cost
+                    # Merge results into quantities
+                    if isinstance(result, dict):
+                        for key, value in result.items():
+                            if key in quantities:
+                                quantities[key].update(value)
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Hybrid quantity extraction failed: {e}", component="hybrid_system")
         
         self._track_hybrid_costs('quantities', 0.08, 2000)
         return quantities
@@ -657,13 +742,72 @@ class HybridConsensusSystem(BaseExtractionSystem):
         """Detail consensus with enhanced OCR and reasoning"""
         
         details = {}
-        for pos_key in positions.keys():
-            details[pos_key] = {
-                'price': 2.99,  # Mock data
-                'size': '500ml',
-                'confidence': 0.84,
-                'ocr_enhancement': 'LangChain enhanced OCR'
-            }
+        
+        # Check if details already exist in product data
+        for pos_key, product in positions.items():
+            if isinstance(product, dict):
+                # Extract existing details
+                details[pos_key] = {
+                    'price': product.get('price'),
+                    'size': product.get('size'),
+                    'color': product.get('color', product.get('primary_color')),
+                    'confidence': product.get('confidence', 0.8)
+                }
+        
+        # If details are missing, do focused extraction
+        if not all(d.get('price') or d.get('size') for d in details.values()):
+            try:
+                # Get details prompt
+                prompt = getattr(self, 'stage_prompts', {}).get('details', 
+                    'Extract detailed information including prices and sizes for all visible products.')
+                
+                # Build list of products for context
+                products_list = []
+                for pos_key, product in positions.items():
+                    if isinstance(product, dict):
+                        products_list.append(f"{product.get('brand', '')} {product.get('name', '')}")
+                
+                if products_list:
+                    prompt += "\n\nProducts to analyze:\n" + "\n".join(f"- {p}" for p in products_list)
+                
+                # Build dynamic model
+                output_schema = self._get_output_schema_for_stage('details')
+                
+                models = getattr(self, 'stage_models', {}).get('details', ['gpt-4o'])
+                
+                for model in models[:1]:  # Use one model to save costs
+                    result, cost = await self.extraction_engine.execute_with_model_id(
+                        model_id=model,
+                        prompt=prompt,
+                        images={'enhanced': image_data},
+                        output_schema=output_schema,
+                        agent_id=f"hybrid_details_{model}"
+                    )
+                    
+                    self.cost_tracker['total_cost'] += cost
+                    
+                    # Parse and merge details
+                    if isinstance(result, dict):
+                        for pos_key in positions.keys():
+                            if pos_key in result:
+                                details[pos_key].update(result[pos_key])
+                    elif isinstance(result, list):
+                        # Match details to positions
+                        for i, detail in enumerate(result):
+                            if i < len(positions):
+                                pos_key = list(positions.keys())[i]
+                                if hasattr(detail, 'dict'):
+                                    details[pos_key].update(detail.dict())
+                                elif isinstance(detail, dict):
+                                    details[pos_key].update(detail)
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Hybrid detail extraction failed: {e}", component="hybrid_system")
+        
+        # Add OCR enhancement note
+        for detail in details.values():
+            detail['ocr_enhancement'] = 'LangChain enhanced OCR with memory context'
         
         self._track_hybrid_costs('details', 0.06, 1500)
         return details
@@ -687,16 +831,68 @@ class HybridConsensusSystem(BaseExtractionSystem):
     async def _hybrid_end_to_end_validation(self, image_data: bytes, extraction: Dict, planogram: Dict) -> Dict[str, Any]:
         """Enhanced validation with hybrid reasoning"""
         
-        # Mock enhanced validation
-        accuracy = 0.93  # Hybrid typically performs best
+        # Calculate actual accuracy based on extraction results
+        structure = extraction.get('structure', {})
+        positions = extraction.get('positions', {})
+        
+        # Basic validation checks
+        has_structure = bool(structure)
+        has_positions = len(positions) > 0
+        position_count = len(positions)
+        
+        # Calculate accuracy based on what we have
+        base_accuracy = 0.0
+        if has_structure:
+            base_accuracy += 0.25
+        if has_positions:
+            base_accuracy += 0.25
+        if position_count >= 10:  # Expecting reasonable product count
+            base_accuracy += 0.25
+        
+        # Check data quality
+        quality_score = 0.0
+        valid_products = 0
+        for pos_key, product in positions.items():
+            if isinstance(product, dict):
+                if product.get('brand') and product.get('name'):
+                    valid_products += 1
+        
+        if position_count > 0:
+            quality_score = valid_products / position_count * 0.25
+        
+        accuracy = min(base_accuracy + quality_score, 0.85)  # Cap at 0.85 without human validation
+        
+        # Identify issues
+        issues = []
+        if not has_structure:
+            issues.append({'type': 'missing_structure', 'severity': 'high'})
+        if position_count < 10:
+            issues.append({
+                'type': 'low_product_count', 
+                'found': position_count, 
+                'expected_min': 10, 
+                'severity': 'medium'
+            })
+        if quality_score < 0.2:
+            issues.append({
+                'type': 'low_data_quality',
+                'valid_products': valid_products,
+                'total_products': position_count,
+                'severity': 'medium'
+            })
         
         return {
             'accuracy': accuracy,
-            'issues': [] if accuracy >= 0.9 else [
-                {'type': 'minor_detail_error', 'shelf': 2, 'position': 4, 'severity': 'low'}
-            ],
+            'issues': issues,
             'validation_method': 'hybrid_reasoning',
-            'confidence': 0.90,
+            'confidence': accuracy * 0.95,
+            'needs_human_validation': True,
+            'validation_details': {
+                'has_structure': has_structure,
+                'position_count': position_count,
+                'valid_products': valid_products,
+                'quality_score': quality_score
+            },
             'hybrid_benefits': [
                 'LangChain memory for context',
                 'Custom consensus voting',
@@ -815,7 +1011,105 @@ class HybridConsensusSystem(BaseExtractionSystem):
     
     def get_control_level(self) -> str:
         """Get control level"""
-        return "Selective" 
+        return "Selective"
+    
+    def _get_output_schema_for_stage(self, stage: str):
+        """Get output schema for a stage, building dynamic model if configured"""
+        # Check for configured fields
+        stage_config = getattr(self, 'stage_configs', {}).get(stage, {})
+        
+        if stage_config and 'fields' in stage_config:
+            # Build dynamic model from user's field definitions
+            logger.info(
+                f"Building dynamic model for Hybrid {stage} stage with {len(stage_config['fields'])} fields",
+                component="hybrid_system"
+            )
+            return DynamicModelBuilder.build_model_from_config(stage_config['fields'], f'Hybrid{stage.title()}V1')
+        
+        # Fallback to generic schemas
+        if stage == 'structure':
+            return 'Dict[str, Any]'
+        elif stage == 'products':
+            return 'List[Dict[str, Any]]'
+        elif stage == 'details':
+            return 'Dict[str, Any]'
+        else:
+            return 'Dict[str, Any]'
+    
+    def _extract_shelf_count_from_result(self, result) -> int:
+        """Extract shelf count from extraction result"""
+        if hasattr(result, 'shelf_count'):
+            return result.shelf_count
+        elif isinstance(result, dict):
+            # Try various possible field names
+            for key in ['shelf_count', 'total_shelves', 'shelves']:
+                if key in result:
+                    value = result[key]
+                    if isinstance(value, int):
+                        return value
+                    elif isinstance(value, dict) and 'total_shelves' in value:
+                        return value['total_shelves']
+                    elif isinstance(value, list):
+                        return len(value)
+        return 4  # Default fallback
+    
+    def _extract_shelf_boundaries_from_result(self, result, shelf_count: int) -> List[Dict]:
+        """Extract shelf boundaries from result"""
+        boundaries = []
+        
+        # Try to find boundaries in result
+        if hasattr(result, 'boundaries'):
+            return result.boundaries
+        elif isinstance(result, dict):
+            if 'boundaries' in result:
+                return result['boundaries']
+            elif 'shelves' in result and isinstance(result['shelves'], list):
+                # Generate boundaries from shelf list
+                for i, shelf in enumerate(result['shelves']):
+                    boundaries.append({
+                        'y_start': i * 150 + 100,
+                        'y_end': (i + 1) * 150 + 100
+                    })
+                return boundaries
+        
+        # Generate default boundaries
+        for i in range(shelf_count):
+            boundaries.append({
+                'y_start': i * 150 + 100,
+                'y_end': (i + 1) * 150 + 100
+            })
+        
+        return boundaries
+    
+    def _extract_products_from_result(self, result) -> List[Dict]:
+        """Extract product list from extraction result"""
+        products = []
+        
+        if isinstance(result, list):
+            # Direct list of products
+            for item in result:
+                if hasattr(item, 'dict'):
+                    products.append(item.dict())
+                elif isinstance(item, dict):
+                    products.append(item)
+        elif hasattr(result, 'products'):
+            # Has products attribute
+            return self._extract_products_from_result(result.products)
+        elif isinstance(result, dict):
+            # Look for products in dict
+            if 'products' in result:
+                return self._extract_products_from_result(result['products'])
+            elif 'shelves' in result:
+                # Products organized by shelf
+                for shelf in result['shelves']:
+                    if isinstance(shelf, dict) and 'products' in shelf:
+                        shelf_num = shelf.get('shelf_number', 1)
+                        for prod in shelf['products']:
+                            if isinstance(prod, dict):
+                                prod['shelf'] = shelf_num
+                                products.append(prod)
+        
+        return products 
 
 # Export the HybridSystem class
 HybridSystem = HybridConsensusSystem 

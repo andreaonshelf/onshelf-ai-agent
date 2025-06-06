@@ -38,6 +38,15 @@ async def process_queue_item_with_config(queue_processor, queue_item: Dict[str, 
             }
         }
     
+    # If still no configuration, log warning but continue
+    if not extraction_config:
+        logger.warning(
+            f"No configuration found for queue item {queue_id}, extraction will use system defaults",
+            component="queue_processor",
+            queue_id=queue_id
+        )
+        extraction_config = {}
+    
     try:
         # Mark as processing
         await queue_processor._update_queue_status(queue_id, "processing")
@@ -209,6 +218,151 @@ def patch_master_orchestrator_with_config():
     
     # Apply patch
     SystemDispatcher.achieve_target_accuracy = patched_achieve_target_accuracy
+
+
+async def _load_default_configuration() -> Dict[str, Any]:
+    """
+    Load a default configuration with proper field definitions for queue items
+    that don't have an explicit configuration saved.
+    """
+    
+    # Default configuration with basic field definitions for each stage
+    default_config = {
+        'system': 'custom_consensus',
+        'temperature': 0.7,
+        'orchestrator_model': 'claude-4-opus',
+        'orchestrator_prompt': 'You are an expert retail analyst specializing in planogram analysis.',
+        'max_budget': 2.0,
+        'stages': {
+            'structure': {
+                'prompt_text': '''Analyze the shelf structure in this retail image.
+Count the number of horizontal shelves and identify the fixture type.
+Focus on the physical layout and organization of the shelving unit.''',
+                'fields': [
+                    {
+                        'name': 'shelf_count',
+                        'type': 'integer',
+                        'description': 'Total number of horizontal shelves visible',
+                        'required': True
+                    },
+                    {
+                        'name': 'fixture_type',
+                        'type': 'literal',
+                        'description': 'Type of retail fixture',
+                        'required': True,
+                        'allowed_values': ['wall_shelf', 'gondola', 'end_cap', 'cooler', 'freezer', 'other']
+                    },
+                    {
+                        'name': 'sections',
+                        'type': 'integer',
+                        'description': 'Number of vertical sections across the fixture',
+                        'required': False
+                    }
+                ],
+                'models': ['gpt-4o', 'claude-3-sonnet']
+            },
+            'products': {
+                'prompt_text': '''Extract all products visible on the shelves.
+For each product, identify its position, brand, name, and quantity.
+Be precise about shelf numbers (counting from bottom) and horizontal positions.''',
+                'fields': [
+                    {
+                        'name': 'products',
+                        'type': 'list',
+                        'description': 'List of all products found on the shelves',
+                        'required': True,
+                        'nested_fields': [
+                            {
+                                'name': 'brand',
+                                'type': 'string',
+                                'description': 'Product brand name',
+                                'required': True
+                            },
+                            {
+                                'name': 'name',
+                                'type': 'string',
+                                'description': 'Product name as shown on packaging',
+                                'required': True
+                            },
+                            {
+                                'name': 'shelf_number',
+                                'type': 'integer',
+                                'description': 'Shelf number (1=bottom, counting up)',
+                                'required': True
+                            },
+                            {
+                                'name': 'position',
+                                'type': 'integer',
+                                'description': 'Horizontal position from left (1=leftmost)',
+                                'required': True
+                            },
+                            {
+                                'name': 'facings',
+                                'type': 'integer',
+                                'description': 'Number of identical products side by side',
+                                'required': True
+                            }
+                        ]
+                    }
+                ],
+                'models': ['gpt-4o', 'claude-3-sonnet', 'gemini-pro']
+            },
+            'details': {
+                'prompt_text': '''Extract detailed product information including prices, sizes, and promotional elements.
+Focus on text visible on products and shelf labels.''',
+                'fields': [
+                    {
+                        'name': 'product_details',
+                        'type': 'list',
+                        'description': 'Detailed information for each product',
+                        'required': True,
+                        'nested_fields': [
+                            {
+                                'name': 'product_name',
+                                'type': 'string',
+                                'description': 'Product name for reference',
+                                'required': True
+                            },
+                            {
+                                'name': 'price',
+                                'type': 'float',
+                                'description': 'Price if visible on labels or tags',
+                                'required': False
+                            },
+                            {
+                                'name': 'size_variant',
+                                'type': 'string',
+                                'description': 'Product size or variant (e.g., 500ml, Large, 24-pack)',
+                                'required': False
+                            },
+                            {
+                                'name': 'promotional_tags',
+                                'type': 'list',
+                                'description': 'Any promotional labels or tags visible',
+                                'required': False,
+                                'list_item_type': 'string'
+                            }
+                        ]
+                    }
+                ],
+                'models': ['gpt-4o', 'claude-3-sonnet']
+            }
+        },
+        'stage_models': {
+            'structure': ['gpt-4o', 'claude-3-sonnet'],
+            'products': ['gpt-4o', 'claude-3-sonnet', 'gemini-pro'],
+            'details': ['gpt-4o', 'claude-3-sonnet']
+        }
+    }
+    
+    logger.info(
+        "Loaded default configuration with field definitions",
+        component="queue_processor",
+        stages=list(default_config['stages'].keys()),
+        total_fields=sum(len(stage['fields']) for stage in default_config['stages'].values())
+    )
+    
+    return default_config
 
 
 # Apply patches when module is imported

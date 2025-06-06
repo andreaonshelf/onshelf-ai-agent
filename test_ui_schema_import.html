@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Schema Import Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .stage-selector {
+            margin: 20px 0;
+        }
+        select {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .schema-display {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .field-tree {
+            margin-top: 20px;
+        }
+        .field-node {
+            margin-left: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: white;
+        }
+        .field-node.root {
+            margin-left: 0;
+            background-color: #e7f3ff;
+        }
+        .field-name {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .field-type {
+            color: #666;
+            font-style: italic;
+        }
+        .field-required {
+            color: #d9534f;
+            font-weight: bold;
+        }
+        .field-optional {
+            color: #5cb85c;
+        }
+        .field-description {
+            color: #555;
+            margin-top: 5px;
+        }
+        .allowed-values {
+            color: #9c27b0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>UI Schema Import Test</h1>
+        
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <ol>
+                <li>Select a stage from the dropdown to see its field structure</li>
+                <li>Click "Copy JSON for UI Import" to get the JSON you can paste into the UI Schema Builder</li>
+                <li>The field tree shows the hierarchical structure with all nested fields</li>
+                <li>Red ✓ indicates required fields, green ☐ indicates optional fields</li>
+            </ol>
+        </div>
+        
+        <div class="stage-selector">
+            <label for="stage">Select Stage: </label>
+            <select id="stage">
+                <option value="">-- Select a stage --</option>
+                <option value="structure_v1">Structure v1</option>
+                <option value="product_v1">Product v1</option>
+                <option value="detail_v1">Detail v1</option>
+                <option value="visual_v1">Visual v1</option>
+            </select>
+            <button onclick="loadStageSchema()">Load Schema</button>
+            <button onclick="copyToClipboard()">Copy JSON for UI Import</button>
+        </div>
+        
+        <div id="schema-display" class="schema-display" style="display: none;">
+            <h3>Raw JSON:</h3>
+            <pre id="json-display"></pre>
+        </div>
+        
+        <div id="field-tree" class="field-tree" style="display: none;">
+            <h3>Field Structure:</h3>
+            <div id="tree-display"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSchema = null;
+        
+        // Simulated schema data (in real implementation, these would be loaded from the JSON files)
+        const schemas = {
+            structure_v1: {
+                "name": "structure_extraction",
+                "type": "object",
+                "description": "Complete shelf structure analysis",
+                "required": true,
+                "sort_order": 0,
+                "nested_fields": [
+                    {
+                        "name": "shelf_structure",
+                        "type": "object",
+                        "description": "Physical structure of the shelf fixture",
+                        "required": true,
+                        "sort_order": 0,
+                        "nested_fields": [
+                            {
+                                "name": "total_shelves",
+                                "type": "integer",
+                                "description": "Total number of horizontal shelves",
+                                "required": true,
+                                "sort_order": 0
+                            },
+                            {
+                                "name": "fixture_id",
+                                "type": "string",
+                                "description": "Unique identifier for this shelf fixture (e.g., \"store123_aisle5_bay2\")",
+                                "required": true,
+                                "sort_order": 1
+                            },
+                            {
+                                "name": "shelf_numbers",
+                                "type": "list",
+                                "description": "List of shelf numbers from bottom to top (must have length = total_shelves). Example: [1, 2, 3] for 3 shelves",
+                                "required": true,
+                                "sort_order": 2,
+                                "list_item_type": "integer"
+                            },
+                            {
+                                "name": "shelf_type",
+                                "type": "literal",
+                                "description": "Type of fixture",
+                                "required": true,
+                                "sort_order": 3,
+                                "allowed_values": ["wall_shelf", "gondola", "end_cap", "cooler", "freezer", "bin", "pegboard", "other"]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        
+        async function loadStageSchema() {
+            const stage = document.getElementById('stage').value;
+            if (!stage) {
+                alert('Please select a stage');
+                return;
+            }
+            
+            try {
+                // In real implementation, load from JSON file
+                const response = await fetch(`ui_schema_${stage}.json`);
+                const schema = await response.json();
+                currentSchema = schema;
+                
+                // Display JSON
+                document.getElementById('json-display').textContent = JSON.stringify(schema, null, 2);
+                document.getElementById('schema-display').style.display = 'block';
+                
+                // Display tree
+                renderFieldTree(schema);
+                document.getElementById('field-tree').style.display = 'block';
+            } catch (error) {
+                // For demo, use hardcoded schema
+                if (schemas[stage]) {
+                    currentSchema = schemas[stage];
+                    document.getElementById('json-display').textContent = JSON.stringify(schemas[stage], null, 2);
+                    document.getElementById('schema-display').style.display = 'block';
+                    renderFieldTree(schemas[stage]);
+                    document.getElementById('field-tree').style.display = 'block';
+                } else {
+                    alert('Schema not found. Make sure the JSON files are in the same directory.');
+                }
+            }
+        }
+        
+        function renderFieldTree(field, container = null, isRoot = true) {
+            if (!container) {
+                container = document.getElementById('tree-display');
+                container.innerHTML = '';
+            }
+            
+            const node = document.createElement('div');
+            node.className = isRoot ? 'field-node root' : 'field-node';
+            
+            // Field name and type
+            const header = document.createElement('div');
+            header.innerHTML = `
+                <span class="field-name">${field.name}</span>
+                <span class="field-type">(${field.type}${field.list_item_type ? ' of ' + field.list_item_type : ''})</span>
+                <span class="${field.required ? 'field-required' : 'field-optional'}">${field.required ? ' ✓ Required' : ' ☐ Optional'}</span>
+            `;
+            node.appendChild(header);
+            
+            // Description
+            if (field.description) {
+                const desc = document.createElement('div');
+                desc.className = 'field-description';
+                desc.textContent = field.description;
+                node.appendChild(desc);
+            }
+            
+            // Allowed values for literal types
+            if (field.allowed_values) {
+                const values = document.createElement('div');
+                values.className = 'allowed-values';
+                values.textContent = 'Allowed values: ' + field.allowed_values.join(', ');
+                node.appendChild(values);
+            }
+            
+            container.appendChild(node);
+            
+            // Render nested fields
+            if (field.nested_fields) {
+                const nestedContainer = document.createElement('div');
+                nestedContainer.style.marginLeft = '20px';
+                node.appendChild(nestedContainer);
+                
+                field.nested_fields.forEach(nestedField => {
+                    renderFieldTree(nestedField, nestedContainer, false);
+                });
+            }
+        }
+        
+        function copyToClipboard() {
+            if (!currentSchema) {
+                alert('Please load a schema first');
+                return;
+            }
+            
+            const jsonStr = JSON.stringify(currentSchema, null, 2);
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                alert('Schema JSON copied to clipboard! You can now paste it into the UI Schema Builder.');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard. Please manually copy from the JSON display.');
+            });
+        }
+    </script>
+</body>
+</html>

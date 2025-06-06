@@ -1,0 +1,955 @@
+{
+  "stages": {
+    "structure_v1": {
+      "name": "structure_extraction",
+      "type": "object",
+      "description": "Complete shelf structure analysis",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "shelf_structure",
+          "type": "object",
+          "description": "Physical structure of the shelf fixture",
+          "required": true,
+          "sort_order": 0,
+          "nested_fields": [
+            {
+              "name": "total_shelves",
+              "type": "integer",
+              "description": "Total number of horizontal shelves",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "fixture_id",
+              "type": "string",
+              "description": "Unique identifier for this shelf fixture (e.g., \"store123_aisle5_bay2\")",
+              "required": true,
+              "sort_order": 1
+            },
+            {
+              "name": "shelf_numbers",
+              "type": "list",
+              "description": "List of shelf numbers from bottom to top (must have length = total_shelves). Example: [1, 2, 3] for 3 shelves",
+              "required": true,
+              "sort_order": 2,
+              "list_item_type": "integer"
+            },
+            {
+              "name": "shelf_type",
+              "type": "literal",
+              "description": "Type of fixture",
+              "required": true,
+              "sort_order": 3,
+              "allowed_values": [
+                "wall_shelf",
+                "gondola",
+                "end_cap",
+                "cooler",
+                "freezer",
+                "bin",
+                "pegboard",
+                "other"
+              ]
+            },
+            {
+              "name": "width_meters",
+              "type": "float",
+              "description": "Estimated width of fixture in meters",
+              "required": true,
+              "sort_order": 4
+            },
+            {
+              "name": "height_meters",
+              "type": "float",
+              "description": "Estimated height of fixture in meters",
+              "required": true,
+              "sort_order": 5
+            },
+            {
+              "name": "shelves",
+              "type": "list",
+              "description": "Detailed information for each shelf level",
+              "required": true,
+              "sort_order": 6,
+              "nested_fields": [
+                {
+                  "name": "shelf_number",
+                  "type": "integer",
+                  "description": "Shelf identifier (1=bottom, counting up) (Min: 1)",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "has_price_rail",
+                  "type": "boolean",
+                  "description": "Whether shelf has price label strip/rail",
+                  "required": true,
+                  "sort_order": 1
+                },
+                {
+                  "name": "special_features",
+                  "type": "string",
+                  "description": "Unusual characteristics (slanted, wire mesh, divided sections, damaged)",
+                  "required": false,
+                  "sort_order": 2
+                },
+                {
+                  "name": "has_empty_spaces",
+                  "type": "boolean",
+                  "description": "Whether significant gaps exist on this shelf",
+                  "required": true,
+                  "sort_order": 3
+                },
+                {
+                  "name": "empty_space_details",
+                  "type": "object",
+                  "description": "Details about empty spaces",
+                  "required": false,
+                  "sort_order": 4,
+                  "nested_fields": [
+                    {
+                      "name": "sections_with_gaps",
+                      "type": "list",
+                      "description": "Which sections have gaps",
+                      "required": true,
+                      "sort_order": 0,
+                      "list_item_type": "literal",
+                      "allowed_values": [
+                        "left",
+                        "center",
+                        "right"
+                      ]
+                    },
+                    {
+                      "name": "estimated_total_gap_cm",
+                      "type": "float",
+                      "description": "Total empty space in centimeters",
+                      "required": true,
+                      "sort_order": 1
+                    }
+                  ]
+                }
+              ],
+              "list_item_type": "object"
+            },
+            {
+              "name": "non_product_elements",
+              "type": "object",
+              "description": "Items on shelves that are not products",
+              "required": true,
+              "sort_order": 7,
+              "nested_fields": [
+                {
+                  "name": "security_devices",
+                  "type": "list",
+                  "description": "Security measures (grids, magnetic tags, plastic cases, bottle locks)",
+                  "required": false,
+                  "sort_order": 0,
+                  "nested_fields": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "description": "Type of security device",
+                      "required": true,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "location",
+                      "type": "string",
+                      "description": "Where on shelf it's located",
+                      "required": true,
+                      "sort_order": 1
+                    }
+                  ],
+                  "list_item_type": "object"
+                },
+                {
+                  "name": "promotional_materials",
+                  "type": "list",
+                  "description": "Marketing materials (shelf wobblers, hanging signs, price cards, banners)",
+                  "required": false,
+                  "sort_order": 1,
+                  "nested_fields": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "description": "Type of promotional material",
+                      "required": true,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "location",
+                      "type": "string",
+                      "description": "Where positioned",
+                      "required": true,
+                      "sort_order": 1
+                    },
+                    {
+                      "name": "text_visible",
+                      "type": "string",
+                      "description": "Any readable promotional text",
+                      "required": false,
+                      "sort_order": 2
+                    }
+                  ],
+                  "list_item_type": "object"
+                },
+                {
+                  "name": "shelf_equipment",
+                  "type": "list",
+                  "description": "Shelf organization tools (dividers, pushers, price rails, shelf strips)",
+                  "required": false,
+                  "sort_order": 2,
+                  "nested_fields": [
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "description": "Type of equipment",
+                      "required": true,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "location",
+                      "type": "string",
+                      "description": "Where installed",
+                      "required": true,
+                      "sort_order": 1
+                    }
+                  ],
+                  "list_item_type": "object"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "product_v1": {
+      "name": "product_extraction",
+      "type": "object",
+      "description": "Complete product extraction for ALL shelves in the fixture",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "fixture_id",
+          "type": "string",
+          "description": "Unique identifier for this extraction (e.g., \"store123_aisle5_bay2\")",
+          "required": true,
+          "sort_order": 0
+        },
+        {
+          "name": "total_shelves",
+          "type": "integer",
+          "description": "Total number of shelves being extracted (MUST equal {TOTAL_SHELVES} from Stage 1) (Min: 1, Max: 10)",
+          "required": true,
+          "sort_order": 1
+        },
+        {
+          "name": "shelves",
+          "type": "list",
+          "description": "Product data for each shelf (MUST have exactly total_shelves entries). VALIDATION: Array length MUST equal total_shelves value",
+          "required": true,
+          "sort_order": 2,
+          "nested_fields": [
+            {
+              "name": "shelf_number",
+              "type": "integer",
+              "description": "Which shelf this is (MUST match position in array + 1) (Min: 1)",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "extraction_status",
+              "type": "literal",
+              "description": "Status of this shelf extraction",
+              "required": true,
+              "sort_order": 1,
+              "allowed_values": [
+                "has_products",
+                "empty_shelf",
+                "not_visible",
+                "blocked"
+              ]
+            },
+            {
+              "name": "products",
+              "type": "list",
+              "description": "All products found on this specific shelf",
+              "required": true,
+              "sort_order": 2,
+              "nested_fields": [
+                {
+                  "name": "position",
+                  "type": "integer",
+                  "description": "Sequential position from left to right on THIS shelf (Min: 1)",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "section",
+                  "type": "literal",
+                  "description": "Which third of the shelf this product is in",
+                  "required": true,
+                  "sort_order": 1,
+                  "allowed_values": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                {
+                  "name": "brand",
+                  "type": "string",
+                  "description": "Product brand name",
+                  "required": true,
+                  "sort_order": 2
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "description": "Product name or variant",
+                  "required": true,
+                  "sort_order": 3
+                },
+                {
+                  "name": "product_type",
+                  "type": "literal",
+                  "description": "Package type",
+                  "required": true,
+                  "sort_order": 4,
+                  "allowed_values": [
+                    "can",
+                    "bottle",
+                    "box",
+                    "pouch",
+                    "jar",
+                    "other"
+                  ]
+                },
+                {
+                  "name": "facings",
+                  "type": "integer",
+                  "description": "Number of units visible from front (Min: 1, Max: 20)",
+                  "required": true,
+                  "sort_order": 5
+                },
+                {
+                  "name": "stack",
+                  "type": "integer",
+                  "description": "Number of units stacked vertically (Min: 1, Max: 5)",
+                  "required": true,
+                  "sort_order": 6
+                }
+              ],
+              "list_item_type": "object"
+            },
+            {
+              "name": "gaps",
+              "type": "list",
+              "description": "Empty spaces between products on this shelf",
+              "required": false,
+              "sort_order": 3,
+              "nested_fields": [
+                {
+                  "name": "after_position",
+                  "type": "integer",
+                  "description": "Gap appears after this position number",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "gap_size",
+                  "type": "literal",
+                  "description": "Approximate size of the gap",
+                  "required": true,
+                  "sort_order": 1,
+                  "allowed_values": [
+                    "small",
+                    "medium",
+                    "large"
+                  ]
+                },
+                {
+                  "name": "estimated_product_spaces",
+                  "type": "integer",
+                  "description": "How many products could fit in this gap (Min: 1, Max: 10)",
+                  "required": true,
+                  "sort_order": 2
+                }
+              ],
+              "list_item_type": "object"
+            },
+            {
+              "name": "extraction_notes",
+              "type": "string",
+              "description": "Any issues or observations about this shelf (e.g., \"products fallen over\", \"heavy shadows on right side\")",
+              "required": false,
+              "sort_order": 4
+            }
+          ],
+          "list_item_type": "object"
+        }
+      ]
+    },
+    "detail_v1": {
+      "name": "detail_enhancement",
+      "type": "object",
+      "description": "Enhanced details for ALL products from Stage 2, maintaining exact structure",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "fixture_id",
+          "type": "string",
+          "description": "Must match Stage 2's fixture_id exactly",
+          "required": true,
+          "sort_order": 0
+        },
+        {
+          "name": "total_shelves",
+          "type": "integer",
+          "description": "Must match Stage 2's total_shelves exactly",
+          "required": true,
+          "sort_order": 1
+        },
+        {
+          "name": "shelves_enhanced",
+          "type": "list",
+          "description": "Enhanced details for each shelf (MUST have same length as Stage 2's shelves array)",
+          "required": true,
+          "sort_order": 2,
+          "nested_fields": [
+            {
+              "name": "shelf_number",
+              "type": "integer",
+              "description": "Must match Stage 2's shelf_number for this array position",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "products_enhanced",
+              "type": "list",
+              "description": "Required only when Stage 2's extraction_status=\"has_products\". When shelf was empty, this array should be omitted or empty",
+              "required": false,
+              "sort_order": 1,
+              "nested_fields": [
+                {
+                  "name": "product_reference",
+                  "type": "object",
+                  "description": "Identifies which Stage 2 product this enhances",
+                  "required": true,
+                  "sort_order": 0,
+                  "nested_fields": [
+                    {
+                      "name": "shelf_index",
+                      "type": "integer",
+                      "description": "Index in Stage 2's shelves array (0-based)",
+                      "required": true,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "product_index",
+                      "type": "integer",
+                      "description": "Index in that shelf's products array (0-based)",
+                      "required": true,
+                      "sort_order": 1
+                    },
+                    {
+                      "name": "position",
+                      "type": "integer",
+                      "description": "Position from Stage 2 (for validation)",
+                      "required": true,
+                      "sort_order": 2
+                    },
+                    {
+                      "name": "brand",
+                      "type": "string",
+                      "description": "Brand from Stage 2 (for validation)",
+                      "required": true,
+                      "sort_order": 3
+                    },
+                    {
+                      "name": "name",
+                      "type": "string",
+                      "description": "Name from Stage 2 (for validation)",
+                      "required": true,
+                      "sort_order": 4
+                    }
+                  ]
+                },
+                {
+                  "name": "pricing",
+                  "type": "object",
+                  "description": "Price information",
+                  "required": true,
+                  "sort_order": 1,
+                  "nested_fields": [
+                    {
+                      "name": "regular_price",
+                      "type": "float",
+                      "description": "Regular price (Min: 0, Max: 1000)",
+                      "required": false,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "promotional_price",
+                      "type": "float",
+                      "description": "Promotional price if different (Min: 0, Max: 1000)",
+                      "required": false,
+                      "sort_order": 1
+                    },
+                    {
+                      "name": "promotion_text",
+                      "type": "string",
+                      "description": "Promotion text (e.g., \"3 for \u00a35\")",
+                      "required": false,
+                      "sort_order": 2
+                    },
+                    {
+                      "name": "currency",
+                      "type": "literal",
+                      "description": "Currency",
+                      "required": true,
+                      "sort_order": 3,
+                      "allowed_values": [
+                        "GBP",
+                        "EUR",
+                        "USD",
+                        "other"
+                      ]
+                    },
+                    {
+                      "name": "price_visible",
+                      "type": "boolean",
+                      "description": "Whether price is visible",
+                      "required": true,
+                      "sort_order": 4
+                    },
+                    {
+                      "name": "price_not_visible_reason",
+                      "type": "string",
+                      "description": "Why price couldn't be extracted (only fill if price_visible is false)",
+                      "required": false,
+                      "sort_order": 5
+                    },
+                    {
+                      "name": "price_tag_location",
+                      "type": "literal",
+                      "description": "Where the price tag is positioned relative to this product",
+                      "required": true,
+                      "sort_order": 6,
+                      "allowed_values": [
+                        "directly_below",
+                        "left_of_product",
+                        "right_of_product",
+                        "distant",
+                        "not_visible"
+                      ]
+                    },
+                    {
+                      "name": "price_attribution_confidence",
+                      "type": "literal",
+                      "description": "How confident that this price belongs to this specific product",
+                      "required": true,
+                      "sort_order": 7,
+                      "allowed_values": [
+                        "certain",
+                        "likely",
+                        "uncertain"
+                      ]
+                    },
+                    {
+                      "name": "possible_price_owner",
+                      "type": "string",
+                      "description": "If uncertain, which nearby product might this price actually belong to",
+                      "required": false,
+                      "sort_order": 8
+                    }
+                  ]
+                },
+                {
+                  "name": "package_info",
+                  "type": "object",
+                  "description": "Package details",
+                  "required": true,
+                  "sort_order": 2,
+                  "nested_fields": [
+                    {
+                      "name": "size",
+                      "type": "string",
+                      "description": "Package size (e.g., \"330ml\")",
+                      "required": false,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "unit_count",
+                      "type": "integer",
+                      "description": "Number of units in multipack",
+                      "required": false,
+                      "sort_order": 1
+                    },
+                    {
+                      "name": "unit_size",
+                      "type": "string",
+                      "description": "Size of individual unit",
+                      "required": false,
+                      "sort_order": 2
+                    },
+                    {
+                      "name": "total_volume",
+                      "type": "string",
+                      "description": "Total volume (e.g., \"6 \u00d7 330ml = 1,980ml\")",
+                      "required": false,
+                      "sort_order": 3
+                    },
+                    {
+                      "name": "size_visible",
+                      "type": "boolean",
+                      "description": "Whether size information is visible",
+                      "required": true,
+                      "sort_order": 4
+                    },
+                    {
+                      "name": "size_not_visible_reason",
+                      "type": "string",
+                      "description": "Why size couldn't be read (only fill if size_visible is false)",
+                      "required": false,
+                      "sort_order": 5
+                    },
+                    {
+                      "name": "size_read_location",
+                      "type": "literal",
+                      "description": "Where on the package the size information was read from",
+                      "required": true,
+                      "sort_order": 6,
+                      "allowed_values": [
+                        "front_label",
+                        "side_visible",
+                        "cap_lid",
+                        "not_visible"
+                      ]
+                    },
+                    {
+                      "name": "size_read_confidence",
+                      "type": "literal",
+                      "description": "Confidence in the size reading accuracy",
+                      "required": true,
+                      "sort_order": 7,
+                      "allowed_values": [
+                        "certain",
+                        "likely",
+                        "uncertain"
+                      ]
+                    },
+                    {
+                      "name": "multiple_units_visible",
+                      "type": "boolean",
+                      "description": "Can you see multiple individual units (helps verify multipack claims)",
+                      "required": true,
+                      "sort_order": 8
+                    }
+                  ]
+                },
+                {
+                  "name": "physical",
+                  "type": "object",
+                  "description": "Physical characteristics",
+                  "required": true,
+                  "sort_order": 3,
+                  "nested_fields": [
+                    {
+                      "name": "width_relative",
+                      "type": "literal",
+                      "description": "Width relative to neighbors",
+                      "required": true,
+                      "sort_order": 0,
+                      "allowed_values": [
+                        "narrow",
+                        "normal",
+                        "wide"
+                      ]
+                    },
+                    {
+                      "name": "height_relative",
+                      "type": "literal",
+                      "description": "Height relative to shelf",
+                      "required": true,
+                      "sort_order": 1,
+                      "allowed_values": [
+                        "short",
+                        "medium",
+                        "tall"
+                      ]
+                    },
+                    {
+                      "name": "width_cm",
+                      "type": "float",
+                      "description": "Estimated width in cm (Min: 1, Max: 100)",
+                      "required": true,
+                      "sort_order": 2
+                    },
+                    {
+                      "name": "height_cm",
+                      "type": "float",
+                      "description": "Estimated height in cm (Min: 1, Max: 50)",
+                      "required": true,
+                      "sort_order": 3
+                    },
+                    {
+                      "name": "dimension_confidence",
+                      "type": "literal",
+                      "description": "Confidence in dimension estimates",
+                      "required": true,
+                      "sort_order": 4,
+                      "allowed_values": [
+                        "measured",
+                        "estimated",
+                        "rough_guess"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "visual",
+                  "type": "object",
+                  "description": "Visual appearance",
+                  "required": true,
+                  "sort_order": 4,
+                  "nested_fields": [
+                    {
+                      "name": "primary_color",
+                      "type": "string",
+                      "description": "Most dominant color",
+                      "required": true,
+                      "sort_order": 0
+                    },
+                    {
+                      "name": "secondary_color",
+                      "type": "string",
+                      "description": "Second most prominent color",
+                      "required": true,
+                      "sort_order": 1
+                    },
+                    {
+                      "name": "finish",
+                      "type": "literal",
+                      "description": "Package finish",
+                      "required": true,
+                      "sort_order": 2,
+                      "allowed_values": [
+                        "metallic",
+                        "matte",
+                        "glossy",
+                        "transparent",
+                        "mixed"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "quality",
+                  "type": "object",
+                  "description": "Extraction quality",
+                  "required": true,
+                  "sort_order": 5,
+                  "nested_fields": [
+                    {
+                      "name": "visibility",
+                      "type": "literal",
+                      "description": "Product visibility",
+                      "required": true,
+                      "sort_order": 0,
+                      "allowed_values": [
+                        "clearly_visible",
+                        "partially_obscured",
+                        "mostly_hidden"
+                      ]
+                    },
+                    {
+                      "name": "confidence",
+                      "type": "literal",
+                      "description": "Extraction confidence",
+                      "required": true,
+                      "sort_order": 1,
+                      "allowed_values": [
+                        "high",
+                        "medium",
+                        "low"
+                      ]
+                    },
+                    {
+                      "name": "issues",
+                      "type": "list",
+                      "description": "Any extraction issues",
+                      "required": false,
+                      "sort_order": 2,
+                      "list_item_type": "string"
+                    }
+                  ]
+                }
+              ],
+              "list_item_type": "object"
+            }
+          ],
+          "list_item_type": "object"
+        }
+      ]
+    },
+    "visual_v1": {
+      "name": "visual_comparison",
+      "type": "object",
+      "description": "Comparison between original photo and generated planogram",
+      "required": true,
+      "sort_order": 0,
+      "nested_fields": [
+        {
+          "name": "overview",
+          "type": "object",
+          "description": "Overall comparison metrics",
+          "required": true,
+          "sort_order": 0,
+          "nested_fields": [
+            {
+              "name": "total_products_photo",
+              "type": "integer",
+              "description": "Total products counted in original photo",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "total_products_planogram",
+              "type": "integer",
+              "description": "Total products shown in planogram",
+              "required": true,
+              "sort_order": 1
+            },
+            {
+              "name": "overall_alignment",
+              "type": "literal",
+              "description": "Overall quality assessment",
+              "required": true,
+              "sort_order": 2,
+              "allowed_values": [
+                "good",
+                "moderate",
+                "poor"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "shelf_mismatches",
+          "type": "list",
+          "description": "Specific products with placement or quantity issues",
+          "required": false,
+          "sort_order": 1,
+          "nested_fields": [
+            {
+              "name": "product",
+              "type": "string",
+              "description": "Product name",
+              "required": true,
+              "sort_order": 0
+            },
+            {
+              "name": "issue_type",
+              "type": "literal",
+              "description": "Type of mismatch",
+              "required": true,
+              "sort_order": 1,
+              "allowed_values": [
+                "wrong_shelf",
+                "wrong_quantity",
+                "wrong_position",
+                "missing",
+                "extra"
+              ]
+            },
+            {
+              "name": "photo_location",
+              "type": "object",
+              "description": "Where product appears in photo",
+              "required": true,
+              "sort_order": 2,
+              "nested_fields": [
+                {
+                  "name": "shelf",
+                  "type": "integer",
+                  "description": "Shelf number",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "position",
+                  "type": "integer",
+                  "description": "Position number",
+                  "required": true,
+                  "sort_order": 1
+                }
+              ]
+            },
+            {
+              "name": "planogram_location",
+              "type": "object",
+              "description": "Where product appears in planogram",
+              "required": true,
+              "sort_order": 3,
+              "nested_fields": [
+                {
+                  "name": "shelf",
+                  "type": "integer",
+                  "description": "Shelf number",
+                  "required": true,
+                  "sort_order": 0
+                },
+                {
+                  "name": "position",
+                  "type": "integer",
+                  "description": "Position number",
+                  "required": true,
+                  "sort_order": 1
+                }
+              ]
+            },
+            {
+              "name": "confidence",
+              "type": "literal",
+              "description": "Confidence in this mismatch",
+              "required": true,
+              "sort_order": 4,
+              "allowed_values": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            {
+              "name": "details",
+              "type": "string",
+              "description": "Additional context about the mismatch",
+              "required": false,
+              "sort_order": 5
+            }
+          ],
+          "list_item_type": "object"
+        },
+        {
+          "name": "critical_issues",
+          "type": "list",
+          "description": "Major structural problems",
+          "required": false,
+          "sort_order": 2,
+          "list_item_type": "string"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "description": "UI Schema Builder field definitions for all extraction stages",
+    "source": "EXTRACTION_PROMPTS_FINAL.md",
+    "version": "1.0"
+  }
+}

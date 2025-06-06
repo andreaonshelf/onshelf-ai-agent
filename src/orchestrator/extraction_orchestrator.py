@@ -498,6 +498,7 @@ class ExtractionOrchestrator:
                                                agent_id: str) -> List[ProductExtraction]:
         """Execute extraction shelf by shelf for better accuracy"""
         from ..extraction.prompts import PromptTemplates
+        from ..extraction.dynamic_model_builder import DynamicModelBuilder
         
         all_products = []
         prompt_templates = PromptTemplates()
@@ -601,29 +602,64 @@ class ExtractionOrchestrator:
                     if models:
                         # Select model based on agent number
                         model_id = models[(agent_number - 1) % len(models)]
+                        # Determine output schema - use dynamic model if configured
+                        output_schema = "List[ProductExtraction]"  # Default
+                        
+                        if hasattr(self, 'stage_fields') and 'products' in self.stage_fields:
+                            fields = self.stage_fields['products']
+                            if fields:
+                                logger.info(
+                                    f"Building dynamic model for products stage with {len(fields)} fields",
+                                    component="extraction_orchestrator",
+                                    field_count=len(fields),
+                                    shelf_num=shelf_num
+                                )
+                                # Build dynamic model from configured fields
+                                from typing import List
+                                ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                                output_schema = List[ProductModel]
+                        
                         shelf_result, api_cost = await self.extraction_engine.execute_with_model_id(
                             model_id=model_id,
                             prompt=shelf_prompt,
                             images={"main": image},
-                            output_schema="List[ProductExtraction]",
+                            output_schema=output_schema,
                             agent_id=f"{agent_id}_shelf_{shelf_num}"
                         )
                     else:
-                        # Fallback to default model
+                        # Fallback to default model but still check for dynamic schema
+                        output_schema = "List[ProductExtraction]"  # Default
+                        
+                        if hasattr(self, 'stage_fields') and 'products' in self.stage_fields:
+                            fields = self.stage_fields['products']
+                            if fields:
+                                from typing import List
+                                ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                                output_schema = List[ProductModel]
+                        
                         shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
                             primary_model=model,
                             prompt=shelf_prompt,
                             images={"main": image},
-                            output_schema="List[ProductExtraction]",
+                            output_schema=output_schema,
                             agent_id=f"{agent_id}_shelf_{shelf_num}"
                         )
                 else:
-                    # Use default fallback
+                    # Use default fallback but still check for dynamic schema
+                    output_schema = "List[ProductExtraction]"  # Default
+                    
+                    if hasattr(self, 'stage_fields') and 'products' in self.stage_fields:
+                        fields = self.stage_fields['products']
+                        if fields:
+                            from typing import List
+                            ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                            output_schema = List[ProductModel]
+                    
                     shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
                         primary_model=model,
                         prompt=shelf_prompt,
                         images={"main": image},
-                        output_schema="List[ProductExtraction]",
+                        output_schema=output_schema,
                         agent_id=f"{agent_id}_shelf_{shelf_num}"
                     )
                 
@@ -884,6 +920,7 @@ class ExtractionOrchestrator:
                                      agent_id: str) -> ShelfStructure:
         """Execute structure extraction stage"""
         from ..extraction.prompts import PromptTemplates
+        from ..extraction.dynamic_model_builder import DynamicModelBuilder
         
         analytics = get_extraction_analytics()
         
@@ -925,12 +962,26 @@ class ExtractionOrchestrator:
             retry_context=retry_context if attempt_number > 1 else None
         ) as iteration_id:
             
+            # Determine output schema - use dynamic model if configured
+            output_schema = "ShelfStructure"  # Default
+            
+            if hasattr(self, 'stage_fields') and 'structure' in self.stage_fields:
+                fields = self.stage_fields['structure']
+                if fields:
+                    logger.info(
+                        f"Building dynamic model for structure stage with {len(fields)} fields",
+                        component="extraction_orchestrator",
+                        field_count=len(fields)
+                    )
+                    # Build dynamic model from configured fields
+                    output_schema = DynamicModelBuilder.build_model_from_config(fields, 'StructureV1')
+            
             # Execute with the model
             result, cost = await self.extraction_engine.execute_with_model_id(
                 model_id=model_id,
                 prompt=prompt,
                 images=images,
-                output_schema="ShelfStructure",
+                output_schema=output_schema,
                 agent_id=agent_id
             )
             
@@ -997,6 +1048,7 @@ class ExtractionOrchestrator:
                                    agent_id: str) -> ExtractionResult:
         """Execute details extraction stage with locked products"""
         from ..extraction.prompts import PromptTemplates
+        from ..extraction.dynamic_model_builder import DynamicModelBuilder
         
         # Get custom prompt for details
         if hasattr(self, 'stage_prompts') and 'details' in self.stage_prompts:
@@ -1057,12 +1109,28 @@ class ExtractionOrchestrator:
         for i, product in enumerate(products_list, 1):
             prompt += f"{i}. Shelf {product.position.shelf_number}, Position {product.position.position_on_shelf}: {product.brand} {product.name}\n"
         
+        # Determine output schema - use dynamic model if configured
+        output_schema = "List[ProductExtraction]"  # Default
+        
+        if hasattr(self, 'stage_fields') and 'details' in self.stage_fields:
+            fields = self.stage_fields['details']
+            if fields:
+                logger.info(
+                    f"Building dynamic model for details stage with {len(fields)} fields",
+                    component="extraction_orchestrator",
+                    field_count=len(fields)
+                )
+                # Build dynamic model from configured fields
+                from typing import List
+                DetailModel = DynamicModelBuilder.build_model_from_config(fields, 'DetailV1')
+                output_schema = List[DetailModel]
+        
         # Execute details extraction
         result, cost = await self.extraction_engine.execute_with_model_id(
             model_id=model_id,
             prompt=prompt,
             images=images,
-            output_schema="List[ProductExtraction]",
+            output_schema=output_schema,
             agent_id=agent_id
         )
         

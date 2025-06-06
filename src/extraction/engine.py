@@ -455,7 +455,7 @@ class ModularExtractionEngine:
         
         return model_mapping.get(model_id, ("openai", "gpt-4o-2024-11-20"))
     
-    async def execute_with_model_id(self, model_id: str, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+    async def execute_with_model_id(self, model_id: str, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute with specific frontend model ID"""
         provider, api_model = self._get_api_model_name(model_id)
         
@@ -477,7 +477,7 @@ class ModularExtractionEngine:
             # Fallback to GPT-4o
             return await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
     
-    async def _execute_with_fallback(self, primary_model: AIModelType, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_fallback(self, primary_model: AIModelType, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute step with automatic model fallback for maximum reliability"""
         
         # Define fallback order: try primary model first, then fallbacks
@@ -636,15 +636,15 @@ class ModularExtractionEngine:
         
         return output.getvalue()
     
-    async def _execute_with_claude_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_claude_model(self, prompt: str, images: Dict[str, bytes], output_schema: Any, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute with specific Claude model"""
         return await self._execute_with_claude_internal(prompt, images, output_schema, api_model, agent_id)
     
-    async def _execute_with_gpt4o_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_gpt4o_model(self, prompt: str, images: Dict[str, bytes], output_schema: Any, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute with specific GPT-4 model"""
         return await self._execute_with_gpt4o_internal(prompt, images, output_schema, api_model, agent_id)
     
-    async def _execute_with_gemini_model(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_gemini_model(self, prompt: str, images: Dict[str, bytes], output_schema: Any, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute with specific Gemini model"""
         # Recreate Gemini model with specific model name
         generation_config = genai.types.GenerationConfig(
@@ -657,11 +657,11 @@ class ModularExtractionEngine:
         return await self._execute_with_gemini(prompt, images, output_schema, agent_id)
     
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
-    async def _execute_with_claude(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_claude(self, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute with default Claude model"""
         return await self._execute_with_claude_internal(prompt, images, output_schema, "claude-3-5-sonnet-20241022", agent_id)
     
-    async def _execute_with_claude_internal(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_claude_internal(self, prompt: str, images: Dict[str, bytes], output_schema: Any, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute extraction step with Claude"""
         
         # Use primary image or first available
@@ -705,8 +705,22 @@ class ModularExtractionEngine:
             
             messages = [{"role": "user", "content": content}]
             
-            # Execute based on schema
-            if output_schema == "ShelfStructure":
+            # Check if output_schema is a Pydantic model class (user-defined)
+            if isinstance(output_schema, type) and issubclass(output_schema, BaseModel):
+                # Dynamic model from user's field definitions
+                logger.info(
+                    f"Using dynamic Pydantic model: {output_schema.__name__}",
+                    component="extraction_engine",
+                    model_id=api_model
+                )
+                response = self.anthropic_client.messages.create(
+                    model=api_model,
+                    max_tokens=6000,
+                    temperature=self.temperature,
+                    messages=messages,
+                    response_model=output_schema
+                )
+            elif output_schema == "ShelfStructure":
                 response = self.anthropic_client.messages.create(
                     model=api_model,
                     max_tokens=4000,
@@ -731,13 +745,26 @@ class ModularExtractionEngine:
                     response_model=CompleteShelfExtraction
                 )
             else:
-                # Generic text response
-                response = self.anthropic_client.messages.create(
+                # Generic text response - create a raw Anthropic client
+                # Instructor wrapper requires response_model, so we bypass it
+                raw_client = anthropic.Anthropic(api_key=self.config.anthropic_api_key)
+                raw_response = raw_client.messages.create(
                     model=api_model,
                     max_tokens=4000,
                     temperature=self.temperature,
                     messages=messages
                 )
+                response_text = raw_response.content[0].text
+                
+                # Try to parse as JSON for Dict[str, Any] output schema
+                if output_schema == "Dict[str, Any]":
+                    try:
+                        response = json.loads(response_text)
+                    except json.JSONDecodeError:
+                        # If not valid JSON, return as dict with 'result' key
+                        response = {'result': response_text}
+                else:
+                    response = response_text
             
             # Estimate API cost (Claude 3 Sonnet pricing)
             duration = time.time() - start_time
@@ -776,11 +803,11 @@ class ModularExtractionEngine:
             raise
     
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
-    async def _execute_with_gpt4o(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_gpt4o(self, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute with default GPT-4o model"""
         return await self._execute_with_gpt4o_internal(prompt, images, output_schema, "gpt-4o-2024-11-20", agent_id)
     
-    async def _execute_with_gpt4o_internal(self, prompt: str, images: Dict[str, bytes], output_schema: str, api_model: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_gpt4o_internal(self, prompt: str, images: Dict[str, bytes], output_schema: Any, api_model: str, agent_id: str = None) -> tuple[Any, float]:
         """Execute extraction step with GPT-4o"""
         
         # Use primary image or first available
@@ -792,11 +819,13 @@ class ModularExtractionEngine:
             image_type = list(images.keys())[0]
         
         logger.debug(
-            f"Executing GPT-4o step with {image_type} image",
+            f"Executing GPT-4o step with {image_type} image, output_schema={output_schema}",
             component="extraction_engine",
             agent_id=agent_id,
-            model="gpt-4o",
-            image_type=image_type
+            model=api_model,
+            image_type=image_type,
+            output_schema=output_schema,
+            output_schema_type=type(output_schema).__name__
         )
         
         try:
@@ -819,7 +848,43 @@ class ModularExtractionEngine:
             
             messages = [{"role": "user", "content": content}]
             
-            if output_schema == "List[ProductExtraction]":
+            # Add detailed logging for debugging
+            logger.info(
+                f"Processing GPT-4o request with output_schema debug info",
+                component="extraction_engine",
+                agent_id=agent_id,
+                output_schema_value=str(output_schema),
+                output_schema_type=type(output_schema).__name__,
+                output_schema_repr=repr(output_schema),
+                openai_client_type=type(self.openai_client).__name__
+            )
+            
+            # Check if output_schema is a Pydantic model class (user-defined)
+            if isinstance(output_schema, type) and issubclass(output_schema, BaseModel):
+                # Dynamic model from user's field definitions
+                logger.info(
+                    f"Using dynamic Pydantic model: {output_schema.__name__}",
+                    component="extraction_engine",
+                    model_id=api_model
+                )
+                response = self.openai_client.chat.completions.create(
+                    model=api_model,
+                    messages=messages,
+                    response_model=output_schema,
+                    max_tokens=6000,
+                    temperature=self.temperature
+                )
+            elif output_schema == "ShelfStructure":
+                logger.info("Using ShelfStructure schema", component="extraction_engine", agent_id=agent_id)
+                response = self.openai_client.chat.completions.create(
+                    model=api_model,
+                    messages=messages,
+                    response_model=ShelfStructure,
+                    max_tokens=4000,
+                    temperature=self.temperature
+                )
+            elif output_schema == "List[ProductExtraction]":
+                logger.info("Using List[ProductExtraction] schema", component="extraction_engine", agent_id=agent_id)
                 response = self.openai_client.chat.completions.create(
                     model=api_model,
                     messages=messages,
@@ -828,6 +893,7 @@ class ModularExtractionEngine:
                     temperature=self.temperature
                 )
             elif output_schema == "CompleteShelfExtraction":
+                logger.info("Using CompleteShelfExtraction schema", component="extraction_engine", agent_id=agent_id)
                 response = self.openai_client.chat.completions.create(
                     model=api_model,
                     messages=messages,
@@ -836,13 +902,32 @@ class ModularExtractionEngine:
                     temperature=self.temperature
                 )
             else:
-                # Generic response
-                response = self.openai_client.chat.completions.create(
+                # Generic response - create a raw OpenAI client for text responses
+                # Instructor wrapper requires response_model, so we bypass it
+                logger.info(
+                    f"Using raw OpenAI client for output_schema: {output_schema} (type: {type(output_schema).__name__})",
+                    component="extraction_engine",
+                    agent_id=agent_id
+                )
+                
+                raw_client = openai.OpenAI(api_key=self.config.openai_api_key)
+                raw_response = raw_client.chat.completions.create(
                     model=api_model,
                     messages=messages,
                     max_tokens=4000,
                     temperature=self.temperature
                 )
+                response_text = raw_response.choices[0].message.content
+                
+                # Try to parse as JSON for Dict[str, Any] output schema
+                if output_schema == "Dict[str, Any]":
+                    try:
+                        response = json.loads(response_text)
+                    except json.JSONDecodeError:
+                        # If not valid JSON, return as dict with 'result' key
+                        response = {'result': response_text}
+                else:
+                    response = response_text
             
             # Estimate API cost and tokens
             duration = time.time() - start_time
@@ -881,7 +966,7 @@ class ModularExtractionEngine:
             raise
     
     @with_retry(RetryConfig(max_retries=2, base_delay=1.0))
-    async def _execute_with_gemini(self, prompt: str, images: Dict[str, bytes], output_schema: str, agent_id: str = None) -> tuple[Any, float]:
+    async def _execute_with_gemini(self, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute extraction step with Gemini"""
         
         # Use primary image or first available

@@ -198,7 +198,7 @@ class DeterministicOrchestrator:
 class CustomConsensusSystem(BaseExtractionSystem):
     """Lightweight custom system with direct API calls and deterministic consensus"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         super().__init__(config)
         
         self.orchestrator = DeterministicOrchestrator()

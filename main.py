@@ -54,7 +54,15 @@ app.include_router(queue_router)
 
 # Include queue processing API (new unified dashboard)
 from src.api.queue_processing import router as queue_processing_router
-app.include_router(queue_processing_router, prefix="/api/queue")
+app.include_router(queue_processing_router, prefix="/api/queue-process")
+
+# Include processing control API
+from src.api.processing_control import router as processing_control_router
+app.include_router(processing_control_router)
+
+# Include queue reset API
+from src.api.queue_reset import router as queue_reset_router
+app.include_router(queue_reset_router)
 
 # Include analytics API
 from src.api.analytics import router as analytics_router
@@ -68,21 +76,9 @@ app.include_router(analytics_extended_router, prefix="/api/analytics")
 from src.api.prompt_management import router as prompt_router
 app.include_router(prompt_router)
 
-# Include feedback API
-from src.api.feedback import router as feedback_router
-app.include_router(feedback_router)
-
-# Include prompt management API
-from src.api.prompt_management import router as prompt_router
-app.include_router(prompt_router)
-
-# Include feedback API
-from src.api.feedback import router as feedback_router
-app.include_router(feedback_router)
-
-# Include prompt management API
-from src.api.prompt_management import router as prompt_router
-app.include_router(prompt_router)
+# Include prompt library API
+from src.api.prompt_library import router as prompt_library_router
+app.include_router(prompt_library_router, prefix="/api/prompt-library")
 
 # Include feedback API
 from src.api.feedback import router as feedback_router
@@ -108,6 +104,10 @@ app.include_router(diagnostics_router)
 from src.api.field_schema_builder import router as schema_builder_router
 app.include_router(schema_builder_router)
 
+# Include configurations API
+from src.api.configurations import router as configurations_router
+app.include_router(configurations_router)
+
 # WebSocket support
 from src.websocket.manager import websocket_manager
 from fastapi import WebSocket, WebSocketDisconnect
@@ -124,309 +124,309 @@ async def websocket_endpoint(websocket: WebSocket, item_id: int):
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket, str(item_id))
 
-# Initialize mock iteration data on startup
-@app.on_event("startup")
-async def initialize_mock_data():
-    """Initialize mock iteration data for testing the dashboard"""
-    try:
-        from datetime import datetime
-        
-        # Create REAL extraction data structure that matches actual AI agent output
-        # This mirrors exactly what ProductExtraction model returns
-        real_extraction_products = [
-            # Shelf 1 products - exactly as AI agents extract them
-            {
-                "section": {"horizontal": "1", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Coke Zero Sugar 330ml", "price": 1.29,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 1, "position_on_shelf": 1,
-                "any_text": "Zero Sugar 330ml", "color": "black and red", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 3,
-                "extraction_confidence": 0.94, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Sprite Zero 330ml", "price": 1.29,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 2,
-                "any_text": "Sprite Zero 330ml", "color": "green and white", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.89, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "PepsiCo", "name": "Pepsi Max Cherry 330ml", "price": 1.19,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 1, "position_on_shelf": 4,
-                "any_text": "Max Cherry 330ml", "color": "dark blue and red", "pack_size": None, "volume": "330ml",
-                "is_on_promo": True, "facings_total": 3,
-                "extraction_confidence": 0.92, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "PepsiCo", "name": "7UP Free 330ml", "price": 1.19,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 5,
-                "any_text": "7UP Free", "color": "green and white", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.86, "confidence_category": "high",
-                "validation_flags": ["product_name_unclear"], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            # Gap at position 6 - no product detected
-            {
-                "section": {"horizontal": "1", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Red Bull", "name": "Red Bull Energy Drink 250ml", "price": 1.89,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 1, "position_on_shelf": 7,
-                "any_text": "Energy Drink 250ml", "color": "blue and silver", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.96, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "1", "vertical": "Right"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Monster Beverage", "name": "Monster Energy Original 500ml", "price": 2.15,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 1, "position_on_shelf": 8,
-                "any_text": "Monster Energy 500ml", "color": "green and black", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.91, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            
-            # Shelf 2 products
-            {
-                "section": {"horizontal": "2", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Evian", "name": "Natural Mineral Water 500ml", "price": 0.89,
-                "quantity": {"stack": 3, "columns": 2, "total_facings": 6},
-                "shelf_level": 2, "position_on_shelf": 1,
-                "any_text": "Natural Mineral Water 500ml", "color": "clear plastic", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 6,
-                "extraction_confidence": 0.97, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Coca-Cola", "name": "Smartwater 600ml", "price": 1.49,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 2, "position_on_shelf": 2,
-                "any_text": "smartwater 600ml", "color": "clear with white label", "pack_size": None, "volume": "600ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.88, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Innocent", "name": "Orange Juice Smooth 330ml", "price": 2.29,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 2, "position_on_shelf": 3,
-                "any_text": "Orange Juice Smooth 330ml", "color": "orange carton", "pack_size": None, "volume": "330ml",
-                "is_on_promo": True, "facings_total": 3,
-                "extraction_confidence": 0.93, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Innocent", "name": "Apple Juice 330ml", "price": 2.29,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 2, "position_on_shelf": 4,
-                "any_text": "Apple Juice", "color": "green carton", "pack_size": None, "volume": "330ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.85, "confidence_category": "high",
-                "validation_flags": ["price_suspicious"], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "2", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Lipton", "name": "Ice Tea Lemon 500ml", "price": 1.59,
-                "quantity": {"stack": 2, "columns": 3, "total_facings": 6},
-                "shelf_level": 2, "position_on_shelf": 6,
-                "any_text": "Ice Tea Lemon 500ml", "color": "yellow plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 6,
-                "extraction_confidence": 0.94, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            
-            # Shelf 3 products
-            {
-                "section": {"horizontal": "3", "vertical": "Left"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Starbucks", "name": "Frappuccino Vanilla 250ml", "price": 2.49,
-                "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
-                "shelf_level": 3, "position_on_shelf": 1,
-                "any_text": "Frappuccino Vanilla 250ml", "color": "beige bottle", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 3,
-                "extraction_confidence": 0.96, "confidence_category": "very_high",
-                "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Left"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Starbucks", "name": "Frappuccino Mocha 250ml", "price": 2.49,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 3, "position_on_shelf": 2,
-                "any_text": "Frappuccino Mocha", "color": "brown bottle", "pack_size": None, "volume": "250ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.89, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Center"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Powerade", "name": "ION4 Blue 500ml", "price": 1.79,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 3, "position_on_shelf": 3,
-                "any_text": "ION4 Blue 500ml", "color": "blue plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.82, "confidence_category": "high",
-                "validation_flags": ["occlusion_detected"], "extracted_by_model": "claude-3-5-sonnet-20241022"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Center"},
-                "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
-                "brand": "Gatorade", "name": "Orange Sports Drink 500ml", "price": 1.79,
-                "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
-                "shelf_level": 3, "position_on_shelf": 4,
-                "any_text": "Gatorade Orange", "color": "orange plastic bottle", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 4,
-                "extraction_confidence": 0.78, "confidence_category": "medium",
-                "validation_flags": ["product_name_unclear", "position_uncertain"], "extracted_by_model": "gemini-2.0-flash-exp"
-            },
-            {
-                "section": {"horizontal": "3", "vertical": "Right"},
-                "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
-                "brand": "Rockstar", "name": "Energy Drink Original 500ml", "price": 1.99,
-                "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
-                "shelf_level": 3, "position_on_shelf": 5,
-                "any_text": "Rockstar Energy", "color": "black and gold can", "pack_size": None, "volume": "500ml",
-                "is_on_promo": False, "facings_total": 2,
-                "extraction_confidence": 0.87, "confidence_category": "high",
-                "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
-            }
-        ]
-
-        mock_data = {
-            'upload_id': 'demo_12345', 
-            'iterations': [
-                {
-                    "iteration": 1,
-                    "accuracy": 0.87,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": len(real_extraction_products),
-                        "products": real_extraction_products,
-                        "model_used": "claude-3-5-sonnet-20241022",
-                        "confidence": 0.87
-                    },
-                    "planogram_svg": None,  # Will be generated by SVG renderer
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 3
-                },
-                {
-                    "iteration": 2,
-                    "accuracy": 0.92,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": 3,
-                        "products": [
-                            {
-                                "brand": "Coca-Cola",
-                                "name": "Coke Zero 330ml",
-                                "price": 1.29,
-                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.95},
-                                "extraction_confidence": 0.95,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Pepsi",
-                                "name": "Pepsi Max 330ml",
-                                "price": 1.19,
-                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.88},
-                                "extraction_confidence": 0.88,
-                                "confidence_category": "high"
-                            },
-                            {
-                                "brand": "Red Bull",
-                                "name": "Energy Drink 250ml",
-                                "price": 1.89,
-                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.92},
-                                "extraction_confidence": 0.92,
-                                "confidence_category": "high"
-                            }
-                        ],
-                        "model_used": "claude-3-sonnet",
-                        "confidence": 0.92
-                    },
-                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 2 (Improved)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="2" rx="4"/><text x="60" y="130" font-size="12" fill="#1f2937">Coke Zero</text><text x="60" y="150" font-size="10" fill="#6b7280">£1.29 • 3 facings</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="190" y="130" font-size="12" fill="#1f2937">Pepsi Max</text><text x="190" y="150" font-size="10" fill="#6b7280">£1.19 • 2 facings</text><rect x="50" y="200" width="140" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="60" y="230" font-size="12" fill="#1f2937">Red Bull Energy</text><text x="60" y="250" font-size="10" fill="#6b7280">£1.89 • 4 facings</text></svg>',
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 1
-                },
-                {
-                    "iteration": 3,
-                    "accuracy": 0.97,
-                    "timestamp": datetime.now().isoformat(),
-                    "extraction_data": {
-                        "total_products": 4,
-                        "products": [
-                            {
-                                "brand": "Coca-Cola",
-                                "name": "Coke Zero 330ml",
-                                "price": 1.29,
-                                "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.98},
-                                "extraction_confidence": 0.98,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Pepsi",
-                                "name": "Pepsi Max 330ml",
-                                "price": 1.19,
-                                "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.96},
-                                "extraction_confidence": 0.96,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Red Bull",
-                                "name": "Energy Drink 250ml",
-                                "price": 1.89,
-                                "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.97},
-                                "extraction_confidence": 0.97,
-                                "confidence_category": "very_high"
-                            },
-                            {
-                                "brand": "Monster",
-                                "name": "Monster Energy 500ml",
-                                "price": 2.15,
-                                "position": {"shelf_number": 2, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.94},
-                                "extraction_confidence": 0.94,
-                                "confidence_category": "very_high"
-                            }
-                        ],
-                        "model_used": "claude-3-sonnet",
-                        "confidence": 0.96
-                    },
-                    "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 3 (High Accuracy)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="125" font-size="11" font-weight="bold" fill="#1f2937">Coke Zero 330ml</text><text x="60" y="140" font-size="9" fill="#6b7280">Coca-Cola</text><text x="60" y="155" font-size="10" fill="#2563eb">£1.29</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="190" y="125" font-size="11" font-weight="bold" fill="#1f2937">Pepsi Max 330ml</text><text x="190" y="140" font-size="9" fill="#6b7280">Pepsi</text><text x="190" y="155" font-size="10" fill="#2563eb">£1.19</text><circle cx="270" cy="110" r="4" fill="#10b981"/><rect x="50" y="200" width="140" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="225" font-size="11" font-weight="bold" fill="#1f2937">Energy Drink 250ml</text><text x="60" y="240" font-size="9" fill="#6b7280">Red Bull</text><text x="60" y="255" font-size="10" fill="#2563eb">£1.89</text><circle cx="180" cy="210" r="4" fill="#10b981"/><rect x="200" y="200" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="210" y="225" font-size="11" font-weight="bold" fill="#1f2937">Monster Energy</text><text x="210" y="240" font-size="9" fill="#6b7280">Monster</text><text x="210" y="255" font-size="10" fill="#2563eb">£2.15</text><circle cx="310" cy="210" r="4" fill="#10b981"/></svg>',
-                    "structure": {"shelves": 3, "width": 2.5},
-                    "failure_areas": 0
-                }
-            ]
-        }
-        
-        # Store mock data for demo queue item
-        iteration_storage[12345] = mock_data
-        print(f"✅ Initialized mock iteration data with {len(mock_data['iterations'])} iterations")
+# # DISABLED - NO FAKE DATA
+# # @app.on_event("startup")
+# # async def initialize_mock_data():
+# #     """Initialize mock iteration data for testing the dashboard"""
+#     try:
+#         from datetime import datetime
+#         
+#         # Create REAL extraction data structure that matches actual AI agent output
+#         # This mirrors exactly what ProductExtraction model returns
+#         real_extraction_products = [
+#             # Shelf 1 products - exactly as AI agents extract them
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Coca-Cola", "name": "Coke Zero Sugar 330ml", "price": 1.29,
+#                 "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+#                 "shelf_level": 1, "position_on_shelf": 1,
+#                 "any_text": "Zero Sugar 330ml", "color": "black and red", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": False, "facings_total": 3,
+#                 "extraction_confidence": 0.94, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Coca-Cola", "name": "Sprite Zero 330ml", "price": 1.29,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 1, "position_on_shelf": 2,
+#                 "any_text": "Sprite Zero 330ml", "color": "green and white", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.89, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "PepsiCo", "name": "Pepsi Max Cherry 330ml", "price": 1.19,
+#                 "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+#                 "shelf_level": 1, "position_on_shelf": 4,
+#                 "any_text": "Max Cherry 330ml", "color": "dark blue and red", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": True, "facings_total": 3,
+#                 "extraction_confidence": 0.92, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+#             },
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "PepsiCo", "name": "7UP Free 330ml", "price": 1.19,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 1, "position_on_shelf": 5,
+#                 "any_text": "7UP Free", "color": "green and white", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.86, "confidence_category": "high",
+#                 "validation_flags": ["product_name_unclear"], "extracted_by_model": "gpt-4o-2024-11-20"
+#             },
+#             # Gap at position 6 - no product detected
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Right"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Red Bull", "name": "Red Bull Energy Drink 250ml", "price": 1.89,
+#                 "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+#                 "shelf_level": 1, "position_on_shelf": 7,
+#                 "any_text": "Energy Drink 250ml", "color": "blue and silver", "pack_size": None, "volume": "250ml",
+#                 "is_on_promo": False, "facings_total": 4,
+#                 "extraction_confidence": 0.96, "confidence_category": "very_high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "1", "vertical": "Right"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Monster Beverage", "name": "Monster Energy Original 500ml", "price": 2.15,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 1, "position_on_shelf": 8,
+#                 "any_text": "Monster Energy 500ml", "color": "green and black", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.91, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
+#             },
+#             
+#             # Shelf 2 products
+#             {
+#                 "section": {"horizontal": "2", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Evian", "name": "Natural Mineral Water 500ml", "price": 0.89,
+#                 "quantity": {"stack": 3, "columns": 2, "total_facings": 6},
+#                 "shelf_level": 2, "position_on_shelf": 1,
+#                 "any_text": "Natural Mineral Water 500ml", "color": "clear plastic", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 6,
+#                 "extraction_confidence": 0.97, "confidence_category": "very_high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "2", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Coca-Cola", "name": "Smartwater 600ml", "price": 1.49,
+#                 "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+#                 "shelf_level": 2, "position_on_shelf": 2,
+#                 "any_text": "smartwater 600ml", "color": "clear with white label", "pack_size": None, "volume": "600ml",
+#                 "is_on_promo": False, "facings_total": 4,
+#                 "extraction_confidence": 0.88, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+#             },
+#             {
+#                 "section": {"horizontal": "2", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Innocent", "name": "Orange Juice Smooth 330ml", "price": 2.29,
+#                 "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+#                 "shelf_level": 2, "position_on_shelf": 3,
+#                 "any_text": "Orange Juice Smooth 330ml", "color": "orange carton", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": True, "facings_total": 3,
+#                 "extraction_confidence": 0.93, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "2", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Innocent", "name": "Apple Juice 330ml", "price": 2.29,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 2, "position_on_shelf": 4,
+#                 "any_text": "Apple Juice", "color": "green carton", "pack_size": None, "volume": "330ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.85, "confidence_category": "high",
+#                 "validation_flags": ["price_suspicious"], "extracted_by_model": "gpt-4o-2024-11-20"
+#             },
+#             {
+#                 "section": {"horizontal": "2", "vertical": "Right"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Lipton", "name": "Ice Tea Lemon 500ml", "price": 1.59,
+#                 "quantity": {"stack": 2, "columns": 3, "total_facings": 6},
+#                 "shelf_level": 2, "position_on_shelf": 6,
+#                 "any_text": "Ice Tea Lemon 500ml", "color": "yellow plastic bottle", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 6,
+#                 "extraction_confidence": 0.94, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gemini-2.0-flash-exp"
+#             },
+#             
+#             # Shelf 3 products
+#             {
+#                 "section": {"horizontal": "3", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Starbucks", "name": "Frappuccino Vanilla 250ml", "price": 2.49,
+#                 "quantity": {"stack": 1, "columns": 3, "total_facings": 3},
+#                 "shelf_level": 3, "position_on_shelf": 1,
+#                 "any_text": "Frappuccino Vanilla 250ml", "color": "beige bottle", "pack_size": None, "volume": "250ml",
+#                 "is_on_promo": False, "facings_total": 3,
+#                 "extraction_confidence": 0.96, "confidence_category": "very_high",
+#                 "validation_flags": [], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "3", "vertical": "Left"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Starbucks", "name": "Frappuccino Mocha 250ml", "price": 2.49,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 3, "position_on_shelf": 2,
+#                 "any_text": "Frappuccino Mocha", "color": "brown bottle", "pack_size": None, "volume": "250ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.89, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+#             },
+#             {
+#                 "section": {"horizontal": "3", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Powerade", "name": "ION4 Blue 500ml", "price": 1.79,
+#                 "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+#                 "shelf_level": 3, "position_on_shelf": 3,
+#                 "any_text": "ION4 Blue 500ml", "color": "blue plastic bottle", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 4,
+#                 "extraction_confidence": 0.82, "confidence_category": "high",
+#                 "validation_flags": ["occlusion_detected"], "extracted_by_model": "claude-3-5-sonnet-20241022"
+#             },
+#             {
+#                 "section": {"horizontal": "3", "vertical": "Center"},
+#                 "position": {"l_position_on_section": 2, "r_position_on_section": 2, "l_empty": False, "r_empty": False},
+#                 "brand": "Gatorade", "name": "Orange Sports Drink 500ml", "price": 1.79,
+#                 "quantity": {"stack": 2, "columns": 2, "total_facings": 4},
+#                 "shelf_level": 3, "position_on_shelf": 4,
+#                 "any_text": "Gatorade Orange", "color": "orange plastic bottle", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 4,
+#                 "extraction_confidence": 0.78, "confidence_category": "medium",
+#                 "validation_flags": ["product_name_unclear", "position_uncertain"], "extracted_by_model": "gemini-2.0-flash-exp"
+#             },
+#             {
+#                 "section": {"horizontal": "3", "vertical": "Right"},
+#                 "position": {"l_position_on_section": 1, "r_position_on_section": 1, "l_empty": False, "r_empty": False},
+#                 "brand": "Rockstar", "name": "Energy Drink Original 500ml", "price": 1.99,
+#                 "quantity": {"stack": 1, "columns": 2, "total_facings": 2},
+#                 "shelf_level": 3, "position_on_shelf": 5,
+#                 "any_text": "Rockstar Energy", "color": "black and gold can", "pack_size": None, "volume": "500ml",
+#                 "is_on_promo": False, "facings_total": 2,
+#                 "extraction_confidence": 0.87, "confidence_category": "high",
+#                 "validation_flags": [], "extracted_by_model": "gpt-4o-2024-11-20"
+#             }
+#         ]
+# 
+#         mock_data = {
+#             'upload_id': 'demo_12345', 
+#             'iterations': [
+#                 {
+#                     "iteration": 1,
+#                     "accuracy": 0.87,
+#                     "timestamp": datetime.now().isoformat(),
+#                     "extraction_data": {
+#                         "total_products": len(real_extraction_products),
+#                         "products": real_extraction_products,
+#                         "model_used": "claude-3-5-sonnet-20241022",
+#                         "confidence": 0.87
+#                     },
+#                     "planogram_svg": None,  # Will be generated by SVG renderer
+#                     "structure": {"shelves": 3, "width": 2.5},
+#                     "failure_areas": 3
+#                 },
+#                 {
+#                     "iteration": 2,
+#                     "accuracy": 0.92,
+#                     "timestamp": datetime.now().isoformat(),
+#                     "extraction_data": {
+#                         "total_products": 3,
+#                         "products": [
+#                             {
+#                                 "brand": "Coca-Cola",
+#                                 "name": "Coke Zero 330ml",
+#                                 "price": 1.29,
+#                                 "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.95},
+#                                 "extraction_confidence": 0.95,
+#                                 "confidence_category": "very_high"
+#                             },
+#                             {
+#                                 "brand": "Pepsi",
+#                                 "name": "Pepsi Max 330ml",
+#                                 "price": 1.19,
+#                                 "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.88},
+#                                 "extraction_confidence": 0.88,
+#                                 "confidence_category": "high"
+#                             },
+#                             {
+#                                 "brand": "Red Bull",
+#                                 "name": "Energy Drink 250ml",
+#                                 "price": 1.89,
+#                                 "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.92},
+#                                 "extraction_confidence": 0.92,
+#                                 "confidence_category": "high"
+#                             }
+#                         ],
+#                         "model_used": "claude-3-sonnet",
+#                         "confidence": 0.92
+#                     },
+#                     "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 2 (Improved)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="2" rx="4"/><text x="60" y="130" font-size="12" fill="#1f2937">Coke Zero</text><text x="60" y="150" font-size="10" fill="#6b7280">£1.29 • 3 facings</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="190" y="130" font-size="12" fill="#1f2937">Pepsi Max</text><text x="190" y="150" font-size="10" fill="#6b7280">£1.19 • 2 facings</text><rect x="50" y="200" width="140" height="80" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/><text x="60" y="230" font-size="12" fill="#1f2937">Red Bull Energy</text><text x="60" y="250" font-size="10" fill="#6b7280">£1.89 • 4 facings</text></svg>',
+#                     "structure": {"shelves": 3, "width": 2.5},
+#                     "failure_areas": 1
+#                 },
+#                 {
+#                     "iteration": 3,
+#                     "accuracy": 0.97,
+#                     "timestamp": datetime.now().isoformat(),
+#                     "extraction_data": {
+#                         "total_products": 4,
+#                         "products": [
+#                             {
+#                                 "brand": "Coca-Cola",
+#                                 "name": "Coke Zero 330ml",
+#                                 "price": 1.29,
+#                                 "position": {"shelf_number": 1, "position_on_shelf": 1, "facing_count": 3, "section": "Left", "confidence": 0.98},
+#                                 "extraction_confidence": 0.98,
+#                                 "confidence_category": "very_high"
+#                             },
+#                             {
+#                                 "brand": "Pepsi",
+#                                 "name": "Pepsi Max 330ml",
+#                                 "price": 1.19,
+#                                 "position": {"shelf_number": 1, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.96},
+#                                 "extraction_confidence": 0.96,
+#                                 "confidence_category": "very_high"
+#                             },
+#                             {
+#                                 "brand": "Red Bull",
+#                                 "name": "Energy Drink 250ml",
+#                                 "price": 1.89,
+#                                 "position": {"shelf_number": 2, "position_on_shelf": 1, "facing_count": 4, "section": "Left", "confidence": 0.97},
+#                                 "extraction_confidence": 0.97,
+#                                 "confidence_category": "very_high"
+#                             },
+#                             {
+#                                 "brand": "Monster",
+#                                 "name": "Monster Energy 500ml",
+#                                 "price": 2.15,
+#                                 "position": {"shelf_number": 2, "position_on_shelf": 2, "facing_count": 2, "section": "Center", "confidence": 0.94},
+#                                 "extraction_confidence": 0.94,
+#                                 "confidence_category": "very_high"
+#                             }
+#                         ],
+#                         "model_used": "claude-3-sonnet",
+#                         "confidence": 0.96
+#                     },
+#                     "planogram_svg": '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Demo Planogram - Iteration 3 (High Accuracy)</text><rect x="50" y="100" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="125" font-size="11" font-weight="bold" fill="#1f2937">Coke Zero 330ml</text><text x="60" y="140" font-size="9" fill="#6b7280">Coca-Cola</text><text x="60" y="155" font-size="10" fill="#2563eb">£1.29</text><circle cx="160" cy="110" r="4" fill="#10b981"/><rect x="180" y="100" width="100" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="190" y="125" font-size="11" font-weight="bold" fill="#1f2937">Pepsi Max 330ml</text><text x="190" y="140" font-size="9" fill="#6b7280">Pepsi</text><text x="190" y="155" font-size="10" fill="#2563eb">£1.19</text><circle cx="270" cy="110" r="4" fill="#10b981"/><rect x="50" y="200" width="140" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="60" y="225" font-size="11" font-weight="bold" fill="#1f2937">Energy Drink 250ml</text><text x="60" y="240" font-size="9" fill="#6b7280">Red Bull</text><text x="60" y="255" font-size="10" fill="#2563eb">£1.89</text><circle cx="180" cy="210" r="4" fill="#10b981"/><rect x="200" y="200" width="120" height="80" fill="white" stroke="#10b981" stroke-width="3" rx="4"/><text x="210" y="225" font-size="11" font-weight="bold" fill="#1f2937">Monster Energy</text><text x="210" y="240" font-size="9" fill="#6b7280">Monster</text><text x="210" y="255" font-size="10" fill="#2563eb">£2.15</text><circle cx="310" cy="210" r="4" fill="#10b981"/></svg>',
+#                     "structure": {"shelves": 3, "width": 2.5},
+#                     "failure_areas": 0
+#                 }
+#             ]
+#         }
+#         
+#         # Store mock data for demo queue item
+#         iteration_storage[12345] = mock_data
+#         # print(f"✅ Initialized mock iteration data with {len(mock_data['iterations'])} iterations")
         
     except Exception as e:
         print(f"❌ Error initializing mock data: {e}")
@@ -444,12 +444,12 @@ async def initialize_mock_data():
             }]
         }
 
-# Add endpoint to manually initialize mock data
-@app.get("/api/init-mock-data")
-async def init_mock_data():
-    """Manually initialize mock data"""
-    await initialize_mock_data()
-    return {"message": "Mock data initialized", "items": list(iteration_storage.keys())}
+# DISABLED - NO FAKE DATA
+# @app.get("/api/init-mock-data")
+# async def init_mock_data():
+#     """Manually initialize mock data"""
+#     # await initialize_mock_data()
+#     return {"message": "Mock data initialization is disabled", "reason": "NO FAKE DATA ALLOWED"}
 
 # Serve static files (for the UI)
 if os.path.exists("static"):
@@ -5153,7 +5153,8 @@ async def root():
                             </div>
                             <div class="batch-actions" style="display: flex; gap: 6px;">
                                 <button class="primary" onclick="applyConfigToSelected()" id="applyConfigBtn" ${promptManagementState.selectedQueueItems.length === 0 ? 'disabled' : ''} style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer; background: ${promptManagementState.selectedQueueItems.length === 0 ? '#9ca3af' : '#3b82f6'}; color: white; border-color: ${promptManagementState.selectedQueueItems.length === 0 ? '#9ca3af' : '#3b82f6'};">Apply Config</button>
-                                <button onclick="resetSelectedItems()" id="resetBtn" ${promptManagementState.selectedQueueItems.length === 0 ? 'disabled' : ''} style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer; background: ${promptManagementState.selectedQueueItems.length === 0 ? '#f3f4f6' : 'white'}; opacity: ${promptManagementState.selectedQueueItems.length === 0 ? '0.5' : '1'};">Reset</button>
+                                <button onclick="resetSelectedItems()" id="resetBtn" ${promptManagementState.selectedQueueItems.length === 0 ? 'disabled' : ''} style="padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; cursor: pointer; background: ${promptManagementState.selectedQueueItems.length === 0 ? '#f3f4f6' : 'white'}; opacity: ${promptManagementState.selectedQueueItems.length === 0 ? '0.5' : '1'};">Reset Selected</button>
+                                <button onclick="resetAllItems()" style="padding: 4px 8px; border: 1px solid #dc2626; border-radius: 4px; font-size: 11px; cursor: pointer; background: white; color: #dc2626;">🔄 Reset All</button>
                             </div>
                         </div>
                     </div>
@@ -6162,15 +6163,40 @@ async def root():
                     
                     console.log(`${actionText} item ${currentProcessItemId} with ${systemValue}`);
                     
+                    // Get the current extraction configuration with all field definitions
+                    let currentExtractionConfig = null;
+                    try {
+                        const configResponse = await fetch(`/api/extraction/current-config`);
+                        if (configResponse.ok) {
+                            currentExtractionConfig = await configResponse.json();
+                            console.log('📊 Retrieved extraction config:', currentExtractionConfig);
+                        } else {
+                            console.warn('⚠️ Could not retrieve extraction config, using basic config');
+                        }
+                    } catch (configError) {
+                        console.error('❌ Failed to retrieve extraction config:', configError);
+                    }
+                    
+                    // Prepare request data with extraction configuration
+                    const requestData = { 
+                        system: systemValue,
+                        target_accuracy: 0.95,
+                        max_iterations: 5
+                    };
+                    
+                    // Add extraction config if available
+                    if (currentExtractionConfig) {
+                        requestData.extraction_config = currentExtractionConfig;
+                        console.log('✅ Sending complete extraction config with all stages and field definitions');
+                    } else {
+                        console.warn('⚠️ No extraction config available, processing with basic settings');
+                    }
+                    
                     // Make API call to start processing
                     const response = await fetch(`/api/queue/${isReprocessing ? 'reprocess' : 'process'}/${currentProcessItemId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            system: systemValue,
-                            target_accuracy: 0.95,
-                            max_iterations: 5
-                        })
+                        body: JSON.stringify(requestData)
                     });
                     
                     if (response.ok) {
@@ -10129,6 +10155,40 @@ async def root():
                 } catch (error) {
                     console.error('Failed to reset configuration:', error);
                     alert('Failed to reset configuration: ' + error.message);
+                }
+            }
+            
+            // Reset all queue items to pending
+            async function resetAllItems() {
+                const totalItems = queueData.length;
+                if (totalItems === 0) {
+                    alert('No items in queue to reset');
+                    return;
+                }
+                
+                if (!confirm(`⚠️ Are you sure you want to reset ALL ${totalItems} items to pending status?\n\nThis will clear all extraction results and reset the status of every item in the queue.`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/queue/reset-all', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        alert(`✅ Successfully reset ${result.reset_count} items to pending status`);
+                        promptManagementState.selectedQueueItems = [];
+                        promptManagementState.allSelected = false;
+                        loadQueue(); // Reload the queue
+                        updateQueueStats(); // Update stats
+                    } else {
+                        alert('❌ Failed to reset all items');
+                    }
+                } catch (error) {
+                    console.error('Error resetting all items:', error);
+                    alert('❌ Failed to reset all items: ' + error.message);
                 }
             }
             

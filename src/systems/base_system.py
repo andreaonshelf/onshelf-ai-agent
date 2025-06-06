@@ -70,8 +70,9 @@ class ExtractionResult(BaseModel):
 class BaseExtractionSystem(ABC):
     """Common interface for all strategic extraction systems"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         self.config = config
+        self.queue_item_id = queue_item_id
         self.system_type = self.__class__.__name__.replace('System', '').lower()
         
         logger.info(
@@ -208,7 +209,7 @@ class ExtractionSystemFactory:
     }
     
     @staticmethod
-    def get_system(system_type: str, config: SystemConfig) -> BaseExtractionSystem:
+    def get_system(system_type: str, config: SystemConfig, queue_item_id: Optional[int] = None) -> BaseExtractionSystem:
         """Get extraction system by type"""
         
         logger.info(
@@ -219,7 +220,7 @@ class ExtractionSystemFactory:
         
         if system_type == "custom":
             from .custom_consensus_visual import CustomConsensusVisualSystem
-            return CustomConsensusVisualSystem(config)
+            return CustomConsensusVisualSystem(config, queue_item_id)
         elif system_type == "langgraph":
             from .langgraph_system import LangGraphConsensusSystem
             return LangGraphConsensusSystem(config)

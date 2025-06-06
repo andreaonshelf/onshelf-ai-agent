@@ -5,6 +5,7 @@ Monitors ai_extraction_queue table and automatically processes ready items
 
 import asyncio
 import time
+import os
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 
@@ -42,7 +43,12 @@ class AIExtractionQueueProcessor:
         
         while self.is_running:
             try:
-                await self._process_pending_items()
+                # Check if we're in automatic mode
+                if await self._should_process_automatically():
+                    await self._process_pending_items()
+                else:
+                    logger.debug("Queue processor in manual mode, skipping automatic processing")
+                    
                 await asyncio.sleep(polling_interval)
                 
             except Exception as e:
@@ -60,6 +66,27 @@ class AIExtractionQueueProcessor:
             "Queue processing stopped",
             component="queue_processor"
         )
+    
+    async def _should_process_automatically(self) -> bool:
+        """Check if we should process items automatically"""
+        # First check environment variable
+        mode = os.getenv('PROCESSING_MODE', 'manual')
+        if mode == 'manual':
+            return False
+            
+        # Also check API endpoint if available
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get('http://localhost:8000/api/queue/processing-mode') as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get('mode') == 'automatic'
+        except:
+            # If API not available, fall back to env var
+            pass
+            
+        return mode == 'automatic'
     
     async def _process_pending_items(self):
         """Find and process pending items from the queue"""
@@ -120,9 +147,21 @@ class AIExtractionQueueProcessor:
             # Process with master orchestrator using upload_id
             upload_id = queue_item['upload_id']
             
-            # Get configuration from queue item
-            configuration = queue_item.get('model_config', {})
+            # Get configuration from queue item - prioritize extraction_config which has field definitions
+            extraction_config = queue_item.get('extraction_config', {})
+            model_config = queue_item.get('model_config', {})
             system = queue_item.get('current_extraction_system', 'custom_consensus')
+            
+            # Use extraction_config if it has stages (field definitions), otherwise fall back to model_config
+            configuration = extraction_config if extraction_config.get('stages') else model_config
+            
+            logger.info(
+                f"Processing with configuration type: {'extraction_config' if extraction_config.get('stages') else 'model_config'}",
+                component="queue_processor",
+                queue_id=queue_id,
+                has_stages=bool(configuration.get('stages')),
+                stages_count=len(configuration.get('stages', {}))
+            )
             
             result = await orchestrator.achieve_target_accuracy(
                 upload_id=upload_id,

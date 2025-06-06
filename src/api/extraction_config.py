@@ -200,6 +200,126 @@ async def start_extraction_with_config(queue_item_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to start extraction: {str(e)}")
 
 
+@router.get("/current-config")
+async def get_current_extraction_config():
+    """Get the current complete extraction configuration with all stages and field definitions"""
+    
+    try:
+        # Load prompts from database
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection not available")
+        
+        # Get all active prompts
+        result = supabase.table("prompt_templates").select("*").eq("is_active", True).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="No active prompts found")
+        
+        # Organize prompts by type
+        prompts_by_type = {}
+        for prompt in result.data:
+            prompt_type = prompt.get('prompt_type')
+            stage_type = prompt.get('stage_type')
+            name = prompt.get('name', 'Unnamed')
+            
+            key = stage_type or prompt_type
+            if key:
+                if key not in prompts_by_type:
+                    prompts_by_type[key] = []
+                prompts_by_type[key].append({
+                    'name': name,
+                    'prompt_text': prompt.get('prompt_text', ''),
+                    'extraction_fields': prompt.get('extraction_fields'),
+                    'prompt_type': prompt_type,
+                    'stage_type': stage_type
+                })
+        
+        # Build complete extraction configuration
+        extraction_config = {
+            "system": "custom_consensus",
+            "temperature": 0.1,
+            "orchestrator_model": "claude-4-opus",
+            "max_budget": 2.0,
+            "stages": {},
+            "stage_models": {}
+        }
+        
+        # Map database types to stage names
+        type_to_stage = {
+            'structure': 'structure',
+            'product': 'products', 
+            'products': 'products',  # Added: products stage_type maps to products stage
+            'detail': 'details',
+            'details': 'details',    # Added: details stage_type maps to details stage  
+            'comparison': 'comparison'  # Fixed: use 'comparison' instead of 'visual'
+        }
+        
+        # Load field definitions from JSON files for each stage
+        import json
+        import os
+        
+        field_files = {
+            'structure': 'ui_schema_structure_v1.json',
+            'products': 'ui_schema_product_v1.json',
+            'details': 'ui_schema_detail_v1.json',
+            'comparison': 'ui_schema_visual_v1.json'
+        }
+        
+        for db_type, stage_name in type_to_stage.items():
+            if db_type in prompts_by_type:
+                # Get the preferred prompt (prefer v1 versions)
+                prompts = prompts_by_type[db_type]
+                selected_prompt = None
+                
+                for p in prompts:
+                    if 'v1' in p['name'].lower():
+                        selected_prompt = p
+                        break
+                
+                if not selected_prompt and prompts:
+                    selected_prompt = prompts[0]
+                
+                if selected_prompt:
+                    stage_config = {
+                        "prompt_text": selected_prompt['prompt_text']
+                    }
+                    
+                    # Load field definitions from JSON file
+                    if stage_name in field_files:
+                        try:
+                            field_file_path = field_files[stage_name]
+                            if os.path.exists(field_file_path):
+                                with open(field_file_path, 'r') as f:
+                                    fields = json.load(f)
+                                    stage_config["fields"] = [fields]  # Wrap in list as expected
+                        except Exception as e:
+                            logger.warning(f"Could not load field definitions from {field_files[stage_name]}: {e}")
+                    
+                    extraction_config["stages"][stage_name] = stage_config
+                    
+                    # Set default models for each stage
+                    if stage_name == 'structure':
+                        extraction_config["stage_models"][stage_name] = ["gpt-4o"]
+                    elif stage_name == 'products':
+                        extraction_config["stage_models"][stage_name] = ["gpt-4o", "claude-3-sonnet"]
+                    elif stage_name == 'details':
+                        extraction_config["stage_models"][stage_name] = ["gpt-4o", "claude-3-sonnet"]
+                    elif stage_name == 'comparison':
+                        extraction_config["stage_models"][stage_name] = ["gpt-4o"]
+        
+        logger.info(
+            f"Loaded complete extraction config with {len(extraction_config['stages'])} stages",
+            component="extraction_config",
+            stages=list(extraction_config['stages'].keys())
+        )
+        
+        return extraction_config
+        
+    except Exception as e:
+        logger.error(f"Failed to load current extraction config: {e}", component="extraction_config")
+        raise HTTPException(status_code=500, detail=f"Failed to load configuration: {str(e)}")
+
+
 @router.get("/config-templates")
 async def get_configuration_templates():
     """Get pre-configured extraction templates"""

@@ -18,12 +18,14 @@ from ..comparison.image_comparison_agent import ImageComparisonAgent
 from ..models.extraction_models import ExtractionResult
 from ..extraction.engine import ModularExtractionEngine
 
+from ..orchestrator.monitoring_hooks import monitoring_hooks
 
 class CustomConsensusVisualSystem(CustomConsensusSystem):
     """Enhanced Custom Consensus with visual feedback between models"""
     
-    def __init__(self, config: SystemConfig):
+    def __init__(self, config: SystemConfig, queue_item_id: Optional[int] = None):
         super().__init__(config)
+        self.queue_item_id = queue_item_id
         self.planogram_orchestrator = PlanogramOrchestrator(config)
         self.comparison_agent = ImageComparisonAgent(config)
         self.extraction_engine = ModularExtractionEngine(config)
@@ -49,6 +51,14 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                 current_accuracy=best_accuracy,
                 target_accuracy=target_accuracy
             )
+
+            # Send monitoring update for iteration
+            if self.queue_item_id and hasattr(monitoring_hooks, 'update_iteration'):
+                await monitoring_hooks.update_iteration(
+                    self.queue_item_id,
+                    iteration,
+                    locked_items=[]
+                )
             
             # Prepare extraction data for this iteration
             extraction_data = {
@@ -101,6 +111,25 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
         temperature = configuration.get('temperature', 0.7)
         self.orchestrator_model = configuration.get('orchestrator_model', 'claude-4-opus')
         
+        # Check if we have custom prompts - if not, REFUSE to run
+        if not stage_prompts:
+            # Try to get from self.stage_prompts (set by system dispatcher)
+            stage_prompts = getattr(self, 'stage_prompts', {})
+            
+        if not stage_prompts:
+            error_msg = (
+                "REFUSING TO RUN EXTRACTION: No custom prompts loaded from UI/database. "
+                "This would waste money on API calls with wrong hardcoded prompts. "
+                "Please ensure prompts are saved in the UI and the configuration is properly loaded."
+            )
+            logger.error(error_msg, component="custom_consensus_visual")
+            raise ValueError(error_msg)
+        
+        logger.info(
+            f"Custom prompts loaded for stages: {list(stage_prompts.keys())}",
+            component="custom_consensus_visual"
+        )
+        
         # Initialize visual feedback accumulator
         visual_feedback_history = []
         
@@ -111,8 +140,17 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
             temperature=temperature
         )
         
-        # Get stages to process
-        stages = ['structure', 'products', 'details']
+        # Get stages to process - use configured stages, not hardcoded list
+        configured_stages = getattr(self, 'stage_configs', {})
+        if configured_stages:
+            # Process only stages that have configurations
+            stages = list(configured_stages.keys())
+            logger.info(f"Processing configured stages: {stages}", component="custom_consensus_visual")
+        else:
+            # Fallback to default stages if no configuration
+            stages = ['structure', 'products', 'details']
+            logger.warning("No stage configurations found, using default stages", component="custom_consensus_visual")
+        
         stage_results = {}
         
         for stage in stages:
@@ -211,6 +249,22 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                 model=model,
                 attempt=i+1
             )
+
+            # Send monitoring update for stage progress
+            if self.queue_item_id:
+                await monitoring_hooks.update_stage_progress(
+                    self.queue_item_id,
+                    stage_name=stage,
+                    attempt=i+1,
+                    total_attempts=len(models),
+                    model=model,
+                    complete=False
+                )
+                
+                await monitoring_hooks.update_processing_detail(
+                    self.queue_item_id,
+                    f"Processing {stage} with model {i+1}/{len(models)}: {model}"
+                )
             
             # Build prompt with visual feedback from previous models
             prompt = self._build_prompt_with_visual_feedback(
@@ -252,10 +306,18 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                 )
                 
                 # Visual comparison
+                comparison_prompt = stage_prompts.get('comparison', self._get_default_comparison_prompt())
+                logger.info(
+                    f"Running visual comparison after {model} in {stage} stage",
+                    component="custom_consensus_visual",
+                    has_custom_prompt='comparison' in stage_prompts,
+                    prompt_length=len(comparison_prompt),
+                    prompt_preview=comparison_prompt[:100] + "..." if len(comparison_prompt) > 100 else comparison_prompt
+                )
                 comparison_result = await self._compare_with_original(
                     image_data,
                     planogram,
-                    stage_prompts.get('comparison', self._get_default_comparison_prompt())
+                    comparison_prompt
                 )
                 
                 # Extract actionable feedback
@@ -524,13 +586,48 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
         # Prepare images dict as expected by extraction engine
         images = {'enhanced': image_data}
         
-        # Determine output schema based on stage
-        if stage == 'structure':
-            output_schema = 'ShelfStructure'
-        elif stage == 'products':
-            output_schema = 'List[ProductExtraction]'
-        else:  # details
-            output_schema = 'Dict[str, Any]'
+        # Get configuration for this stage
+        stage_config = getattr(self, 'stage_configs', {}).get(stage, {})
+        
+        # Build dynamic model from user's field definitions
+        from ..extraction.dynamic_model_builder import DynamicModelBuilder
+        
+        dynamic_model = None
+        if stage_config and 'fields' in stage_config:
+            logger.info(
+                f"✅ Building dynamic model for stage {stage} with {len(stage_config['fields'])} user-defined fields",
+                component="custom_consensus_visual",
+                stage=stage,
+                field_count=len(stage_config['fields']),
+                field_names=[f.get('name') for f in stage_config['fields']]
+            )
+            dynamic_model = DynamicModelBuilder.build_model_from_config(stage, stage_config)
+        
+        # Determine output schema
+        if dynamic_model:
+            # Use the dynamic model built from user's fields
+            output_schema = dynamic_model
+            logger.info(
+                f"Using dynamic model for stage {stage}",
+                component="custom_consensus_visual",
+                model_name=dynamic_model.__name__
+            )
+        else:
+            # Fallback to generic schemas (should not happen with proper config)
+            logger.warning(
+                f"❌ No dynamic model built for stage {stage} - no field definitions found",
+                component="custom_consensus_visual",
+                stage=stage,
+                has_stage_config=bool(stage_config),
+                stage_config_keys=list(stage_config.keys()) if stage_config else [],
+                has_fields=bool(stage_config.get('fields')) if stage_config else False
+            )
+            if stage == 'structure':
+                output_schema = 'Dict[str, Any]'
+            elif stage == 'products':
+                output_schema = 'List[Dict[str, Any]]'
+            else:  # details
+                output_schema = 'Dict[str, Any]'
         
         # Use the actual extraction engine
         result, cost = await self.extraction_engine.execute_with_model_id(
@@ -546,43 +643,31 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
             self.cost_tracker['total_cost'] += cost
         
         # Parse result based on stage
-        if stage == 'structure':
-            # Extract structure from the result
-            if hasattr(result, 'model_dump'):
-                return result.model_dump()
-            elif hasattr(result, 'shelf_count'):
-                return {'shelf_count': result.shelf_count, 'sections': getattr(result, 'sections', 3)}
-            elif isinstance(result, dict):
-                return result
-            else:
-                # Try to parse structure from text
-                return self._parse_structure_from_text(result)
-        elif stage == 'products':
-            # Extract products from the result
-            if isinstance(result, list):
-                # Convert to dict format if needed
-                products = []
-                for item in result:
-                    if hasattr(item, 'model_dump'):
-                        products.append(item.model_dump())
-                    elif isinstance(item, dict):
-                        products.append(item)
-                return products
-            elif hasattr(result, 'products'):
-                return result.products
-            elif isinstance(result, dict) and 'products' in result:
-                return result['products']
-            else:
-                # Try to parse products from text
-                return self._parse_products_from_text(result)
-        else:  # details stage
-            # Extract enhanced details
-            if hasattr(result, 'model_dump'):
-                return result.model_dump()
-            elif isinstance(result, dict):
-                return result
-            else:
-                return {}
+        # With dynamic models, result will be a Pydantic model instance
+        if hasattr(result, 'model_dump'):
+            # Convert Pydantic model to dict
+            return result.model_dump()
+        elif isinstance(result, list):
+            # Handle list responses (e.g., products might be a list)
+            parsed_list = []
+            for item in result:
+                if hasattr(item, 'model_dump'):
+                    parsed_list.append(item.model_dump())
+                elif isinstance(item, dict):
+                    parsed_list.append(item)
+                else:
+                    parsed_list.append(item)
+            return parsed_list
+        elif isinstance(result, dict):
+            # Already a dict, return as is
+            return result
+        else:
+            # Fallback for other types
+            logger.warning(
+                f"Unexpected result type for stage {stage}: {type(result)}",
+                component="custom_consensus_visual"
+            )
+            return result
     
     def _parse_structure_from_text(self, result):
         """Parse structure from text response"""

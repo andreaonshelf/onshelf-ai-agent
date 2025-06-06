@@ -1,0 +1,331 @@
+[
+  {
+    "name": "fixture_id",
+    "type": "string",
+    "required": true,
+    "description": "Must match Stage 2's fixture_id exactly"
+  },
+  {
+    "name": "total_shelves",
+    "type": "integer",
+    "required": true,
+    "description": "Must match Stage 2's total_shelves exactly"
+  },
+  {
+    "name": "shelves_enhanced",
+    "type": "list",
+    "required": true,
+    "description": "Enhanced details for each shelf (MUST have same length as Stage 2's shelves array)",
+    "list_item_type": "object",
+    "nested_fields": [
+      {
+        "name": "shelf_number",
+        "type": "integer",
+        "required": true,
+        "description": "Must match Stage 2's shelf_number for this array position"
+      },
+      {
+        "name": "products_enhanced",
+        "type": "list",
+        "required": false,
+        "description": "Required only when Stage 2's extraction_status=\"has_products\". When shelf was empty, this array should be omitted or empty",
+        "list_item_type": "object",
+        "nested_fields": [
+          {
+            "name": "product_reference",
+            "type": "object",
+            "required": true,
+            "description": "Identifies which Stage 2 product this enhances",
+            "nested_fields": [
+              {
+                "name": "shelf_index",
+                "type": "integer",
+                "required": true,
+                "description": "Index in Stage 2's shelves array (0-based)"
+              },
+              {
+                "name": "product_index",
+                "type": "integer",
+                "required": true,
+                "description": "Index in that shelf's products array (0-based)"
+              },
+              {
+                "name": "position",
+                "type": "integer",
+                "required": true,
+                "description": "Position from Stage 2 (for validation)"
+              },
+              {
+                "name": "brand",
+                "type": "string",
+                "required": true,
+                "description": "Brand from Stage 2 (for validation)"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "required": true,
+                "description": "Name from Stage 2 (for validation)"
+              }
+            ]
+          },
+          {
+            "name": "pricing",
+            "type": "object",
+            "required": true,
+            "description": "Price information",
+            "nested_fields": [
+              {
+                "name": "regular_price",
+                "type": "float",
+                "required": false
+              },
+              {
+                "name": "promotional_price",
+                "type": "float",
+                "required": false
+              },
+              {
+                "name": "promotion_text",
+                "type": "string",
+                "required": false
+              },
+              {
+                "name": "currency",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "GBP",
+                  "EUR",
+                  "USD",
+                  "other"
+                ]
+              },
+              {
+                "name": "price_visible",
+                "type": "boolean",
+                "required": true
+              },
+              {
+                "name": "price_not_visible_reason",
+                "type": "string",
+                "required": false,
+                "description": "Why price couldn't be extracted (only fill if price_visible is false)"
+              },
+              {
+                "name": "price_tag_location",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "directly_below",
+                  "left_of_product",
+                  "right_of_product",
+                  "distant",
+                  "not_visible"
+                ],
+                "description": "Where the price tag is positioned relative to this product"
+              },
+              {
+                "name": "price_attribution_confidence",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "certain",
+                  "likely",
+                  "uncertain"
+                ],
+                "description": "How confident that this price belongs to this specific product"
+              },
+              {
+                "name": "possible_price_owner",
+                "type": "string",
+                "required": false,
+                "description": "If uncertain, which nearby product might this price actually belong to"
+              }
+            ]
+          },
+          {
+            "name": "package_info",
+            "type": "object",
+            "required": true,
+            "description": "Package details",
+            "nested_fields": [
+              {
+                "name": "size",
+                "type": "string",
+                "required": false
+              },
+              {
+                "name": "unit_count",
+                "type": "integer",
+                "required": false
+              },
+              {
+                "name": "unit_size",
+                "type": "string",
+                "required": false
+              },
+              {
+                "name": "total_volume",
+                "type": "string",
+                "required": false
+              },
+              {
+                "name": "size_visible",
+                "type": "boolean",
+                "required": true
+              },
+              {
+                "name": "size_not_visible_reason",
+                "type": "string",
+                "required": false,
+                "description": "Why size couldn't be read (only fill if size_visible is false)"
+              },
+              {
+                "name": "size_read_location",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "front_label",
+                  "side_visible",
+                  "cap_lid",
+                  "not_visible"
+                ],
+                "description": "Where on the package the size information was read from"
+              },
+              {
+                "name": "size_read_confidence",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "certain",
+                  "likely",
+                  "uncertain"
+                ],
+                "description": "Confidence in the size reading accuracy"
+              },
+              {
+                "name": "multiple_units_visible",
+                "type": "boolean",
+                "required": true,
+                "description": "Can you see multiple individual units (helps verify multipack claims)"
+              }
+            ]
+          },
+          {
+            "name": "physical",
+            "type": "object",
+            "required": true,
+            "description": "Physical characteristics",
+            "nested_fields": [
+              {
+                "name": "width_relative",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "narrow",
+                  "normal",
+                  "wide"
+                ]
+              },
+              {
+                "name": "height_relative",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "short",
+                  "medium",
+                  "tall"
+                ]
+              },
+              {
+                "name": "width_cm",
+                "type": "float",
+                "required": true
+              },
+              {
+                "name": "height_cm",
+                "type": "float",
+                "required": true
+              },
+              {
+                "name": "dimension_confidence",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "measured",
+                  "estimated",
+                  "rough_guess"
+                ],
+                "description": "Confidence in dimension estimates"
+              }
+            ]
+          },
+          {
+            "name": "visual",
+            "type": "object",
+            "required": true,
+            "description": "Visual appearance",
+            "nested_fields": [
+              {
+                "name": "primary_color",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "secondary_color",
+                "type": "string",
+                "required": true
+              },
+              {
+                "name": "finish",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "metallic",
+                  "matte",
+                  "glossy",
+                  "transparent",
+                  "mixed"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "quality",
+            "type": "object",
+            "required": true,
+            "description": "Extraction quality",
+            "nested_fields": [
+              {
+                "name": "visibility",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "clearly_visible",
+                  "partially_obscured",
+                  "mostly_hidden"
+                ]
+              },
+              {
+                "name": "confidence",
+                "type": "literal",
+                "required": true,
+                "allowed_values": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "name": "issues",
+                "type": "list",
+                "required": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

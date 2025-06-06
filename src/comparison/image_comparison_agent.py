@@ -107,37 +107,40 @@ class ImageComparisonAgent:
             original_image_base64 = base64.b64encode(original_image).decode('utf-8')
             planogram_image_base64 = base64.b64encode(planogram_image).decode('utf-8')
             
-            # Use provided prompt or default
+            # Use provided prompt or load user's comparison prompt from database
             if not comparison_prompt:
-                comparison_prompt = """
-                Compare the original shelf photo with the generated planogram visualization.
+                comparison_prompt = await self._load_comparison_prompt_from_database()
+                if not comparison_prompt:
+                    # Fallback to default only if database load fails
+                    comparison_prompt = """
+                    Compare the original shelf photo with the generated planogram visualization.
 
-                CHECK THESE SPECIFIC THINGS:
+                    CHECK THESE SPECIFIC THINGS:
 
-                1. SHELF ASSIGNMENT: Do all products appear on the correct shelf?
-                   - List any products that are on a different shelf in the photo vs planogram
-                   
-                2. QUANTITY CHECK: Are the facing counts roughly correct?
-                   - List any products where quantity is significantly off (±3 or more)
-                   
-                3. POSITION CHECK: Are products in the right general area of each shelf?
-                   - List any products that are in wrong section (left/center/right)
-                   
-                4. MISSING PRODUCTS: Any obvious products in photo but not in planogram?
-                   - List only if clearly visible and significant
-                   
-                5. EXTRA PRODUCTS: Any products in planogram but not visible in photo?
-                   - List only if you're confident they're not there
+                    1. SHELF ASSIGNMENT: Do all products appear on the correct shelf?
+                       - List any products that are on a different shelf in the photo vs planogram
+                       
+                    2. QUANTITY CHECK: Are the facing counts roughly correct?
+                       - List any products where quantity is significantly off (±3 or more)
+                       
+                    3. POSITION CHECK: Are products in the right general area of each shelf?
+                       - List any products that are in wrong section (left/center/right)
+                       
+                    4. MISSING PRODUCTS: Any obvious products in photo but not in planogram?
+                       - List only if clearly visible and significant
+                       
+                    5. EXTRA PRODUCTS: Any products in planogram but not visible in photo?
+                       - List only if you're confident they're not there
 
-                For each issue found, specify:
-                - What: [Product name]
-                - Where in photo: [Shelf X, Position Y]
-                - Where in planogram: [Shelf X, Position Y]
-                - Confidence: [High/Medium/Low]
-                
-                Also count total products in both photo and planogram.
-                Assess overall alignment as good/moderate/poor.
-                """
+                    For each issue found, specify:
+                    - What: [Product name]
+                    - Where in photo: [Shelf X, Position Y]
+                    - Where in planogram: [Shelf X, Position Y]
+                    - Confidence: [High/Medium/Low]
+                    
+                    Also count total products in both photo and planogram.
+                    Assess overall alignment as good/moderate/poor.
+                    """
             
             # Handle different model providers
             if is_claude_model:
@@ -308,3 +311,49 @@ class ImageComparisonAgent:
         # This would use GPT-4V or Claude with vision capabilities
         
         return await self.compare_image_vs_planogram(original_image, None, structure_context)
+    
+    async def _load_comparison_prompt_from_database(self) -> Optional[str]:
+        """Load user's comparison prompt from database (Visual v1)"""
+        try:
+            from supabase import create_client
+            import os
+            
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_KEY")
+            
+            if not supabase_url or not supabase_key:
+                logger.warning("Supabase credentials not available for comparison prompt loading", component="comparison_agent")
+                return None
+            
+            supabase = create_client(supabase_url, supabase_key)
+            
+            # Try to get the user's visual/comparison prompt (Visual v1)
+            # First try by prompt_type = "visual"
+            result = supabase.table("prompt_templates").select("prompt_text, name").eq("prompt_type", "visual").eq("is_active", True).execute()
+            
+            if result.data:
+                # Prefer "Visual v1" if multiple exist
+                for prompt in result.data:
+                    if prompt.get('name') == 'Visual v1':
+                        logger.info("Loaded user's Visual v1 comparison prompt from database", component="comparison_agent")
+                        return prompt['prompt_text']
+                
+                # Fall back to first visual prompt if Visual v1 not found
+                prompt = result.data[0]
+                logger.info(f"Loaded user's comparison prompt: {prompt.get('name', 'Unnamed')}", component="comparison_agent")
+                return prompt['prompt_text']
+            
+            # Try alternative names for comparison prompts
+            result = supabase.table("prompt_templates").select("prompt_text, name").ilike("name", "%comparison%").eq("is_active", True).execute()
+            
+            if result.data:
+                prompt = result.data[0]
+                logger.info(f"Loaded user's comparison prompt: {prompt.get('name', 'Unnamed')}", component="comparison_agent")
+                return prompt['prompt_text']
+            
+            logger.warning("No user-defined comparison prompt found in database, using default", component="comparison_agent")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to load comparison prompt from database: {e}", component="comparison_agent")
+            return None
