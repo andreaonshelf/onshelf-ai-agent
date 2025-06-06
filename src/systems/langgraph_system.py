@@ -777,6 +777,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         self._last_accuracy = accuracy
         self._last_consensus_rate = avg_consensus_rate
         self._last_iteration_count = state.get('iteration_count', 1)
+        self._last_processing_time = processing_time
         
         performance_metrics = PerformanceMetrics(
             accuracy=accuracy,
@@ -866,10 +867,11 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         accuracy = getattr(self, '_last_accuracy', 0.0)
         consensus_rate = getattr(self, '_last_consensus_rate', 0.0)
         iteration_count = getattr(self, '_last_iteration_count', 1)
+        processing_time = getattr(self, '_last_processing_time', 0.0)
         
         return PerformanceMetrics(
             accuracy=accuracy,
-            processing_time=52.0,  # Slightly slower due to workflow overhead
+            processing_time=processing_time,
             consensus_rate=consensus_rate,
             iteration_count=iteration_count,
             human_escalation_rate=0.05 if accuracy > 0.8 else 0.15,
