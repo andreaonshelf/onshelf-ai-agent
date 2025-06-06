@@ -194,8 +194,8 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                 error=str(e)
             )
             
-            # Return error result
-            return await self._create_error_result(upload_id, str(e))
+            # Re-raise the exception so it gets handled properly upstream
+            raise
     
     async def _structure_consensus_node(self, state: LangGraphExtractionState) -> LangGraphExtractionState:
         """LangGraph node for structure consensus"""
@@ -287,8 +287,16 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                     # Parse products from result
                     products = self._extract_products_from_result(result)
                     
-                    # Merge into positions
+                    # Debug: Check what we got
+                    logger.info(f"Products extracted from {model}: {len(products)} items", component="langgraph_system")
+                    if products:
+                        logger.info(f"First product example: {products[0]}", component="langgraph_system")
+                    
+                    # Merge into positions - add safety check
                     for product in products:
+                        if product is None:
+                            logger.warning(f"Skipping None product from {model}", component="langgraph_system")
+                            continue
                         key = f"shelf_{product.get('shelf', 1)}_pos_{product.get('position', 1)}"
                         if key not in all_positions:
                             all_positions[key] = product
@@ -603,7 +611,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         state['iteration_count'] += 1
         
         # Analyze what needs to be retried
-        validation = state.get('validation_result', {})
+        validation = state.get('validation_result') or {}
         issues = validation.get('issues', [])
         
         # Update locked results based on what's working
@@ -912,19 +920,51 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             )
             return DynamicModelBuilder.build_model_from_config(stage_config['fields'], f'LangGraph{stage.title()}V1')
         
-        # Fallback to generic schemas
+        # Fallback to basic structured schemas
+        from pydantic import BaseModel, Field
+        from typing import List, Optional
+        
+        logger.info(f"No field configuration found for {stage}, using basic fallback schema", component="langgraph_system")
+        
         if stage == 'structure':
-            return 'Dict[str, Any]'
+            class BasicStructure(BaseModel):
+                shelf_count: int = Field(description="Total number of shelves")
+                orientation: Optional[str] = Field(description="Shelf orientation", default="vertical")
+                shelf_details: Optional[List[dict]] = Field(description="Details about each shelf", default=[])
+            return BasicStructure
+            
         elif stage == 'products':
-            return 'List[Dict[str, Any]]'
+            class BasicProduct(BaseModel):
+                brand: str = Field(description="Product brand name")
+                name: str = Field(description="Product name")
+                shelf: int = Field(description="Shelf number (1-based)")
+                position: int = Field(description="Position on shelf (1-based)")
+                facings: Optional[int] = Field(description="Number of facings", default=1)
+                color: Optional[str] = Field(description="Primary package color", default="")
+            
+            class BasicProducts(BaseModel):
+                products: List[BasicProduct] = Field(description="List of all products found")
+                total_products: int = Field(description="Total number of products")
+            return BasicProducts
+            
         elif stage == 'details':
-            return 'Dict[str, Any]'
+            class BasicDetails(BaseModel):
+                product_details: List[dict] = Field(description="Enhanced product details", default=[])
+                completeness_score: Optional[float] = Field(description="Completeness score", default=0.8)
+            return BasicDetails
+            
         else:
-            return 'Dict[str, Any]'
+            # Generic fallback
+            class BasicResult(BaseModel):
+                data: dict = Field(description="Extracted data")
+                status: str = Field(description="Extraction status", default="complete")
+            return BasicResult
     
     def _extract_shelf_count_from_result(self, result) -> int:
         """Extract shelf count from extraction result"""
+        # Handle BasicStructure model (new format)
         if hasattr(result, 'shelf_count'):
+            logger.info(f"Found shelf_count in result: {result.shelf_count}", component="langgraph_system")
             return result.shelf_count
         elif isinstance(result, dict):
             # Try various possible field names
@@ -932,26 +972,50 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                 if key in result:
                     value = result[key]
                     if isinstance(value, int):
+                        logger.info(f"Found shelf count via {key}: {value}", component="langgraph_system")
                         return value
                     elif isinstance(value, dict) and 'total_shelves' in value:
-                        return value['total_shelves']
+                        count = value['total_shelves']
+                        logger.info(f"Found shelf count via nested structure: {count}", component="langgraph_system")
+                        return count
                     elif isinstance(value, list):
-                        return len(value)
+                        count = len(value)
+                        logger.info(f"Found shelf count via list length: {count}", component="langgraph_system")
+                        return count
+        
+        logger.warning("Could not extract shelf count, using default fallback: 4", component="langgraph_system")
         return 4  # Default fallback
     
     def _extract_products_from_result(self, result) -> List[Dict]:
         """Extract product list from extraction result"""
         products = []
         
+        # Safety check for None result
+        if result is None:
+            logger.warning("API result is None, returning empty products list", component="langgraph_system")
+            return products
+        
+        # Handle BasicProducts model (new format)
+        if hasattr(result, 'products') and hasattr(result, 'total_products'):
+            logger.info("Found BasicProducts model format", component="langgraph_system")
+            for product in result.products:
+                if hasattr(product, 'dict'):
+                    products.append(product.dict())
+                elif isinstance(product, dict):
+                    products.append(product)
+            return products
+            
         if isinstance(result, list):
             # Direct list of products
             for item in result:
+                if item is None:
+                    continue  # Skip None items
                 if hasattr(item, 'dict'):
                     products.append(item.dict())
                 elif isinstance(item, dict):
                     products.append(item)
         elif hasattr(result, 'products'):
-            # Has products attribute
+            # Has products attribute (old format)
             return self._extract_products_from_result(result.products)
         elif isinstance(result, dict):
             # Look for products in dict
@@ -963,9 +1027,16 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                     if isinstance(shelf, dict) and 'products' in shelf:
                         shelf_num = shelf.get('shelf_number', 1)
                         for prod in shelf['products']:
+                            if prod is None:
+                                continue  # Skip None products
                             if isinstance(prod, dict):
                                 prod['shelf'] = shelf_num
                                 products.append(prod)
+        else:
+            logger.warning(f"Unexpected result type: {type(result)}, result: {result}", component="langgraph_system")
+        
+        # Filter out any None values that might have slipped through
+        products = [p for p in products if p is not None]
         
         return products
     

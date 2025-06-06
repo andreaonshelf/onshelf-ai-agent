@@ -305,12 +305,18 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                     f"{stage}_model_{i+1}"
                 )
                 
-                # Visual comparison
-                comparison_prompt = stage_prompts.get('comparison', self._get_default_comparison_prompt())
+                # Visual comparison - use class-level stage_prompts which has all prompts
+                logger.info(f"Checking for comparison prompt. self.stage_prompts keys: {list(getattr(self, 'stage_prompts', {}).keys())}", component="custom_consensus_visual")
+                if hasattr(self, 'stage_prompts') and 'comparison' in self.stage_prompts:
+                    comparison_prompt = self.stage_prompts['comparison']
+                    logger.info(f"Found comparison prompt: {len(comparison_prompt)} chars", component="custom_consensus_visual")
+                else:
+                    logger.error(f"No comparison prompt found. self.stage_prompts: {getattr(self, 'stage_prompts', 'NOT_SET')}", component="custom_consensus_visual")
+                    comparison_prompt = self._get_default_comparison_prompt()
                 logger.info(
                     f"Running visual comparison after {model} in {stage} stage",
                     component="custom_consensus_visual",
-                    has_custom_prompt='comparison' in stage_prompts,
+                    has_custom_prompt='comparison' in self.stage_prompts,
                     prompt_length=len(comparison_prompt),
                     prompt_preview=comparison_prompt[:100] + "..." if len(comparison_prompt) > 100 else comparison_prompt
                 )
@@ -503,15 +509,10 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
         return defaults.get(stage, "")
     
     def _get_default_comparison_prompt(self) -> str:
-        """Get default comparison prompt"""
-        return """Compare the retail shelf photo with the planogram representation.
-        Identify:
-        1. Missing products (visible in photo but not in planogram)
-        2. Extra products (in planogram but not visible in photo)
-        3. Position mismatches
-        4. Quantity/facing discrepancies
-        
-        Be specific about shelf and position numbers."""
+        """This should NOT be used - comparison prompts must come from database"""
+        error_msg = "CRITICAL: No comparison prompt loaded from database. Visual feedback requires your configured comparison prompts."
+        logger.error(error_msg, component="custom_consensus_visual")
+        raise ValueError(error_msg)
     
     async def _generate_planogram_for_extraction(self, extraction_data: Dict, identifier: str) -> Dict:
         """Generate planogram from extraction data"""

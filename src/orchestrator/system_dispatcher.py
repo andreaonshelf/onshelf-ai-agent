@@ -49,6 +49,42 @@ class SystemDispatcher:
             max_iterations=config.max_iterations
         )
     
+    async def _load_default_prompt(self, stage_id: str) -> str:
+        """Load prompt for a stage from database - ONLY use user's configured prompts"""
+        try:
+            from supabase import create_client
+            supabase = create_client(self.config.supabase_url, self.config.supabase_service_key)
+            
+            # Map stage names to the actual prompt_type values in your database
+            stage_to_prompt_type = {
+                'structure': 'structure',
+                'products': 'product',  # Your DB has "product" not "products"
+                'details': 'detail',    # Your DB has "detail" not "details"
+                'comparison': 'comparison'  # Visual comparison prompts
+            }
+            
+            prompt_type = stage_to_prompt_type.get(stage_id, stage_id)
+            
+            # Get prompts for this stage (don't require is_default since you may not have it set)
+            result = supabase.table("prompt_templates").select("prompt_text").eq("prompt_type", prompt_type).execute()
+            
+            if result.data:
+                # Get the first available prompt for this type
+                prompt_data = result.data[0]
+                prompt_text = prompt_data.get('prompt_text', '')
+                if prompt_text:
+                    logger.info(f"Loaded database prompt for {stage_id} (type: {prompt_type}): {len(prompt_text)} chars")
+                    return prompt_text
+            
+            # If no prompt found, FAIL - do not use fake prompts
+            error_msg = f"No prompt found in database for stage '{stage_id}' (prompt_type: '{prompt_type}'). Cannot proceed without your configured prompts."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        except Exception as e:
+            logger.error(f"Failed to load prompt for {stage_id}: {e}")
+            raise
+    
     async def achieve_target_accuracy(self, 
                                      upload_id: str,
                                      target_accuracy: float = 0.95,
@@ -107,8 +143,10 @@ class SystemDispatcher:
             self.extraction_system.temperature = configuration.get('temperature', 0.7)
             self.extraction_system.stage_models = configuration.get('stage_models', {})
             
-            # Extract stage prompts from stages configuration
+            # Extract stage prompts from configuration
             stage_prompts = {}
+            
+            # Check for new 'stages' format first
             stages = configuration.get('stages', {})
             
             logger.info(f"Extracting prompts from configuration")
@@ -124,6 +162,29 @@ class SystemDispatcher:
                         logger.info(f"Found prompt_text for stage {stage_id}")
                     else:
                         logger.warning(f"No prompt_text found for stage {stage_id}")
+            
+            # Check for legacy 'prompts' format (the current UI format)
+            if not stage_prompts and 'prompts' in configuration:
+                logger.info("Checking legacy 'prompts' format from UI")
+                prompts_config = configuration.get('prompts', {})
+                
+                for stage_id, prompt_value in prompts_config.items():
+                    if prompt_value == "auto":
+                        # Load default prompt from database
+                        stage_prompts[stage_id] = await self._load_default_prompt(stage_id)
+                        logger.info(f"Loaded default prompt for {stage_id}")
+                    elif isinstance(prompt_value, str) and prompt_value != "auto":
+                        # Use custom prompt text
+                        stage_prompts[stage_id] = prompt_value
+                        logger.info(f"Using custom prompt for {stage_id}")
+                
+                # Always load comparison prompt for visual feedback systems
+                if 'comparison' not in stage_prompts:
+                    try:
+                        stage_prompts['comparison'] = await self._load_default_prompt('comparison')
+                        logger.info("Loaded comparison prompt for visual feedback")
+                    except Exception as e:
+                        logger.warning(f"Could not load comparison prompt: {e}")
             
             # Also check for direct stage_prompts (backward compatibility)
             direct_prompts = configuration.get('stage_prompts', {})
@@ -174,15 +235,15 @@ class SystemDispatcher:
             total_duration = time.time() - start_time
             
             result = MasterResult(
-                final_accuracy=getattr(extraction_result, 'overall_accuracy', 0.8),
-                target_achieved=getattr(extraction_result, 'overall_accuracy', 0.8) >= target_accuracy,
-                iterations_completed=getattr(extraction_result, 'iteration_count', 1),
+                final_accuracy=extraction_result.overall_accuracy,
+                target_achieved=extraction_result.overall_accuracy >= target_accuracy,
+                iterations_completed=extraction_result.iteration_count,
                 iteration_history=[],  # System manages its own history now
-                needs_human_review=getattr(extraction_result, 'overall_accuracy', 0.8) < target_accuracy,
-                structure_analysis=getattr(extraction_result, 'structure', None),
+                needs_human_review=extraction_result.overall_accuracy < target_accuracy,
+                structure_analysis=extraction_result.structure,
                 best_planogram=None,  # System generates planograms internally
                 total_duration=total_duration,
-                total_cost=getattr(extraction_result, 'api_cost_estimate', 0.0)
+                total_cost=extraction_result.cost_breakdown.total_cost
             )
             
             return result
