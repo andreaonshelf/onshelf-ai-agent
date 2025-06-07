@@ -908,6 +908,50 @@ async def batch_configure_items(request_data: Dict[str, Any]):
         prompts = extraction_config.get('prompts', {})
         reasoning = extraction_config.get('reasoning', {})
         
+        # Build stages with prompt texts if not present
+        if 'stages' not in extraction_config:
+            stages = {}
+            
+            # Load prompts from database for each stage type
+            prompt_types = ['structure', 'products', 'details', 'visual']
+            for prompt_type in prompt_types:
+                # Get prompt from database
+                try:
+                    result = supabase.table("prompt_templates").select("*").eq("prompt_type", prompt_type).eq("is_active", True).limit(1).execute()
+                    
+                    if result.data:
+                        prompt_data = result.data[0]
+                        stages[prompt_type] = {
+                            "prompt_text": prompt_data.get('prompt_text', f"Extract {prompt_type} from the image"),
+                            "fields": prompt_data.get('extraction_fields', [])
+                        }
+                    else:
+                        # Fallback defaults
+                        if prompt_type == 'structure':
+                            stages[prompt_type] = {
+                                "prompt_text": "Extract the shelf structure from this retail shelf image. Identify shelf levels and sections.",
+                                "fields": []
+                            }
+                        elif prompt_type == 'products':
+                            stages[prompt_type] = {
+                                "prompt_text": "Extract all products from this retail shelf image. Include brand, name, price, and position.",
+                                "fields": []
+                            }
+                        elif prompt_type == 'visual':
+                            stages[prompt_type] = {
+                                "prompt_text": "Compare the extracted data with the original image to verify accuracy.",
+                                "fields": []
+                            }
+                except Exception as e:
+                    logger.warning(f"Failed to load prompt for {prompt_type}: {e}")
+                    # Use minimal defaults
+                    stages[prompt_type] = {
+                        "prompt_text": f"Extract {prompt_type} information from the retail shelf image.",
+                        "fields": []
+                    }
+            
+            extraction_config['stages'] = stages
+        
         # Validate system
         valid_systems = ['custom_consensus', 'langgraph', 'hybrid']
         if system not in valid_systems:

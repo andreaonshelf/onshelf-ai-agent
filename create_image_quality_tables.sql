@@ -1,4 +1,4 @@
--- Create tables for image quality analysis and model performance tracking
+1-- Create tables for image quality analysis and model performance tracking
 
 -- Image Quality Analysis Table
 CREATE TABLE IF NOT EXISTS image_quality_analysis (

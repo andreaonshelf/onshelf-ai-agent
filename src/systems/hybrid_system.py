@@ -649,16 +649,21 @@ class HybridConsensusSystem(BaseExtractionSystem):
         return proposals
     
     async def _get_position_proposals(self, image_data: bytes, shelf_num: int, structure: Dict) -> List[Dict]:
-        """Get position proposals for specific shelf"""
+        """Get position proposals for specific shelf with visual feedback between models"""
         
         proposals = []
+        visual_feedback_history = []
         models = getattr(self, 'stage_models', {}).get('products', ['gpt-4o', 'claude-3-sonnet'])
         
-        for model in models:
+        for i, model in enumerate(models):
             try:
-                # Get prompt
-                prompt = getattr(self, 'stage_prompts', {}).get('products', 
+                # Build prompt with visual feedback from previous models
+                base_prompt = getattr(self, 'stage_prompts', {}).get('products', 
                     f'Extract products from shelf {shelf_num} of this retail display.')
+                
+                prompt = self._build_products_prompt_with_visual_feedback(
+                    base_prompt, visual_feedback_history, i+1, shelf_num
+                )
                 
                 # Build dynamic model if configured
                 output_schema = self._get_output_schema_for_stage('products')
@@ -692,6 +697,40 @@ class HybridConsensusSystem(BaseExtractionSystem):
                 
                 # Track cost
                 self.cost_tracker['total_cost'] += cost
+                
+                # VISUAL FEEDBACK FOR PRODUCTS STAGE (Hybrid system)
+                if i < len(models) - 1:  # Don't generate feedback after last model
+                    # Create temporary extraction for planogram generation
+                    temp_extraction = {
+                        'structure': structure,
+                        'products': list(positions.values())
+                    }
+                    
+                    # Generate planogram for visual comparison
+                    planogram = await self._generate_planogram_hybrid(temp_extraction, f"shelf{shelf_num}_model_{i+1}")
+                    
+                    # Visual comparison if comparison prompt is available
+                    if hasattr(self, 'stage_prompts') and 'comparison' in getattr(self, 'stage_prompts', {}):
+                        comparison_result = await self._compare_with_original_hybrid(
+                            image_data, planogram, self.stage_prompts['comparison']
+                        )
+                        
+                        # Extract actionable feedback
+                        actionable_feedback = await self._extract_actionable_feedback_hybrid(comparison_result)
+                        
+                        visual_feedback_history.append({
+                            'model': model,
+                            'attempt': i+1,
+                            'shelf': shelf_num,
+                            'comparison_result': comparison_result,
+                            'actionable_feedback': actionable_feedback
+                        })
+                        
+                        logger.info(
+                            f"Hybrid visual feedback from model {i+1} for shelf {shelf_num}: {len(actionable_feedback)} issues found",
+                            component="hybrid_system",
+                            issues_found=len(actionable_feedback)
+                        )
                 
             except Exception as e:
                 logger.error(f"Hybrid position agent {model} failed for shelf {shelf_num}: {e}", component="hybrid_system")
@@ -1036,7 +1075,7 @@ class HybridConsensusSystem(BaseExtractionSystem):
                 f"Building dynamic model for Hybrid {stage} stage with {len(stage_config['fields'])} fields",
                 component="hybrid_system"
             )
-            return DynamicModelBuilder.build_model_from_config(stage_config['fields'], f'Hybrid{stage.title()}V1')
+            return DynamicModelBuilder.build_model_from_config(stage, stage_config)
         
         # Fallback to generic schemas
         if stage == 'structure':
@@ -1121,7 +1160,137 @@ class HybridConsensusSystem(BaseExtractionSystem):
                                 prod['shelf'] = shelf_num
                                 products.append(prod)
         
-        return products 
+        return products
+    
+    def _build_products_prompt_with_visual_feedback(
+        self, 
+        base_prompt: str, 
+        visual_feedback: List[Dict], 
+        attempt_number: int,
+        shelf_num: int
+    ) -> str:
+        """Build products prompt with visual feedback from previous models (Hybrid system)"""
+        
+        prompt = base_prompt
+        
+        # Add visual feedback if available (from previous models in products stage)
+        if visual_feedback and attempt_number > 1:
+            prompt += "\n\nVISUAL FEEDBACK FROM PREVIOUS ATTEMPTS:\n"
+            
+            for feedback in visual_feedback:
+                if feedback.get('shelf') == shelf_num:  # Only feedback for this shelf
+                    prompt += f"\nAttempt {feedback['attempt']} ({feedback['model']}) for shelf {shelf_num}:\n"
+                    
+                    # Add specific issues found
+                    for issue in feedback['actionable_feedback']:
+                        issue_type = issue.get('type', 'unknown')
+                        
+                        if issue_type == 'missing_product':
+                            prompt += f"- Missing product at position {issue.get('position', '?')}\n"
+                        elif issue_type == 'wrong_position':
+                            prompt += f"- Product {issue.get('product', '?')} appears to be at wrong position\n"
+                        elif issue_type == 'quantity_mismatch':
+                            prompt += f"- Facing count mismatch for {issue.get('product', '?')}: planogram shows {issue.get('planogram_count', '?')}, image suggests {issue.get('image_count', '?')}\n"
+                        elif issue_type == 'extra_product':
+                            prompt += f"- Extra product {issue.get('product', '?')} at position {issue.get('position', '?')} not visible in image\n"
+                        else:
+                            prompt += f"- {issue_type}: {issue.get('details', '')}\n"
+            
+            prompt += f"\nPlease address these visual discrepancies in your extraction for shelf {shelf_num}."
+        
+        return prompt
+    
+    async def _generate_planogram_hybrid(self, extraction_data: Dict, identifier: str) -> Dict:
+        """Generate planogram from extraction data for visual feedback (Hybrid system)"""
+        from ..api.planogram_renderer import generate_png_from_real_data
+        
+        # Prepare data in the expected format
+        planogram_data = {
+            'extraction_result': {
+                'products': extraction_data.get('products', []),
+                'structure': extraction_data.get('structure', {})
+            },
+            'accuracy': 0.0  # Will be updated after comparison
+        }
+        
+        # Generate PNG
+        planogram_png = generate_png_from_real_data(planogram_data, "product_view")
+        
+        return {
+            'id': identifier,
+            'data': planogram_data,
+            'image': planogram_png,
+            'extraction_result': planogram_data['extraction_result']
+        }
+    
+    async def _compare_with_original_hybrid(self, original_image: bytes, planogram: Dict, comparison_prompt: str) -> Dict:
+        """Compare original image with planogram using orchestrator model (Hybrid system)"""
+        
+        # Use the planogram PNG that was already generated
+        planogram_png = planogram.get('image')
+        if not planogram_png:
+            logger.error("No planogram image found for comparison", component="hybrid_system")
+            return {}
+        
+        # Get structure from the extraction result
+        structure_context = planogram.get('extraction_result', {}).get('structure', {})
+        
+        # Use the comparison agent with orchestrator model for intelligent analysis
+        from ..comparison.image_comparison_agent import ImageComparisonAgent
+        comparison_agent = ImageComparisonAgent(self.config)
+        
+        orchestrator_model = getattr(self, 'orchestrator_model', 'claude-4-opus')
+        
+        comparison_result = await comparison_agent.compare_image_vs_planogram(
+            original_image=original_image,
+            planogram=planogram,
+            structure_context=structure_context,
+            planogram_image=planogram_png,
+            model=orchestrator_model,
+            comparison_prompt=comparison_prompt
+        )
+        
+        return comparison_result
+    
+    async def _extract_actionable_feedback_hybrid(self, comparison_result) -> List[Dict]:
+        """Extract actionable feedback from comparison result for next model (Hybrid system)"""
+        
+        actionable_feedback = []
+        
+        # Process mismatches
+        if hasattr(comparison_result, 'mismatches'):
+            for mismatch in comparison_result.mismatches:
+                if isinstance(mismatch, dict):
+                    actionable_feedback.append({
+                        'type': mismatch.get('issue_type', 'mismatch'),
+                        'product': mismatch.get('product', ''),
+                        'position': mismatch.get('position', 0),
+                        'details': mismatch.get('details', ''),
+                        'planogram_count': mismatch.get('planogram_count'),
+                        'image_count': mismatch.get('image_count')
+                    })
+        
+        # Process missing products (visible in image but not in extraction)
+        if hasattr(comparison_result, 'missing_products'):
+            for missing in comparison_result.missing_products:
+                actionable_feedback.append({
+                    'type': 'missing_product',
+                    'product': missing.get('product_name', '') if isinstance(missing, dict) else '',
+                    'position': missing.get('position', 0) if isinstance(missing, dict) else 0,
+                    'details': missing.get('details', '') if isinstance(missing, dict) else ''
+                })
+        
+        # Process extra products (in extraction but not visible in image)
+        if hasattr(comparison_result, 'extra_products'):
+            for extra in comparison_result.extra_products:
+                actionable_feedback.append({
+                    'type': 'extra_product',
+                    'product': extra.get('product_name', '') if isinstance(extra, dict) else '',
+                    'position': extra.get('position', 0) if isinstance(extra, dict) else 0,
+                    'details': extra.get('details', '') if isinstance(extra, dict) else ''
+                })
+        
+        return actionable_feedback 
 
 # Export the HybridSystem class
 HybridSystem = HybridConsensusSystem 

@@ -176,8 +176,8 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
             
             stage_results[stage] = stage_result
             
-            # Generate planogram after products and details stages
-            if stage in ['products', 'details']:
+            # Generate planogram after products stage only (where visual feedback happens)
+            if stage == 'products':
                 logger.info(
                     f"Generating planogram after {stage} stage",
                     component="custom_consensus_visual"
@@ -290,8 +290,8 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                 'attempt': i+1
             })
             
-            # Generate planogram after each model (except structure stage)
-            if stage != 'structure':
+            # Generate planogram after each model (ONLY for products stage)
+            if stage == 'products':
                 # Create temporary extraction combining previous stages + current attempt
                 temp_extraction = self._create_temp_extraction(
                     previous_stages, 

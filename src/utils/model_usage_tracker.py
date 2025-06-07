@@ -20,7 +20,7 @@ class ModelUsageTracker:
         try:
             self.supabase = create_client(
                 os.getenv("SUPABASE_URL"),
-                os.getenv("SUPABASE_KEY")
+                os.getenv("SUPABASE_SERVICE_KEY")
             )
         except Exception as e:
             logger.error(f"Failed to initialize Supabase client: {e}")

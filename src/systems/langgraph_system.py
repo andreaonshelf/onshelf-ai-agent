@@ -41,6 +41,10 @@ class LangGraphExtractionState(TypedDict):
     """State schema for LangGraph workflow"""
     image_data: bytes
     upload_id: str
+    # New dynamic stage-based results
+    stage_results: Optional[Dict]
+    final_planogram: Optional[Dict]
+    # Legacy fields for backward compatibility
     structure_consensus: Optional[Dict]
     position_consensus: Optional[Dict]
     quantity_consensus: Optional[Dict]
@@ -81,47 +85,29 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         )
     
     def _create_workflow(self):
-        """Create LangGraph workflow for consensus extraction"""
+        """Create DYNAMIC LangGraph workflow based on configured stages"""
         
         if not LANGGRAPH_AVAILABLE:
             return MockWorkflow()
         
         workflow = StateGraph(LangGraphExtractionState)
         
-        # Add nodes for each stage
-        workflow.add_node("structure_analysis_node", self._structure_consensus_node)
-        workflow.add_node("position_consensus_node", self._position_consensus_node)
-        workflow.add_node("quantity_consensus_node", self._quantity_consensus_node)
-        workflow.add_node("detail_consensus_node", self._detail_consensus_node)
-        workflow.add_node("generate_planogram_node", self._generate_planogram_node)
+        # DYNAMIC workflow - uses configured stages instead of hardcoded ones
+        workflow.add_node("process_configured_stages_node", self._process_configured_stages_node)
+        workflow.add_node("generate_final_planogram_node", self._generate_final_planogram_node)
         workflow.add_node("validate_end_to_end_node", self._validate_end_to_end_node)
         workflow.add_node("smart_retry_node", self._smart_retry_node)
         workflow.add_node("finalize_result_node", self._finalize_result_node)
         
-        # Add conditional edges for smart routing
+        # Conditional routing based on results
         workflow.add_conditional_edges(
-            "structure_analysis_node",
-            lambda state: "position_consensus_node" if state.get("structure_consensus") else "smart_retry_node"
+            "process_configured_stages_node",
+            lambda state: "generate_final_planogram_node" if self._all_stages_completed(state) else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
-            "position_consensus_node",
-            lambda state: "quantity_consensus_node" if state.get("position_consensus") else "smart_retry_node"
-        )
-        
-        workflow.add_conditional_edges(
-            "quantity_consensus_node",
-            lambda state: "detail_consensus_node" if state.get("quantity_consensus") else "smart_retry_node"
-        )
-        
-        workflow.add_conditional_edges(
-            "detail_consensus_node",
-            lambda state: "generate_planogram_node" if state.get("detail_consensus") else "smart_retry_node"
-        )
-        
-        workflow.add_conditional_edges(
-            "generate_planogram_node",
-            lambda state: "validate_end_to_end_node" if state.get("planogram") else "smart_retry_node"
+            "generate_final_planogram_node",
+            lambda state: "validate_end_to_end_node" if state.get("final_planogram") else "smart_retry_node"
         )
         
         workflow.add_conditional_edges(
@@ -131,11 +117,11 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         
         workflow.add_conditional_edges(
             "smart_retry_node",
-            lambda state: "structure_analysis_node" if state["iteration_count"] < 5 else "finalize_result_node"
+            lambda state: "process_configured_stages_node" if state["iteration_count"] < 5 else "finalize_result_node"
         )
         
-        # Set entry point
-        workflow.set_entry_point("structure_analysis_node")
+        # Set entry point to process configured stages
+        workflow.set_entry_point("process_configured_stages_node")
         
         return workflow.compile(checkpointer=MemorySaver())
     
@@ -151,6 +137,10 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         initial_state = LangGraphExtractionState(
             image_data=image_data,
             upload_id=upload_id,
+            # New dynamic stage-based results
+            stage_results={},
+            final_planogram=None,
+            # Legacy fields for backward compatibility
             structure_consensus=None,
             position_consensus=None,
             quantity_consensus=None,
@@ -164,8 +154,11 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             consensus_rates={}
         )
         
-        # Run the workflow
-        config = {"configurable": {"thread_id": upload_id}}
+        # Run the workflow with increased recursion limit
+        config = {
+            "configurable": {"thread_id": upload_id},
+            "recursion_limit": 50  # Increase from default 25 to handle complex extractions
+        }
         
         try:
             final_state = await self.workflow.ainvoke(initial_state, config)
@@ -243,6 +236,168 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         
         return state
     
+    async def _process_configured_stages_node(self, state: LangGraphExtractionState) -> LangGraphExtractionState:
+        """DYNAMIC node that processes all configured stages with visual feedback between models"""
+        
+        logger.info(
+            f"LangGraph: Processing configured stages - iteration {state['iteration_count']}",
+            component="langgraph_system",
+            iteration=state['iteration_count']
+        )
+        
+        # Get configured stages from the system
+        configured_stages = getattr(self, 'stage_configs', {})
+        if not configured_stages:
+            # Fallback to traditional stages if no configuration
+            stages_to_process = ['structure', 'products', 'details']
+            logger.warning("No stage configurations found, using default stages", component="langgraph_system")
+        else:
+            stages_to_process = list(configured_stages.keys())
+            logger.info(f"Processing configured stages: {stages_to_process}", component="langgraph_system")
+        
+        stage_results = state.get('stage_results', {})
+        
+        for stage in stages_to_process:
+            logger.info(
+                f"Processing stage: {stage}",
+                component="langgraph_system",
+                stage=stage,
+                iteration=state['iteration_count']
+            )
+            
+            # Check if this stage is locked from previous iteration
+            if stage in state.get('locked_results', {}):
+                stage_results[stage] = state['locked_results'][stage]
+                logger.info(f"🔒 Using locked {stage} result", component="langgraph_system")
+                continue
+            
+            # Get models for this stage
+            models_for_stage = getattr(self, 'stage_models', {}).get(stage, ['gpt-4o', 'claude-3-sonnet'])
+            
+            # Process stage with visual feedback between models (per documentation)
+            stage_result = await self._process_stage_with_visual_feedback_langgraph(
+                stage=stage,
+                models=models_for_stage,
+                image_data=state['image_data'],
+                previous_stages=stage_results,
+                state=state
+            )
+            
+            stage_results[stage] = stage_result
+        
+        # Update state with all stage results
+        state['stage_results'] = stage_results
+        
+        # Mark stages as completed in state for conditional routing
+        for stage in stages_to_process:
+            if stage in stage_results:
+                state[f'{stage}_consensus'] = stage_results[stage]
+        
+        return state
+    
+    async def _process_stage_with_visual_feedback_langgraph(
+        self,
+        stage: str,
+        models: List[str],
+        image_data: bytes,
+        previous_stages: Dict[str, Any],
+        state: LangGraphExtractionState
+    ) -> Dict[str, Any]:
+        """Process single stage with visual feedback between models (as per documentation)"""
+        
+        model_results = []
+        visual_feedback_history = []
+        
+        for i, model in enumerate(models):
+            logger.info(
+                f"Processing {stage} with model {i+1}/{len(models)}: {model}",
+                component="langgraph_system",
+                stage=stage,
+                model=model,
+                attempt=i+1
+            )
+            
+            # Build prompt with visual feedback from previous models in this stage
+            prompt = self._build_stage_prompt_with_visual_feedback(
+                stage=stage,
+                attempt_number=i+1,
+                visual_feedback=visual_feedback_history,
+                previous_stages=previous_stages
+            )
+            
+            # Extract with current model
+            extraction_result = await self._extract_with_model_langgraph(
+                model=model,
+                prompt=prompt,
+                image_data=image_data,
+                stage=stage,
+                previous_stages=previous_stages
+            )
+            
+            model_results.append({
+                'model': model,
+                'result': extraction_result,
+                'attempt': i+1
+            })
+            
+            # VISUAL FEEDBACK BETWEEN MODELS (per documentation - ONLY for products stage)
+            if stage == 'products':  # Visual feedback only in products stage
+                # Generate planogram from current extraction
+                temp_extraction = self._create_temp_extraction_langgraph(previous_stages, stage, extraction_result)
+                planogram = await self._generate_planogram_for_stage(temp_extraction, f"{stage}_model_{i+1}")
+                
+                # Visual comparison for feedback to next model
+                if hasattr(self, 'stage_prompts') and 'comparison' in self.stage_prompts:
+                    comparison_result = await self._compare_with_original_langgraph(
+                        image_data,
+                        planogram,
+                        self.stage_prompts['comparison']
+                    )
+                    
+                    # Extract actionable feedback for next model
+                    actionable_feedback = await self._extract_actionable_feedback_langgraph(comparison_result)
+                    
+                    visual_feedback_history.append({
+                        'model': model,
+                        'attempt': i+1,
+                        'comparison_result': comparison_result,
+                        'actionable_feedback': actionable_feedback,
+                        'planogram': planogram
+                    })
+                    
+                    logger.info(
+                        f"Visual feedback from model {i+1}: {len(actionable_feedback)} issues found",
+                        component="langgraph_system",
+                        issues_found=len(actionable_feedback)
+                    )
+        
+        # Apply consensus voting on all model results
+        consensus_result = await self._apply_stage_consensus_langgraph(stage, model_results, visual_feedback_history)
+        
+        return consensus_result
+    
+    def _all_stages_completed(self, state: LangGraphExtractionState) -> bool:
+        """Check if all configured stages have been completed"""
+        configured_stages = getattr(self, 'stage_configs', {})
+        if not configured_stages:
+            # Default stages check
+            required_stages = ['structure', 'products', 'details']
+        else:
+            required_stages = list(configured_stages.keys())
+        
+        stage_results = state.get('stage_results', {})
+        completed = all(stage in stage_results for stage in required_stages)
+        
+        logger.info(
+            f"Stage completion check: {len(stage_results)}/{len(required_stages)} stages completed",
+            component="langgraph_system",
+            completed_stages=list(stage_results.keys()),
+            required_stages=required_stages,
+            all_completed=completed
+        )
+        
+        return completed
+    
     async def _position_consensus_node(self, state: LangGraphExtractionState) -> LangGraphExtractionState:
         """LangGraph node for position consensus"""
         
@@ -259,7 +414,24 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         try:
             # Real product extraction
             structure = state.get('structure_consensus', {})
-            shelf_count = structure.get('shelf_count', 4)
+            # Handle case where structure might be a string or other non-dict type
+            if isinstance(structure, str):
+                logger.warning(
+                    f"Structure consensus is string, parsing for shelf count",
+                    component="langgraph_system"
+                )
+                # Try to extract shelf count from string
+                import re
+                shelf_match = re.search(r'(\d+)\s*shelves?', structure.lower())
+                shelf_count = int(shelf_match.group(1)) if shelf_match else 4
+            elif isinstance(structure, dict):
+                shelf_count = structure.get('shelf_count', 4)
+            else:
+                logger.warning(
+                    f"Unexpected structure type: {type(structure)}, using default",
+                    component="langgraph_system"
+                )
+                shelf_count = 4
             
             # Get products stage configuration
             prompt = getattr(self, 'stage_prompts', {}).get('products', 
@@ -799,13 +971,16 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             debugging_ease="Medium"
         )
         
+        # Get results from new stage-based structure
+        stage_results = state.get('stage_results', {})
+        
         return ExtractionResult(
             system_type="langgraph",
             upload_id=state['upload_id'],
-            structure=state.get('structure_consensus', {}),
-            positions=state.get('position_consensus', {}),
-            quantities=state.get('quantity_consensus', {}),
-            details=state.get('detail_consensus', {}),
+            structure=stage_results.get('structure', state.get('structure_consensus', {})),
+            positions=stage_results.get('products', state.get('position_consensus', {})),
+            quantities=state.get('quantity_consensus', {}),  # Keep existing for backward compatibility
+            details=stage_results.get('details', state.get('detail_consensus', {})),
             overall_accuracy=accuracy,
             consensus_reached=avg_consensus_rate >= 0.7,
             validation_result=validation,
@@ -918,7 +1093,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                 f"Building dynamic model for LangGraph {stage} stage with {len(stage_config['fields'])} fields",
                 component="langgraph_system"
             )
-            return DynamicModelBuilder.build_model_from_config(stage_config['fields'], f'LangGraph{stage.title()}V1')
+            return DynamicModelBuilder.build_model_from_config(stage, stage_config)
         
         # Fallback to basic structured schemas
         from pydantic import BaseModel, Field
@@ -1063,6 +1238,353 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
                     break
         
         return details
+    
+    def _build_stage_prompt_with_visual_feedback(
+        self,
+        stage: str,
+        attempt_number: int,
+        visual_feedback: List[Dict],
+        previous_stages: Dict[str, Any]
+    ) -> str:
+        """Build prompt with visual feedback from previous models in this stage"""
+        
+        # Get base prompt for stage
+        base_prompt = getattr(self, 'stage_prompts', {}).get(stage, self._get_default_stage_prompt(stage))
+        
+        # Add context from previous stages
+        if stage == 'products' and 'structure' in previous_stages:
+            structure = previous_stages['structure']
+            shelf_count = structure.get('shelf_count', 4)
+            base_prompt = base_prompt.replace('{shelf_count}', str(shelf_count))
+            base_prompt = base_prompt.replace('{shelves}', str(shelf_count))
+        
+        # Add visual feedback if available (from previous models in this stage)
+        if visual_feedback and attempt_number > 1:
+            base_prompt += "\n\nVISUAL FEEDBACK FROM PREVIOUS ATTEMPTS:\n"
+            
+            for feedback in visual_feedback:
+                base_prompt += f"\nAttempt {feedback['attempt']} ({feedback['model']}):\n"
+                
+                # Add specific issues found
+                for issue in feedback['actionable_feedback']:
+                    issue_type = issue.get('type', 'unknown')
+                    
+                    if issue_type == 'missing_product':
+                        base_prompt += f"- Missing product at shelf {issue.get('shelf', '?')}, position {issue.get('position', '?')}\n"
+                    elif issue_type == 'wrong_position':
+                        base_prompt += f"- Product {issue.get('product', '?')} appears to be at wrong position\n"
+                    elif issue_type == 'quantity_mismatch':
+                        base_prompt += f"- Facing count mismatch for {issue.get('product', '?')}: planogram shows {issue.get('planogram_count', '?')}, image suggests {issue.get('image_count', '?')}\n"
+                    elif issue_type == 'extra_product':
+                        base_prompt += f"- Extra product {issue.get('product', '?')} at shelf {issue.get('shelf', '?')}, position {issue.get('position', '?')} not visible in image\n"
+                    else:
+                        base_prompt += f"- {issue_type}: {issue.get('details', '')}\n"
+            
+            base_prompt += "\nPlease address these visual discrepancies in your extraction."
+        
+        return base_prompt
+    
+    def _get_default_stage_prompt(self, stage: str) -> str:
+        """Get default prompt for stage"""
+        defaults = {
+            'structure': "Analyze the shelf structure and count the number of shelves.",
+            'products': "Extract all products with their positions on the {shelf_count} shelves.",
+            'details': "Extract detailed information for all products including prices and sizes."
+        }
+        return defaults.get(stage, f"Process the {stage} stage.")
+    
+    async def _extract_with_model_langgraph(
+        self,
+        model: str,
+        prompt: str,
+        image_data: bytes,
+        stage: str,
+        previous_stages: Dict
+    ) -> Any:
+        """Extract using specific model for LangGraph system"""
+        
+        # Prepare images dict as expected by extraction engine
+        images = {'enhanced': image_data}
+        
+        # Get configuration for this stage
+        stage_config = getattr(self, 'stage_configs', {}).get(stage, {})
+        
+        # Build dynamic model from user's field definitions
+        output_schema = None
+        if stage_config and 'fields' in stage_config:
+            logger.info(
+                f"Building dynamic model for LangGraph {stage} stage with {len(stage_config['fields'])} fields",
+                component="langgraph_system",
+                stage=stage,
+                field_count=len(stage_config['fields'])
+            )
+            output_schema = DynamicModelBuilder.build_model_from_config(stage, stage_config)
+        else:
+            # Use the basic schemas
+            output_schema = self._get_output_schema_for_stage(stage)
+        
+        # Use the actual extraction engine
+        result, cost = await self.extraction_engine.execute_with_model_id(
+            model_id=model,
+            prompt=prompt,
+            images=images,
+            output_schema=output_schema,
+            agent_id=f"langgraph_{stage}_{model}"
+        )
+        
+        # Track cost
+        self.cost_tracker['total_cost'] += cost
+        
+        # Parse result based on stage
+        if hasattr(result, 'model_dump'):
+            # Convert Pydantic model to dict
+            return result.model_dump()
+        elif isinstance(result, dict):
+            return result
+        else:
+            logger.warning(f"Unexpected result type for {stage}: {type(result)}", component="langgraph_system")
+            return result
+    
+    def _create_temp_extraction_langgraph(self, previous_stages: Dict, current_stage: str, current_result: Any) -> Dict:
+        """Create temporary extraction combining previous stages and current attempt"""
+        temp = previous_stages.copy()
+        temp[current_stage] = current_result
+        return temp
+    
+    async def _generate_planogram_for_stage(self, extraction_data: Dict, identifier: str) -> Dict:
+        """Generate planogram from extraction data for visual feedback"""
+        from ..api.planogram_renderer import generate_png_from_real_data
+        
+        # Prepare data in the expected format
+        planogram_data = {
+            'extraction_result': {
+                'products': extraction_data.get('products', []),
+                'structure': extraction_data.get('structure', {})
+            },
+            'accuracy': 0.0  # Will be updated after comparison
+        }
+        
+        # Generate PNG
+        planogram_png = generate_png_from_real_data(planogram_data, "product_view")
+        
+        return {
+            'id': identifier,
+            'data': planogram_data,
+            'image': planogram_png,
+            'extraction_result': planogram_data['extraction_result']
+        }
+    
+    async def _compare_with_original_langgraph(self, original_image: bytes, planogram: Dict, comparison_prompt: str) -> Dict:
+        """Compare original image with planogram using orchestrator model"""
+        
+        # Use the planogram PNG that was already generated
+        planogram_png = planogram.get('image')
+        if not planogram_png:
+            logger.error("No planogram image found for comparison", component="langgraph_system")
+            return {}
+        
+        # Get structure from the extraction result
+        structure_context = planogram.get('extraction_result', {}).get('structure', {})
+        
+        # Use the comparison agent with orchestrator model for intelligent analysis
+        from ..comparison.image_comparison_agent import ImageComparisonAgent
+        comparison_agent = ImageComparisonAgent(self.config)
+        
+        orchestrator_model = getattr(self, 'orchestrator_model', 'claude-4-opus')
+        
+        comparison_result = await comparison_agent.compare_image_vs_planogram(
+            original_image=original_image,
+            planogram=planogram,
+            structure_context=structure_context,
+            planogram_image=planogram_png,
+            model=orchestrator_model,
+            comparison_prompt=comparison_prompt
+        )
+        
+        return comparison_result
+    
+    async def _extract_actionable_feedback_langgraph(self, comparison_result) -> List[Dict]:
+        """Extract actionable feedback from comparison result for next model"""
+        
+        actionable_feedback = []
+        
+        # Process mismatches
+        if hasattr(comparison_result, 'mismatches'):
+            for mismatch in comparison_result.mismatches:
+                if isinstance(mismatch, dict):
+                    actionable_feedback.append({
+                        'type': mismatch.get('issue_type', 'mismatch'),
+                        'product': mismatch.get('product', ''),
+                        'shelf': mismatch.get('shelf', 0),
+                        'position': mismatch.get('position', 0),
+                        'details': mismatch.get('details', ''),
+                        'planogram_count': mismatch.get('planogram_count'),
+                        'image_count': mismatch.get('image_count')
+                    })
+        
+        # Process missing products (visible in image but not in extraction)
+        if hasattr(comparison_result, 'missing_products'):
+            for missing in comparison_result.missing_products:
+                actionable_feedback.append({
+                    'type': 'missing_product',
+                    'product': missing.get('product_name', '') if isinstance(missing, dict) else '',
+                    'shelf': missing.get('shelf', 0) if isinstance(missing, dict) else 0,
+                    'position': missing.get('position', 0) if isinstance(missing, dict) else 0,
+                    'details': missing.get('details', '') if isinstance(missing, dict) else ''
+                })
+        
+        # Process extra products (in extraction but not visible in image)
+        if hasattr(comparison_result, 'extra_products'):
+            for extra in comparison_result.extra_products:
+                actionable_feedback.append({
+                    'type': 'extra_product',
+                    'product': extra.get('product_name', '') if isinstance(extra, dict) else '',
+                    'shelf': extra.get('shelf', 0) if isinstance(extra, dict) else 0,
+                    'position': extra.get('position', 0) if isinstance(extra, dict) else 0,
+                    'details': extra.get('details', '') if isinstance(extra, dict) else ''
+                })
+        
+        return actionable_feedback
+    
+    async def _apply_stage_consensus_langgraph(
+        self,
+        stage: str,
+        model_results: List[Dict],
+        visual_feedback: List[Dict]
+    ) -> Dict[str, Any]:
+        """Apply consensus voting for a stage using existing logic"""
+        
+        # Use the same consensus logic as other systems
+        if stage == 'structure':
+            return await self._consensus_structure_langgraph(model_results)
+        elif stage == 'products':
+            return await self._consensus_products_langgraph(model_results)
+        elif stage == 'details':
+            return await self._consensus_details_langgraph(model_results)
+        else:
+            # Generic consensus - use first result
+            return model_results[0]['result'] if model_results else {}
+    
+    async def _consensus_structure_langgraph(self, model_results: List[Dict]) -> Dict:
+        """Apply consensus for structure stage"""
+        
+        # Simple majority voting on shelf count
+        from collections import Counter
+        shelf_counts = []
+        
+        for result in model_results:
+            data = result['result']
+            shelf_count = data.get('shelf_count', 4)
+            shelf_counts.append(shelf_count)
+        
+        if shelf_counts:
+            count_votes = Counter(shelf_counts)
+            most_common_count = count_votes.most_common(1)[0][0]
+            
+            # Find the best result with the most common shelf count
+            best_result = None
+            for result in model_results:
+                data = result['result']
+                if data.get('shelf_count', 4) == most_common_count:
+                    best_result = data
+                    break
+            
+            logger.info(
+                f"Structure consensus: {most_common_count} shelves",
+                component="langgraph_system",
+                shelf_count=most_common_count
+            )
+            
+            return best_result or {'shelf_count': most_common_count}
+        
+        return {'shelf_count': 4}  # Default fallback
+    
+    async def _consensus_products_langgraph(self, model_results: List[Dict]) -> List[Dict]:
+        """Apply consensus for products using position voting"""
+        
+        all_products = []
+        
+        # Collect all products from all models
+        for result in model_results:
+            products = result['result']
+            if isinstance(products, list):
+                all_products.extend(products)
+            elif isinstance(products, dict) and 'products' in products:
+                all_products.extend(products['products'])
+        
+        # Simple deduplication by position
+        position_map = {}
+        for product in all_products:
+            if isinstance(product, dict) and 'shelf' in product and 'position' in product:
+                key = f"s{product['shelf']}_p{product['position']}"
+                if key not in position_map:
+                    position_map[key] = product
+        
+        consensus_products = list(position_map.values())
+        
+        logger.info(
+            f"Products consensus: {len(consensus_products)} products",
+            component="langgraph_system",
+            product_count=len(consensus_products)
+        )
+        
+        return consensus_products
+    
+    async def _consensus_details_langgraph(self, model_results: List[Dict]) -> Dict:
+        """Apply consensus for details by merging results"""
+        
+        merged_details = {}
+        
+        for result in model_results:
+            details = result['result']
+            if isinstance(details, dict):
+                merged_details.update(details)
+        
+        logger.info(
+            f"Details consensus: {len(merged_details)} detail fields",
+            component="langgraph_system",
+            detail_count=len(merged_details)
+        )
+        
+        return merged_details
+    
+    async def _generate_final_planogram_node(self, state: LangGraphExtractionState) -> LangGraphExtractionState:
+        """Generate final planogram after all stages completed"""
+        
+        logger.info(
+            "LangGraph: Generate final planogram node",
+            component="langgraph_system"
+        )
+        
+        try:
+            # Get all stage results
+            stage_results = state.get('stage_results', {})
+            
+            # Combine into final extraction format
+            final_extraction = {
+                'structure': stage_results.get('structure', {}),
+                'products': stage_results.get('products', []),
+                'details': stage_results.get('details', {})
+            }
+            
+            # Generate final planogram
+            final_planogram = await self._generate_planogram_for_stage(final_extraction, "final_langgraph")
+            
+            state['final_planogram'] = final_planogram
+            
+            logger.info(
+                f"✅ LangGraph final planogram generated",
+                component="langgraph_system"
+            )
+        
+        except Exception as e:
+            logger.error(
+                f"Final planogram generation failed: {e}",
+                component="langgraph_system",
+                error=str(e)
+            )
+        
+        return state
     
     def _find_matching_position(self, item: Dict, positions: Dict) -> Optional[str]:
         """Find matching position key for a detail item"""

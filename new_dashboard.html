@@ -939,15 +939,45 @@
                 // Get the current extraction configuration with all field definitions
                 let currentExtractionConfig = null;
                 try {
-                    const configResponse = await fetch(`${API_BASE}/extraction-config/current`);
+                    const configResponse = await fetch(`${API_BASE}/extraction-config/current-config`);
                     if (configResponse.ok) {
                         currentExtractionConfig = await configResponse.json();
                         console.log('Retrieved extraction config:', currentExtractionConfig);
                     } else {
-                        console.warn('No current extraction config found, using UI config');
+                        console.warn('No current extraction config found, will build default config');
+                        // Build a default configuration with stages
+                        currentExtractionConfig = {
+                            system: currentConfig.system || 'langgraph_consensus',
+                            temperature: 0.7,
+                            stages: {
+                                structure: {
+                                    prompt_text: "Extract the shelf structure from this retail shelf image. Identify shelf levels and sections.",
+                                    fields: []
+                                },
+                                products: {
+                                    prompt_text: "Extract all products from this retail shelf image. Include brand, name, price, and position.",
+                                    fields: []
+                                }
+                            }
+                        };
                     }
                 } catch (error) {
                     console.error('Failed to get extraction config:', error);
+                    // Build a default configuration with stages
+                    currentExtractionConfig = {
+                        system: currentConfig.system || 'langgraph_consensus',
+                        temperature: 0.7,
+                        stages: {
+                            structure: {
+                                prompt_text: "Extract the shelf structure from this retail shelf image. Identify shelf levels and sections.",
+                                fields: []
+                            },
+                            products: {
+                                prompt_text: "Extract all products from this retail shelf image. Include brand, name, price, and position.",
+                                fields: []
+                            }
+                        }
+                    };
                 }
                 
                 for (const itemId of itemsToProcess) {
@@ -1410,10 +1440,10 @@
                     description: 'Latest Claude 3.5 Sonnet revision'
                 },
                 {
-                    id: 'claude-3-7-sonnet',
+                    id: 'claude-3-5-sonnet',
                     provider: 'Anthropic',
-                    family: 'Claude 3.7',
-                    name: 'Claude 3.7 Sonnet',
+                    family: 'Claude 3.5',
+                    name: 'Claude 3.5 Sonnet',
                     capabilities: ['vision', 'fast', 'efficient'],
                     speed: 'fast',
                     cost: 'low',
@@ -2861,7 +2891,7 @@
                                             <option value="gpt-4o">GPT-4o</option>
                                         </optgroup>
                                         <optgroup label="Cost Effective">
-                                            <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
+                                            <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
                                             <option value="gpt-4o-mini">GPT-4o mini</option>
                                             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                                         </optgroup>

@@ -27,11 +27,20 @@ class DynamicModelBuilder:
         """
         fields = stage_config.get('fields', [])
         if not fields:
-            logger.warning(
-                f"No fields defined for stage {stage_name}",
-                component="dynamic_model_builder"
-            )
-            return None
+            # Some stages like 'visual' legitimately have no fields (they do comparison, not extraction)
+            if stage_name in ['visual', 'comparison']:
+                logger.info(
+                    f"Stage {stage_name} has no fields (comparison-only stage)",
+                    component="dynamic_model_builder"
+                )
+                return None
+            else:
+                logger.error(
+                    f"No fields defined for stage {stage_name} - this should not happen! "
+                    f"Fields must be loaded from the database.",
+                    component="dynamic_model_builder"
+                )
+                raise ValueError(f"No field definitions found for stage {stage_name}. Check database configuration.")
             
         logger.info(
             f"Building dynamic model for stage {stage_name} with {len(fields)} fields",

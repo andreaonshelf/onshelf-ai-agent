@@ -150,10 +150,12 @@ class AIExtractionQueueProcessor:
             # Get configuration from queue item - prioritize extraction_config which has field definitions
             extraction_config = queue_item.get('extraction_config', {})
             model_config = queue_item.get('model_config', {})
-            system = queue_item.get('current_extraction_system', 'custom_consensus')
             
             # Use extraction_config if it has stages (field definitions), otherwise fall back to model_config
             configuration = extraction_config if extraction_config.get('stages') else model_config
+            
+            # Determine system to use - prioritize system from configuration, fall back to queue item
+            system = configuration.get('system') or queue_item.get('current_extraction_system', 'custom_consensus')
             
             logger.info(
                 f"Processing with configuration type: {'extraction_config' if extraction_config.get('stages') else 'model_config'}",

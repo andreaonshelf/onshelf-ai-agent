@@ -131,15 +131,7 @@ class NonProductElements(BaseModel):
     empty_spaces: List[Dict[str, int]] = Field(default_factory=list)
 
 
-class ShelfStructure(BaseModel):
-    """Physical shelf layout"""
-    picture_height: int
-    picture_width: int
-    number_of_shelves: int
-    estimated_width_meters: float
-    estimated_height_meters: float
-    shelf_coordinates: List[Dict[str, int]] = Field(description="Y coordinates per shelf")
-    structure_confidence: ConfidenceLevel
+# ShelfStructure removed - using dynamic models from database instead
 
 
 class CompleteShelfExtraction(BaseModel):
@@ -150,7 +142,7 @@ class CompleteShelfExtraction(BaseModel):
     media_file_ids: List[str]
     
     # Core extraction data
-    shelf_structure: ShelfStructure
+    shelf_structure: Dict[str, Any]  # Dynamic structure from database
     products: List[ProductExtraction]
     total_products_detected: int
     non_product_elements: NonProductElements

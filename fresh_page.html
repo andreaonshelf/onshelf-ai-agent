@@ -11108,11 +11108,15 @@ Note: This feature requires backend integration for live testing.`);
             // Process Queue Item
             async function processQueueItem(itemId) {
                 try {
+                    // Build full configuration with stages and prompts
+                    const configuration = await buildFullConfiguration();
+                    
                     const response = await fetch(`/api/queue/process/${itemId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            systems: [promptManagementState.selectedSystem]
+                            systems: [promptManagementState.selectedSystem],
+                            configuration: configuration
                         })
                     });
                     
@@ -11125,6 +11129,63 @@ Note: This feature requires backend integration for live testing.`);
                     console.error('Failed to start processing:', error);
                     alert('Failed to start processing');
                 }
+            }
+            
+            // Build full configuration with stages and prompts
+            async function buildFullConfiguration() {
+                const config = {
+                    system: promptManagementState.selectedSystem || 'langgraph_consensus',
+                    temperature: 0.7,
+                    stages: {}
+                };
+                
+                // Get current prompts and field definitions from prompt management state
+                const promptTypes = ['structure', 'products', 'details'];
+                
+                for (const promptType of promptTypes) {
+                    // Get saved prompt for this type
+                    const promptData = promptManagementState.savedPrompts?.[promptType];
+                    
+                    if (promptData) {
+                        config.stages[promptType] = {
+                            prompt_text: promptData.prompt_text || promptData.prompt_content || '',
+                            fields: promptData.fields || []
+                        };
+                    } else {
+                        // Fallback: try to load from database
+                        try {
+                            const response = await fetch(`/api/prompts?prompt_type=${promptType}&system=${promptManagementState.selectedSystem}`);
+                            if (response.ok) {
+                                const prompts = await response.json();
+                                if (prompts.length > 0) {
+                                    const prompt = prompts[0];
+                                    config.stages[promptType] = {
+                                        prompt_text: prompt.prompt_text || prompt.prompt_content || '',
+                                        fields: prompt.fields || []
+                                    };
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Failed to load prompt for ${promptType}:`, error);
+                        }
+                    }
+                }
+                
+                // If no stages were loaded, use minimal defaults
+                if (Object.keys(config.stages).length === 0) {
+                    config.stages = {
+                        structure: {
+                            prompt_text: "Extract the shelf structure from this retail shelf image.",
+                            fields: []
+                        },
+                        products: {
+                            prompt_text: "Extract all products from this retail shelf image.",
+                            fields: []
+                        }
+                    };
+                }
+                
+                return config;
             }
             
             // Override Queue Item

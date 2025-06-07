@@ -319,7 +319,7 @@ class ImageComparisonAgent:
             import os
             
             supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_KEY")
+            supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
             
             if not supabase_url or not supabase_key:
                 logger.warning("Supabase credentials not available for comparison prompt loading", component="comparison_agent")

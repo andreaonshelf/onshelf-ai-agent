@@ -23,7 +23,7 @@ from ..utils import (
     with_retry, RetryConfig, GracefulDegradation, MultiImageCoordinator
 )
 from .models import (
-    ExtractionStep, AIModelType, ShelfStructure, ProductExtraction,
+    ExtractionStep, AIModelType, ProductExtraction,
     CompleteShelfExtraction, ConfidenceLevel, ValidationFlag, NonProductElements
 )
 from .prompts import PromptTemplates
@@ -432,31 +432,67 @@ class ModularExtractionEngine:
     def _get_api_model_name(self, model_id: str) -> tuple[str, str]:
         """Map frontend model ID to actual API model name and provider"""
         model_mapping = {
-            # OpenAI models
-            "gpt-4.1": ("openai", "gpt-4o-2024-11-20"),  # Latest GPT-4
+            # OpenAI models - Complete mapping from UI
+            "gpt-4.1": ("openai", "gpt-4o-2024-11-20"),  # Latest GPT-4o as fallback for GPT-4.1
             "gpt-4.1-mini": ("openai", "gpt-4o-mini"),
             "gpt-4.1-nano": ("openai", "gpt-4o-mini"),   # Using mini as fallback
             "gpt-4o": ("openai", "gpt-4o-2024-11-20"),
             "gpt-4o-mini": ("openai", "gpt-4o-mini"),
-            "o3": ("openai", "gpt-4o-2024-11-20"),       # Using GPT-4o as fallback
-            "o4-mini": ("openai", "gpt-4o-mini"),
+            "o3": ("openai", "gpt-4o-2024-11-20"),       # Using GPT-4o as fallback for o3
+            "o4-mini": ("openai", "gpt-4o-mini"),        # Using GPT-4o mini as fallback
             
-            # Anthropic models
+            # Anthropic models - Complete mapping from UI
             "claude-3-5-sonnet-v2": ("anthropic", "claude-3-5-sonnet-20241022"),
             "claude-3-7-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),  # Using 3.5 as fallback
-            "claude-4-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),    # Using 3.5 as fallback
-            "claude-4-opus": ("anthropic", "claude-3-5-sonnet-20241022"),      # Using 3.5 as fallback
+            "claude-4-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),    # Using 3.5 as fallback until Claude 4 available
+            "claude-4-opus": ("anthropic", "claude-3-opus-20240229"),      # Most capable Claude model
             
-            # Google models
+            # Google models - Complete mapping from UI
             "gemini-2.5-flash": ("google", "gemini-2.0-flash-exp"),
-            "gemini-2.5-flash-thinking": ("google", "gemini-2.0-flash-exp"),
+            "gemini-2.5-flash-thinking": ("google", "gemini-2.0-flash-thinking-exp-01-21"),  # Thinking model
             "gemini-2.5-pro": ("google", "gemini-2.0-pro-exp"),
+            
+            # Legacy/common variations
+            "claude-3-5-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),
+            "claude-3-sonnet": ("anthropic", "claude-3-5-sonnet-20241022"),
+            "gemini-pro": ("google", "gemini-2.0-pro-exp"),
+            "gemini-flash": ("google", "gemini-2.0-flash-exp"),
         }
         
         return model_mapping.get(model_id, ("openai", "gpt-4o-2024-11-20"))
     
+    def _get_quota_fallback_chain(self, model_id: str, provider: str) -> List[str]:
+        """Get fallback chain for quota exhaustion - multiple alternatives"""
+        fallback_chains = {
+            # OpenAI model fallbacks -> Use Claude, then GPT alternatives
+            "gpt-4.1": ["claude-4-opus", "gpt-4o", "claude-3-5-sonnet-v2"],
+            "gpt-4.1-mini": ["claude-3-5-sonnet-v2", "gpt-4o-mini", "claude-4-opus"],
+            "gpt-4.1-nano": ["claude-3-5-sonnet-v2", "gpt-4o-mini"],
+            "gpt-4o": ["claude-3-5-sonnet-v2", "claude-4-opus", "gpt-4o-mini"],
+            "gpt-4o-mini": ["claude-3-5-sonnet-v2", "gpt-4o"],
+            "o3": ["claude-4-opus", "gpt-4o", "claude-3-5-sonnet-v2"],
+            "o4-mini": ["claude-3-5-sonnet-v2", "gpt-4o-mini"],
+            
+            # Anthropic model fallbacks -> Use GPT-4, then alternatives
+            "claude-4-opus": ["gpt-4o", "claude-3-5-sonnet-v2", "gpt-4o-mini"],
+            "claude-4-sonnet": ["gpt-4o", "claude-3-5-sonnet-v2"], 
+            "claude-3-5-sonnet-v2": ["gpt-4o", "gpt-4o-mini", "claude-4-opus"],
+            "claude-3-7-sonnet": ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet-v2"],
+            "claude-3-5-sonnet": ["gpt-4o", "gpt-4o-mini"],
+            "claude-3-sonnet": ["gpt-4o", "claude-3-5-sonnet-v2"],
+            
+            # Google model fallbacks -> Use Claude and GPT alternatives
+            "gemini-2.5-pro": ["claude-4-opus", "gpt-4o", "claude-3-5-sonnet-v2"],
+            "gemini-2.5-flash": ["claude-3-5-sonnet-v2", "gpt-4o", "gpt-4o-mini"], 
+            "gemini-2.5-flash-thinking": ["gpt-4o", "claude-3-5-sonnet-v2"],
+            "gemini-pro": ["claude-4-opus", "gpt-4o"],
+            "gemini-flash": ["claude-3-5-sonnet-v2", "gpt-4o-mini"],
+        }
+        
+        return fallback_chains.get(model_id, ["gpt-4o", "claude-3-5-sonnet-v2"])  # Default fallback chain
+    
     async def execute_with_model_id(self, model_id: str, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
-        """Execute with specific frontend model ID"""
+        """Execute with specific frontend model ID with quota-aware fallback"""
         provider, api_model = self._get_api_model_name(model_id)
         
         logger.info(
@@ -467,15 +503,123 @@ class ModularExtractionEngine:
             provider=provider
         )
         
-        if provider == "openai":
-            return await self._execute_with_gpt4o_model(prompt, images, output_schema, api_model, agent_id)
-        elif provider == "anthropic":
-            return await self._execute_with_claude_model(prompt, images, output_schema, api_model, agent_id)
-        elif provider == "google":
-            return await self._execute_with_gemini_model(prompt, images, output_schema, api_model, agent_id)
-        else:
-            # Fallback to GPT-4o
-            return await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
+        try:
+            # Try the requested model first
+            if provider == "openai":
+                return await self._execute_with_gpt4o_model(prompt, images, output_schema, api_model, agent_id)
+            elif provider == "anthropic":
+                return await self._execute_with_claude_model(prompt, images, output_schema, api_model, agent_id)
+            elif provider == "google":
+                return await self._execute_with_gemini_model(prompt, images, output_schema, api_model, agent_id)
+            else:
+                # Fallback to GPT-4o
+                return await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
+                
+        except Exception as e:
+            error_msg = str(e)
+            
+            # Check if it's a quota/rate limit error (429, quota exceeded, etc.)
+            is_quota_error = any(phrase in error_msg.lower() for phrase in [
+                "429", "quota", "rate limit", "exceeded", "insufficient_quota",
+                "billing", "usage limit", "resource_exhausted"
+            ])
+            
+            if is_quota_error:
+                logger.warning(
+                    f"Quota exhausted for {model_id}, attempting fallback chain",
+                    component="extraction_engine",
+                    original_model=model_id,
+                    error=error_msg[:100]
+                )
+                
+                # Get fallback chain for smart multi-level fallback
+                fallback_chain = self._get_quota_fallback_chain(model_id, provider)
+                
+                if fallback_chain:
+                    logger.info(
+                        f"Quota fallback chain: {model_id} -> {fallback_chain}",
+                        component="extraction_engine",
+                        original_model=model_id,
+                        fallback_chain=fallback_chain
+                    )
+                    
+                    # Try each fallback in sequence
+                    for i, fallback_model in enumerate(fallback_chain):
+                        try:
+                            fallback_provider, fallback_api_model = self._get_api_model_name(fallback_model)
+                            
+                            logger.info(
+                                f"Attempting fallback {i+1}/{len(fallback_chain)}: {fallback_model}",
+                                component="extraction_engine",
+                                fallback_attempt=i+1,
+                                fallback_model=fallback_model
+                            )
+                            
+                            if fallback_provider == "openai":
+                                result, cost = await self._execute_with_gpt4o_model(prompt, images, output_schema, fallback_api_model, agent_id)
+                            elif fallback_provider == "anthropic":
+                                result, cost = await self._execute_with_claude_model(prompt, images, output_schema, fallback_api_model, agent_id)
+                            elif fallback_provider == "google":
+                                result, cost = await self._execute_with_gemini_model(prompt, images, output_schema, fallback_api_model, agent_id)
+                            else:
+                                result, cost = await self._execute_with_gpt4o(prompt, images, output_schema, agent_id)
+                            
+                            logger.info(
+                                f"✅ Quota fallback successful: {model_id} -> {fallback_model}",
+                                component="extraction_engine",
+                                original_model=model_id,
+                                successful_fallback=fallback_model,
+                                fallback_attempt=i+1
+                            )
+                            
+                            return result, cost
+                            
+                        except Exception as fallback_error:
+                            fallback_error_msg = str(fallback_error)
+                            
+                            # Check if this fallback also has quota issues
+                            is_fallback_quota_error = any(phrase in fallback_error_msg.lower() for phrase in [
+                                "429", "quota", "rate limit", "exceeded", "insufficient_quota",
+                                "billing", "usage limit", "resource_exhausted"
+                            ])
+                            
+                            if is_fallback_quota_error:
+                                logger.warning(
+                                    f"Fallback {fallback_model} also hit quota, trying next fallback",
+                                    component="extraction_engine",
+                                    fallback_model=fallback_model,
+                                    fallback_attempt=i+1
+                                )
+                            else:
+                                logger.warning(
+                                    f"Fallback {fallback_model} failed (non-quota): {str(fallback_error)[:100]}, trying next",
+                                    component="extraction_engine",
+                                    fallback_model=fallback_model,
+                                    fallback_attempt=i+1,
+                                    error=str(fallback_error)[:100]
+                                )
+                            
+                            # Continue to next fallback
+                            continue
+                    
+                    # All fallbacks failed
+                    logger.error(
+                        f"All fallbacks failed for {model_id}",
+                        component="extraction_engine",
+                        model_id=model_id,
+                        tried_fallbacks=fallback_chain
+                    )
+                    raise e
+                else:
+                    logger.error(
+                        f"No fallback chain available for {model_id}",
+                        component="extraction_engine",
+                        model_id=model_id
+                    )
+                    raise e
+            else:
+                # Non-quota error, re-raise
+                raise e
     
     async def _execute_with_fallback(self, primary_model: AIModelType, prompt: str, images: Dict[str, bytes], output_schema: Any, agent_id: str = None) -> tuple[Any, float]:
         """Execute step with automatic model fallback for maximum reliability"""

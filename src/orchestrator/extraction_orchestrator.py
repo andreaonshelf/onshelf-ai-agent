@@ -15,7 +15,7 @@ from ..extraction.models import (
     ProductExtraction, Position, SectionCoordinates, Quantity, 
     AIModelType, ConfidenceLevel
 )
-from ..models.shelf_structure import ShelfStructure
+# ShelfStructure removed - using dynamic models from database
 from ..utils import logger
 from ..utils.extraction_analytics import get_extraction_analytics
 
@@ -135,7 +135,7 @@ class ExtractionOrchestrator:
         return current_agent_result
     
     def _build_cumulative_context(self, 
-                                structure: ShelfStructure,
+                                structure: Any,
                                 previous_attempts: List[ExtractionResult],
                                 focus_areas: Optional[List[Dict]],
                                 locked_positions: Optional[List[Dict]],
@@ -411,13 +411,39 @@ class ExtractionOrchestrator:
             
             supabase = create_client(
                 os.getenv("SUPABASE_URL"),
-                os.getenv("SUPABASE_KEY")
+                os.getenv("SUPABASE_SERVICE_KEY")
             )
             
-            result = supabase.table("ai_extraction_queue").select("model_config").eq("id", self.queue_item_id).single().execute()
+            # Get both model_config and extraction_config
+            result = supabase.table("ai_extraction_queue").select("model_config, extraction_config").eq("id", self.queue_item_id).single().execute()
             
-            if result.data and result.data.get("model_config"):
-                self.model_config = result.data["model_config"]
+            if result.data:
+                # Prioritize extraction_config if it has stages (contains field definitions)
+                extraction_config = result.data.get("extraction_config", {})
+                model_config = result.data.get("model_config", {})
+                
+                # Use extraction_config if it has stages, otherwise fall back to model_config
+                if extraction_config and extraction_config.get("stages"):
+                    self.model_config = extraction_config
+                    logger.info(
+                        "Using extraction_config with field definitions",
+                        component="extraction_orchestrator",
+                        stage_count=len(extraction_config.get("stages", {}))
+                    )
+                elif model_config:
+                    self.model_config = model_config
+                    logger.info(
+                        "Using model_config (no extraction_config with stages found)",
+                        component="extraction_orchestrator"
+                    )
+                else:
+                    self.model_config = {}
+                    logger.warning(
+                        "No configuration found in queue item",
+                        component="extraction_orchestrator"
+                    )
+                
+                # Extract configuration values
                 self.temperature = self.model_config.get("temperature", 0.7)
                 self.orchestrator_model = self.model_config.get("orchestrator_model", "claude-4-opus")
                 self.orchestrator_prompt = self.model_config.get("orchestrator_prompt", "")
@@ -436,17 +462,25 @@ class ExtractionOrchestrator:
                             self.stage_prompts[stage_id] = stage_config["prompt_text"]
                         if "fields" in stage_config:
                             self.stage_fields[stage_id] = stage_config["fields"]
+                            logger.info(
+                                f"Loaded {len(stage_config['fields'])} fields for stage {stage_id}",
+                                component="extraction_orchestrator",
+                                stage=stage_id,
+                                field_count=len(stage_config['fields'])
+                            )
                 
                 logger.info(
                     "Loaded model configuration from queue item",
                     component="extraction_orchestrator",
                     queue_item_id=self.queue_item_id,
                     temperature=self.temperature,
-                    orchestrator_model=self.orchestrator_model
+                    orchestrator_model=self.orchestrator_model,
+                    stages_loaded=list(self.stage_configs.keys()),
+                    fields_loaded={k: len(v) for k, v in self.stage_fields.items()}
                 )
         except Exception as e:
             logger.error(f"Failed to load model config: {e}", component="extraction_orchestrator")
-    
+
     def _select_model_for_agent(self, agent_number: int, context: CumulativeExtractionContext, stage: str = "products") -> AIModelType:
         """Select appropriate model based on configuration or defaults"""
         
@@ -616,7 +650,7 @@ class ExtractionOrchestrator:
                                 )
                                 # Build dynamic model from configured fields
                                 from typing import List
-                                ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                                ProductModel = DynamicModelBuilder.build_model_from_config('product', {'fields': fields})
                                 output_schema = List[ProductModel]
                         
                         shelf_result, api_cost = await self.extraction_engine.execute_with_model_id(
@@ -634,7 +668,7 @@ class ExtractionOrchestrator:
                             fields = self.stage_fields['products']
                             if fields:
                                 from typing import List
-                                ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                                ProductModel = DynamicModelBuilder.build_model_from_config('product', {'fields': fields})
                                 output_schema = List[ProductModel]
                         
                         shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
@@ -652,7 +686,7 @@ class ExtractionOrchestrator:
                         fields = self.stage_fields['products']
                         if fields:
                             from typing import List
-                            ProductModel = DynamicModelBuilder.build_model_from_config(fields, 'ProductV1')
+                            ProductModel = DynamicModelBuilder.build_model_from_config('product', {'fields': fields})
                             output_schema = List[ProductModel]
                     
                     shelf_result, api_cost = await self.extraction_engine._execute_with_fallback(
@@ -917,7 +951,7 @@ class ExtractionOrchestrator:
                                      images: Dict[str, bytes],
                                      model_id: str,
                                      previous_attempts: List,
-                                     agent_id: str) -> ShelfStructure:
+                                     agent_id: str) -> Any:
         """Execute structure extraction stage"""
         from ..extraction.prompts import PromptTemplates
         from ..extraction.dynamic_model_builder import DynamicModelBuilder
@@ -974,7 +1008,7 @@ class ExtractionOrchestrator:
                         field_count=len(fields)
                     )
                     # Build dynamic model from configured fields
-                    output_schema = DynamicModelBuilder.build_model_from_config(fields, 'StructureV1')
+                    output_schema = DynamicModelBuilder.build_model_from_config('structure', {'fields': fields})
             
             # Execute with the model
             result, cost = await self.extraction_engine.execute_with_model_id(
@@ -1011,7 +1045,7 @@ class ExtractionOrchestrator:
     
     async def _execute_products_stage(self,
                                     images: Dict[str, bytes],
-                                    structure: ShelfStructure,
+                                    structure: Any,
                                     model_id: str,
                                     previous_attempts: List,
                                     attempt_number: int,
@@ -1041,7 +1075,7 @@ class ExtractionOrchestrator:
     
     async def _execute_details_stage(self,
                                    images: Dict[str, bytes],
-                                   structure: ShelfStructure,
+                                   structure: Any,
                                    products: ExtractionResult,
                                    model_id: str,
                                    previous_attempts: List,
@@ -1122,7 +1156,7 @@ class ExtractionOrchestrator:
                 )
                 # Build dynamic model from configured fields
                 from typing import List
-                DetailModel = DynamicModelBuilder.build_model_from_config(fields, 'DetailV1')
+                DetailModel = DynamicModelBuilder.build_model_from_config('detail', {'fields': fields})
                 output_schema = List[DetailModel]
         
         # Execute details extraction
