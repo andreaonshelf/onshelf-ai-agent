@@ -682,16 +682,16 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         try:
             # Calculate actual accuracy based on extraction results
             # THIS IS PLACEHOLDER - Real validation should compare against ground truth
-            structure = state.get('structure_consensus', {})
-            positions = state.get('position_consensus', {})
-            quantities = state.get('quantity_consensus', {})
-            details = state.get('detail_consensus', {})
+            structure = state.get('structure_consensus', {}) or {}
+            positions = state.get('position_consensus', {}) or {}
+            quantities = state.get('quantity_consensus', {}) or {}
+            details = state.get('detail_consensus', {}) or {}
             
             # Basic validation: check if we have data
             has_structure = bool(structure)
-            has_positions = len(positions) > 0
-            has_quantities = len(quantities) > 0
-            has_details = len(details) > 0
+            has_positions = len(positions) > 0 if isinstance(positions, (dict, list)) else False
+            has_quantities = len(quantities) > 0 if isinstance(quantities, (dict, list)) else False
+            has_details = len(details) > 0 if isinstance(details, (dict, list)) else False
             
             # Calculate accuracy based on what we have
             components = [has_structure, has_positions, has_quantities, has_details]

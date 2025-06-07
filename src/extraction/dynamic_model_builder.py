@@ -84,7 +84,14 @@ class DynamicModelBuilder:
         
         # Map field types to Python types
         if field_type == 'string':
-            python_type = str
+            # Check if this string field has enum constraints
+            allowed_values = field_def.get('allowed_values', [])
+            if allowed_values:
+                # Create enum for string fields with allowed_values
+                enum_class = Enum(f"{field_name}_enum", {v: v for v in allowed_values})
+                python_type = enum_class
+            else:
+                python_type = str
         elif field_type == 'literal':
             # Handle literal/enum types
             allowed_values = field_def.get('allowed_values', [])
@@ -140,6 +147,13 @@ class DynamicModelBuilder:
         field_kwargs = {
             "description": description
         }
+        
+        # If this is an enum field, enhance description with valid values
+        allowed_values = field_def.get('allowed_values', [])
+        if allowed_values:
+            quoted_values = [f'"{v}"' for v in allowed_values]
+            enum_instruction = f" MUST use exactly one of: {', '.join(quoted_values)}"
+            field_kwargs["description"] = f"{description}.{enum_instruction}"
         
         # Add default if not required
         if not required:
