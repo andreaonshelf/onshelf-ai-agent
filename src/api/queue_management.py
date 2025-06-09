@@ -48,7 +48,8 @@ async def get_queue_items(
             "id, upload_id, ready_media_id, enhanced_image_path, status, "
             "human_review_required, final_accuracy, selected_systems, "
             "comparison_group_id, current_extraction_system, processing_attempts, "
-            "created_at, started_at, completed_at, iterations_completed, api_cost"
+            "created_at, started_at, completed_at, iterations_completed, api_cost, "
+            "extraction_result"
         )
         
         # Apply status filter

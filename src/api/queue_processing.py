@@ -16,6 +16,97 @@ from ..orchestrator.monitoring_hooks import monitoring_hooks
 
 router = APIRouter()
 
+
+def generate_planogram_from_extraction(extraction_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate planogram SVG from extraction results"""
+    
+    # Extract products from the extraction result
+    products = []
+    if isinstance(extraction_data, dict):
+        # Handle different extraction result formats
+        if 'products' in extraction_data:
+            products = extraction_data.get('products', [])
+        elif 'positions' in extraction_data:
+            # Convert positions dict to products list
+            positions = extraction_data.get('positions', {})
+            for pos_key, product in positions.items():
+                if isinstance(product, dict):
+                    products.append(product)
+    
+    if not products:
+        return {
+            'svg': '<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f5f5f5"/><text x="400" y="200" text-anchor="middle" font-size="20">No products extracted</text></svg>',
+            'layout': {'products': 0, 'shelves': 0}
+        }
+    
+    # Generate SVG
+    svg_parts = [
+        '<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">',
+        '<rect width="100%" height="100%" fill="#f5f5f5"/>',
+        '<rect x="0" y="0" width="100%" height="60" fill="white"/>',
+        '<text x="20" y="35" font-size="24" font-weight="bold" fill="#1f2937">Planogram View</text>',
+        f'<text x="20" y="50" font-size="14" fill="#6b7280">{len(products)} products extracted</text>'
+    ]
+    
+    # Group products by shelf
+    shelves = {}
+    max_shelf = 1
+    for p in products:
+        shelf = p.get('shelf', p.get('shelf_number', 1))
+        if shelf > max_shelf:
+            max_shelf = shelf
+        if shelf not in shelves:
+            shelves[shelf] = []
+        shelves[shelf].append(p)
+    
+    # Calculate dimensions
+    shelf_height = (600 - 80) / max_shelf
+    
+    # Draw shelves
+    for shelf_num in range(1, max_shelf + 1):
+        shelf_y = 80 + (max_shelf - shelf_num) * shelf_height
+        
+        # Shelf background and line
+        svg_parts.append(f'<rect x="0" y="{shelf_y}" width="800" height="{shelf_height}" fill="white" stroke="#e5e7eb"/>')
+        svg_parts.append(f'<line x1="20" y1="{shelf_y + shelf_height - 5}" x2="780" y2="{shelf_y + shelf_height - 5}" stroke="#374151" stroke-width="3"/>')
+        svg_parts.append(f'<text x="10" y="{shelf_y + shelf_height/2}" font-size="12" fill="#6b7280" text-anchor="middle" transform="rotate(-90 10 {shelf_y + shelf_height/2})">Shelf {shelf_num}</text>')
+        
+        # Products on shelf
+        if shelf_num in shelves:
+            x_pos = 40
+            for product in sorted(shelves[shelf_num], key=lambda x: x.get('position', x.get('position_on_shelf', 0))):
+                facings = product.get('facings', product.get('facing_count', 1))
+                width = 80 * facings
+                height = min(90, shelf_height - 20)
+                
+                # Product box
+                svg_parts.append(f'<rect x="{x_pos}" y="{shelf_y + 10}" width="{width}" height="{height}" fill="white" stroke="#3b82f6" stroke-width="2" rx="4"/>')
+                
+                # Product info
+                brand = str(product.get('brand', 'Unknown'))[:15]
+                name = str(product.get('name', 'Product'))[:15]
+                price = product.get('price')
+                
+                svg_parts.append(f'<text x="{x_pos + 5}" y="{shelf_y + 30}" font-size="11" font-weight="bold">{brand}</text>')
+                svg_parts.append(f'<text x="{x_pos + 5}" y="{shelf_y + 45}" font-size="10" fill="#475569">{name}</text>')
+                
+                if price is not None:
+                    svg_parts.append(f'<text x="{x_pos + 5}" y="{shelf_y + 70}" font-size="12" fill="#059669" font-weight="bold">${price}</text>')
+                
+                x_pos += width + 10
+                if x_pos > 750:
+                    break
+    
+    svg_parts.append('</svg>')
+    
+    return {
+        'svg': '\n'.join(svg_parts),
+        'layout': {
+            'products': len(products),
+            'shelves': max_shelf
+        }
+    }
+
 # Global store for monitoring data
 monitoring_data = {}
 
@@ -226,8 +317,13 @@ async def run_extraction(
         # Clear monitoring hooks
         monitoring_hooks.clear_monitor(item_id)
         
+        # Generate planogram from extraction results
+        planogram_result = None
+        if hasattr(result, 'extraction_result') and result.extraction_result:
+            planogram_result = generate_planogram_from_extraction(result.extraction_result)
+        
         # Update queue item with results
-        supabase.table("ai_extraction_queue").update({
+        update_data = {
             "status": "completed",
             "completed_at": datetime.utcnow().isoformat(),
             "final_accuracy": result.final_accuracy,
@@ -236,7 +332,13 @@ async def run_extraction(
             "human_review_required": result.needs_human_review,
             "selected_systems": [system],
             "current_extraction_system": system
-        }).eq("id", item_id).execute()
+        }
+        
+        # Add planogram if generated
+        if planogram_result:
+            update_data["planogram_result"] = planogram_result
+            
+        supabase.table("ai_extraction_queue").update(update_data).eq("id", item_id).execute()
         
         # Store the result for later retrieval
         if result.best_planogram:

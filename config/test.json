@@ -1,0 +1,26 @@
+{
+  "api_models": {
+    "primary": "gpt-4o-mini",
+    "fallback": "gpt-4o-mini",
+    "vision": "gpt-4o-mini"
+  },
+  "extraction": {
+    "max_retries": 1,
+    "timeout": 10,
+    "enable_caching": false
+  },
+  "monitoring": {
+    "log_api_calls": false,
+    "log_extraction_details": true,
+    "enable_performance_tracking": false
+  },
+  "safety": {
+    "backup_before_updates": false,
+    "require_confirmations": false,
+    "allow_test_data": true
+  },
+  "test": {
+    "use_mock_api": true,
+    "fast_mode": true
+  }
+}

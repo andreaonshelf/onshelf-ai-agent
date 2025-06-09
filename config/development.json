@@ -1,0 +1,23 @@
+{
+  "api_models": {
+    "primary": "gpt-4o-2024-08-06",
+    "fallback": "gpt-4o-mini",
+    "vision": "gpt-4o-2024-08-06"
+  },
+  "extraction": {
+    "max_retries": 3,
+    "timeout": 30,
+    "enable_caching": true,
+    "cache_ttl": 3600
+  },
+  "monitoring": {
+    "log_api_calls": true,
+    "log_extraction_details": true,
+    "enable_performance_tracking": true
+  },
+  "safety": {
+    "backup_before_updates": true,
+    "require_confirmations": true,
+    "allow_test_data": true
+  }
+}

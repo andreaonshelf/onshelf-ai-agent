@@ -4896,15 +4896,46 @@
             const [logsLoading, setLogsLoading] = useState(false);
             const [autoRefresh, setAutoRefresh] = useState(true);
             
+            // Add sidebar state (same as ResultsPage)
+            const [sidebarOpen, setSidebarOpen] = useState(true);
+            const [queueItems, setQueueItems] = useState([]);
+            const [filteredItems, setFilteredItems] = useState([]);
+            const [statusFilter, setStatusFilter] = useState('all');
+            const [storeFilter, setStoreFilter] = useState('all');
+            const [categoryFilter, setCategoryFilter] = useState('all');
+            const [dateFrom, setDateFrom] = useState('');
+            const [dateTo, setDateTo] = useState('');
+            const [sortBy, setSortBy] = useState('newest');
+            const [stores, setStores] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [refreshInterval, setRefreshInterval] = useState(null);
+            
             useEffect(() => {
                 fetchExtractionRuns();
+                fetchQueueItems(); // Fetch queue items for sidebar
             }, [timeRange]);
             
             useEffect(() => {
                 if (selectedRun) {
                     fetchRunDetails(selectedRun);
+                    // Sync with new logging
+                    if (activeDetailsTab === 'logs') {
+                        fetchLogs(selectedRun);
+                    }
                 }
             }, [selectedRun]);
+            
+            // Set up auto-refresh for queue items
+            useEffect(() => {
+                const interval = setInterval(fetchQueueItems, 10000); // Refresh every 10 seconds
+                setRefreshInterval(interval);
+                return () => clearInterval(interval);
+            }, []);
+            
+            // Apply filters whenever they change
+            useEffect(() => {
+                applyFilters();
+            }, [queueItems, statusFilter, storeFilter, categoryFilter, dateFrom, dateTo, sortBy]);
             
             const fetchExtractionRuns = async () => {
                 try {
@@ -4920,11 +4951,70 @@
             
             const fetchRunDetails = async (runId) => {
                 try {
-                    const response = await fetch(`${API_BASE}/diagnostics/extraction-run/${runId}`);
-                    const data = await response.json();
-                    setRunDetails(data);
+                    // Extract queue ID from run ID (format: queue_9)
+                    const queueId = runId.replace('queue_', '');
+                    
+                    // Fetch queue item details
+                    const response = await fetch(`${API_BASE}/queue/results/${queueId}`);
+                    const queueData = await response.json();
+                    
+                    // Transform queue data into run details format
+                    const runDetails = {
+                        id: runId,
+                        queue_id: queueId,
+                        store_name: queueData.store_name,
+                        category: queueData.category,
+                        status: queueData.status,
+                        started_at: queueData.started_at,
+                        completed_at: queueData.completed_at,
+                        extraction_system: queueData.current_extraction_system,
+                        iterations: [],
+                        total_cost: queueData.api_cost || 0,
+                        final_accuracy: queueData.final_accuracy || 0,
+                        products_extracted: 0
+                    };
+                    
+                    // Extract iteration details from metadata
+                    if (queueData.extraction_metadata && queueData.extraction_metadata.iterations) {
+                        runDetails.iterations = queueData.extraction_metadata.iterations.map((iter, idx) => ({
+                            id: `iter_${idx}`,
+                            iteration_number: idx + 1,
+                            stage: iter.stage || 'extraction',
+                            model_used: iter.model || 'unknown',
+                            accuracy_score: iter.accuracy || 0,
+                            products_found: iter.products_found || 0,
+                            duration_ms: iter.duration_ms || 0,
+                            api_cost: iter.cost || 0,
+                            retry_reason: iter.retry_reason,
+                            visual_feedback_received: iter.visual_feedback || false,
+                            retry_blocks_activated: iter.retry_blocks || [],
+                            actual_prompt: iter.prompt_used || 'Prompt not recorded'
+                        }));
+                    }
+                    
+                    // Count total products
+                    if (queueData.extraction_result) {
+                        const result = queueData.extraction_result;
+                        if (result.stages) {
+                            Object.entries(result.stages).forEach(([stage, data]) => {
+                                if (data && data.data && data.data.products) {
+                                    runDetails.products_extracted += data.data.products.length;
+                                }
+                            });
+                        } else if (result.products) {
+                            runDetails.products_extracted = result.products.length;
+                        }
+                    }
+                    
+                    // Add visual feedback summary if available
+                    if (queueData.extraction_metadata && queueData.extraction_metadata.visual_feedback_summary) {
+                        runDetails.visual_feedback_summary = queueData.extraction_metadata.visual_feedback_summary;
+                    }
+                    
+                    setRunDetails(runDetails);
                 } catch (error) {
                     console.error('Failed to fetch run details:', error);
+                    setRunDetails(null);
                 }
             };
             
@@ -4957,15 +5047,187 @@
                 try {
                     // Extract queue ID from run ID (format: queue_9)
                     const queueId = runId.replace('queue_', '');
-                    const response = await fetch(`${API_BASE}/diagnostics/extraction-logs/${queueId}?lines=100`);
+                    
+                    // First try to get logs from the API endpoint
+                    const response = await fetch(`${API_BASE}/diagnostics/extraction-logs/${queueId}?lines=500`);
                     const data = await response.json();
-                    setLogs(data.logs || []);
+                    
+                    // If we have logs, use them
+                    if (data.logs && data.logs.length > 0) {
+                        setLogs(data.logs);
+                    } else {
+                        // Otherwise, fetch from the queue item's extraction metadata
+                        const queueResponse = await fetch(`${API_BASE}/queue/results/${queueId}`);
+                        const queueData = await queueResponse.json();
+                        
+                        // Extract logs from extraction metadata
+                        const extractionLogs = [];
+                        
+                        if (queueData.extraction_metadata) {
+                            // Add extraction start
+                            if (queueData.started_at) {
+                                extractionLogs.push({
+                                    time: new Date(queueData.started_at).toISOString(),
+                                    level: 'INFO',
+                                    message: `Extraction started - System: ${queueData.current_extraction_system || 'unknown'}`
+                                });
+                            }
+                            
+                            // Add iteration logs
+                            if (queueData.extraction_metadata.iterations) {
+                                queueData.extraction_metadata.iterations.forEach((iter, idx) => {
+                                    extractionLogs.push({
+                                        time: iter.timestamp || new Date(queueData.started_at).toISOString(),
+                                        level: 'INFO',
+                                        message: `Iteration ${idx + 1} - Model: ${iter.model}, Stage: ${iter.stage || 'extraction'}, Accuracy: ${(iter.accuracy * 100).toFixed(1)}%`
+                                    });
+                                    
+                                    if (iter.error) {
+                                        extractionLogs.push({
+                                            time: iter.timestamp || new Date(queueData.started_at).toISOString(),
+                                            level: 'ERROR',
+                                            message: `Iteration ${idx + 1} failed: ${iter.error}`
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // Add extraction complete
+                            if (queueData.completed_at) {
+                                extractionLogs.push({
+                                    time: new Date(queueData.completed_at).toISOString(),
+                                    level: 'INFO',
+                                    message: `Extraction completed - Total iterations: ${queueData.iterations_completed}, Final accuracy: ${(queueData.final_accuracy * 100).toFixed(1)}%, Cost: $${queueData.api_cost.toFixed(3)}`
+                                });
+                            }
+                        }
+                        
+                        // Add extraction result summary
+                        if (queueData.extraction_result) {
+                            const result = queueData.extraction_result;
+                            let productCount = 0;
+                            
+                            // Count products from various possible locations
+                            if (result.stages) {
+                                Object.entries(result.stages).forEach(([stage, data]) => {
+                                    if (data && data.data && data.data.products) {
+                                        productCount += data.data.products.length;
+                                    }
+                                });
+                            } else if (result.products) {
+                                productCount = result.products.length;
+                            }
+                            
+                            extractionLogs.push({
+                                time: new Date(queueData.completed_at || Date.now()).toISOString(),
+                                level: 'INFO',
+                                message: `Extraction result: ${productCount} products extracted`
+                            });
+                        }
+                        
+                        setLogs(extractionLogs);
+                    }
                 } catch (error) {
                     console.error('Failed to fetch logs:', error);
-                    setLogs([]);
+                    setLogs([{
+                        time: new Date().toISOString(),
+                        level: 'ERROR',
+                        message: `Failed to fetch logs: ${error.message}`
+                    }]);
                 } finally {
                     setLogsLoading(false);
                 }
+            };
+            
+            // Sidebar functions (from ResultsPage)
+            const fetchQueueItems = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/queue/items`);
+                    const data = await response.json();
+                    setQueueItems(data.items || []);
+                    
+                    // Extract unique stores and categories
+                    const uniqueStores = [...new Set(data.items.map(item => item.store_name).filter(Boolean))];
+                    const uniqueCategories = [...new Set(data.items.map(item => item.category).filter(Boolean))];
+                    setStores(uniqueStores);
+                    setCategories(uniqueCategories);
+                    
+                    // Auto-select first completed item if none selected
+                    if (!selectedRun && data.items.length > 0) {
+                        const firstCompleted = data.items.find(item => item.status === 'completed');
+                        if (firstCompleted) {
+                            setSelectedRun(`queue_${firstCompleted.id}`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch queue items:', error);
+                }
+            };
+            
+            const applyFilters = () => {
+                let filtered = [...queueItems];
+                
+                // Status filter
+                if (statusFilter !== 'all') {
+                    filtered = filtered.filter(item => item.status === statusFilter);
+                }
+                
+                // Store filter
+                if (storeFilter !== 'all') {
+                    filtered = filtered.filter(item => item.store_name === storeFilter);
+                }
+                
+                // Category filter
+                if (categoryFilter !== 'all') {
+                    filtered = filtered.filter(item => item.category === categoryFilter);
+                }
+                
+                // Date range filter
+                if (dateFrom) {
+                    filtered = filtered.filter(item => new Date(item.created_at) >= new Date(dateFrom));
+                }
+                if (dateTo) {
+                    const endDate = new Date(dateTo);
+                    endDate.setHours(23, 59, 59, 999);
+                    filtered = filtered.filter(item => new Date(item.created_at) <= endDate);
+                }
+                
+                // Sort
+                filtered.sort((a, b) => {
+                    if (sortBy === 'newest') {
+                        return new Date(b.created_at) - new Date(a.created_at);
+                    } else if (sortBy === 'oldest') {
+                        return new Date(a.created_at) - new Date(b.created_at);
+                    } else if (sortBy === 'store') {
+                        return (a.store_name || '').localeCompare(b.store_name || '');
+                    }
+                    return 0;
+                });
+                
+                setFilteredItems(filtered);
+            };
+            
+            const formatTimeAgo = (dateString) => {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'just now';
+                if (diffMins < 60) return `${diffMins}m ago`;
+                if (diffHours < 24) return `${diffHours}h ago`;
+                return `${diffDays}d ago`;
+            };
+            
+            const clearFilters = () => {
+                setStatusFilter('all');
+                setStoreFilter('all');
+                setCategoryFilter('all');
+                setDateFrom('');
+                setDateTo('');
+                setSortBy('newest');
             };
             
             // Auto-refresh effect for logs
@@ -4982,55 +5244,165 @@
             
             return (
                 <div className="diagnostics-page">
-                    <div className="page-header">
-                        <h2>Extraction Diagnostics</h2>
-                        <div className="time-selector">
-                            <button 
-                                className={timeRange === '7d' ? 'active' : ''}
-                                onClick={() => setTimeRange('7d')}
-                            >
-                                Last 7 Days
-                            </button>
-                            <button 
-                                className={timeRange === '30d' ? 'active' : ''}
-                                onClick={() => setTimeRange('30d')}
-                            >
-                                Last 30 Days
-                            </button>
-                        </div>
+                    {/* Collapsible Sidebar */}
+                    <div className={`extractions-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+                        <button 
+                            className="sidebar-toggle"
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+                        >
+                            {sidebarOpen ? '◀' : '▶'}
+                        </button>
+                        
+                        {sidebarOpen && (
+                            <>
+                                <div className="sidebar-header">
+                                    <h3>Extractions</h3>
+                                    <button 
+                                        className="refresh-btn"
+                                        onClick={fetchQueueItems}
+                                        title="Refresh list"
+                                    >
+                                        ↻
+                                    </button>
+                                </div>
+                                
+                                <div className="filters-section">
+                                    <h4>FILTERS</h4>
+                                    
+                                    <div className="filter-group">
+                                        <label>Status</label>
+                                        <select 
+                                            value={statusFilter} 
+                                            onChange={(e) => setStatusFilter(e.target.value)}
+                                        >
+                                            <option value="all">All Status</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="processing">Processing</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="failed">Failed</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Store</label>
+                                        <select 
+                                            value={storeFilter} 
+                                            onChange={(e) => setStoreFilter(e.target.value)}
+                                        >
+                                            <option value="all">All Stores</option>
+                                            {stores.map(store => (
+                                                <option key={store} value={store}>{store}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Category</label>
+                                        <select 
+                                            value={categoryFilter} 
+                                            onChange={(e) => setCategoryFilter(e.target.value)}
+                                        >
+                                            <option value="all">All Categories</option>
+                                            {categories.map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Date Range</label>
+                                        <div className="date-inputs">
+                                            <input 
+                                                type="date" 
+                                                value={dateFrom}
+                                                onChange={(e) => setDateFrom(e.target.value)}
+                                                placeholder="From"
+                                            />
+                                            <input 
+                                                type="date" 
+                                                value={dateTo}
+                                                onChange={(e) => setDateTo(e.target.value)}
+                                                placeholder="To"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Sort By</label>
+                                        <select 
+                                            value={sortBy} 
+                                            onChange={(e) => setSortBy(e.target.value)}
+                                        >
+                                            <option value="newest">Newest First</option>
+                                            <option value="oldest">Oldest First</option>
+                                            <option value="store">Store Name</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button 
+                                        className="clear-filters"
+                                        onClick={clearFilters}
+                                    >
+                                        Clear All Filters
+                                    </button>
+                                </div>
+                                
+                                <div className="extractions-list">
+                                    <h4>EXTRACTIONS ({filteredItems.length})</h4>
+                                    <div className="extraction-items">
+                                        {filteredItems.length === 0 ? (
+                                            <div className="no-items">No extractions found</div>
+                                        ) : (
+                                            filteredItems.map(item => (
+                                                <div 
+                                                    key={item.id}
+                                                    className={`extraction-item ${selectedRun === `queue_${item.id}` ? 'selected' : ''}`}
+                                                    onClick={() => setSelectedRun(`queue_${item.id}`)}
+                                                >
+                                                    <div className="item-header">
+                                                        <span className="store-name">{item.store_name || 'Unknown Store'}</span>
+                                                        <span className="time-ago">{formatTimeAgo(item.created_at)}</span>
+                                                    </div>
+                                                    <div className="item-details">
+                                                        <span className="category">{item.category || 'No category'}</span>
+                                                        <span className={`status ${item.status}`}>{item.status}</span>
+                                                    </div>
+                                                    {item.extraction_results?.total_products !== undefined && (
+                                                        <div className="item-metrics">
+                                                            <span className="products-count">
+                                                                {item.extraction_results.total_products} products
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                     
-                    <div className="diagnostics-layout">
-                        <div className="runs-list">
-                            <h3>Extraction Runs</h3>
-                            {loading ? (
-                                <div className="loading">Loading runs...</div>
-                            ) : (
-                                <div className="runs-container">
-                                    {extractionRuns.map((run) => (
-                                        <div 
-                                            key={run.run_id}
-                                            className={`run-item ${selectedRun === run.run_id ? 'selected' : ''}`}
-                                            onClick={() => setSelectedRun(run.run_id)}
-                                        >
-                                            <div className="run-header">
-                                                <span className="run-id">{run.run_id.substring(0, 8)}...</span>
-                                                <span className={`run-status ${run.status}`}>{run.status}</span>
-                                            </div>
-                                            <div className="run-info">
-                                                <span>{run.system_type}</span>
-                                                <span>{new Date(run.started_at).toLocaleString()}</span>
-                                            </div>
-                                            <div className="run-metrics">
-                                                <span>Iterations: {run.total_iterations}</span>
-                                                <span>Cost: £{run.total_cost?.toFixed(2) || '0.00'}</span>
-                                                <span>Accuracy: {(run.avg_accuracy * 100).toFixed(1)}%</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                    <div className="diagnostics-content">
+                        <div className="page-header">
+                            <h2>Extraction Diagnostics</h2>
+                            <div className="time-selector">
+                                <button 
+                                    className={timeRange === '7d' ? 'active' : ''}
+                                    onClick={() => setTimeRange('7d')}
+                                >
+                                    Last 7 Days
+                                </button>
+                                <button 
+                                    className={timeRange === '30d' ? 'active' : ''}
+                                    onClick={() => setTimeRange('30d')}
+                                >
+                                    Last 30 Days
+                                </button>
+                            </div>
                         </div>
+                        
                         
                         <div className="run-details">
                             {runDetails ? (
@@ -5053,6 +5425,31 @@
                                     {activeDetailsTab === 'timeline' && (
                                         <>
                                             <h3>Extraction Flow Timeline</h3>
+                                            
+                                            {/* Warning if test data detected */}
+                                            {runDetails && runDetails.store_name === 'Co-op Food - Greenwich - Trafalgar Road' && 
+                                             runDetails.products_extracted === 4 && (
+                                                <div style={{
+                                                    background: '#fef3c7',
+                                                    border: '1px solid #f59e0b',
+                                                    borderRadius: '6px',
+                                                    padding: '16px',
+                                                    marginBottom: '20px'
+                                                }}>
+                                                    <h4 style={{ color: '#b45309', marginBottom: '8px' }}>⚠️ Test Data Detected</h4>
+                                                    <p style={{ color: '#92400e', marginBottom: '12px' }}>
+                                                        This extraction result contains test data that was inserted for debugging purposes. 
+                                                        The actual Co-op products from the shelf image were replaced with generic soda products.
+                                                    </p>
+                                                    <p style={{ color: '#92400e', marginBottom: '12px' }}>
+                                                        <strong>Test products shown:</strong> Coca Cola, Pepsi, Sprite, Mountain Dew
+                                                    </p>
+                                                    <p style={{ color: '#92400e' }}>
+                                                        To see real extraction results, please re-process this image using the Queue page.
+                                                    </p>
+                                                </div>
+                                            )}
+                                            
                                             <div className="timeline-container">
                                         {runDetails.iterations && runDetails.iterations.length > 0 ? (
                                             runDetails.iterations.map((iteration, idx) => (
@@ -5151,9 +5548,8 @@
                                                 ) : logs.length > 0 ? (
                                                     logs.map((log, idx) => (
                                                         <div key={idx} className={`log-entry log-${log.level}`}>
-                                                            <span className="log-time">{log.time}</span>
-                                                            <span className="log-level">{log.level}</span>
-                                                            <span className="log-component">[{log.component}]</span>
+                                                            <span className="log-time">{new Date(log.time).toLocaleTimeString()}</span>
+                                                            <span className={`log-level ${log.level.toLowerCase()}`}>{log.level}</span>
                                                             <span className="log-message">{log.message}</span>
                                                             {log.extra && Object.keys(log.extra).length > 0 && (
                                                                 <div className="log-extra">
@@ -5181,6 +5577,244 @@
                     
                     <style>{`
                         .diagnostics-page {
+                            display: flex;
+                            height: 100vh;
+                            overflow: hidden;
+                        }
+                        
+                        /* Sidebar Styles */
+                        .extractions-sidebar {
+                            position: relative;
+                            background: #f8fafc;
+                            border-right: 1px solid #e2e8f0;
+                            transition: width 0.3s ease;
+                            overflow: hidden;
+                            display: flex;
+                            flex-direction: column;
+                        }
+                        
+                        .extractions-sidebar.open {
+                            width: 320px;
+                        }
+                        
+                        .extractions-sidebar.closed {
+                            width: 40px;
+                        }
+                        
+                        .sidebar-toggle {
+                            position: absolute;
+                            right: -20px;
+                            top: 50%;
+                            transform: translateY(-50%);
+                            width: 20px;
+                            height: 60px;
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            border-radius: 0 6px 6px 0;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 12px;
+                            z-index: 10;
+                            transition: all 0.2s;
+                        }
+                        
+                        .sidebar-toggle:hover {
+                            background: #2563eb;
+                        }
+                        
+                        .sidebar-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            padding: 20px;
+                            border-bottom: 1px solid #e2e8f0;
+                        }
+                        
+                        .sidebar-header h3 {
+                            margin: 0;
+                            font-size: 18px;
+                            color: #1f2937;
+                        }
+                        
+                        .refresh-btn {
+                            padding: 6px 10px;
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 16px;
+                        }
+                        
+                        .filters-section {
+                            padding: 20px;
+                            border-bottom: 1px solid #e2e8f0;
+                        }
+                        
+                        .filters-section h4 {
+                            margin: 0 0 15px 0;
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: #6b7280;
+                            letter-spacing: 0.5px;
+                        }
+                        
+                        .filter-group {
+                            margin-bottom: 15px;
+                        }
+                        
+                        .filter-group label {
+                            display: block;
+                            font-size: 13px;
+                            color: #374151;
+                            margin-bottom: 5px;
+                            font-weight: 500;
+                        }
+                        
+                        .filter-group select,
+                        .filter-group input {
+                            width: 100%;
+                            padding: 8px 12px;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 6px;
+                            font-size: 13px;
+                            background: white;
+                        }
+                        
+                        .date-inputs {
+                            display: grid;
+                            grid-template-columns: 1fr 1fr;
+                            gap: 8px;
+                        }
+                        
+                        .clear-filters {
+                            width: 100%;
+                            padding: 8px;
+                            background: #ef4444;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 13px;
+                            font-weight: 500;
+                            margin-top: 10px;
+                        }
+                        
+                        .extractions-list {
+                            flex: 1;
+                            overflow-y: auto;
+                            padding: 20px;
+                        }
+                        
+                        .extractions-list h4 {
+                            margin: 0 0 15px 0;
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: #6b7280;
+                            letter-spacing: 0.5px;
+                        }
+                        
+                        .extraction-items {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 10px;
+                        }
+                        
+                        .extraction-item {
+                            padding: 12px;
+                            background: white;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        }
+                        
+                        .extraction-item:hover {
+                            border-color: #3b82f6;
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                        }
+                        
+                        .extraction-item.selected {
+                            border-color: #3b82f6;
+                            background: #eff6ff;
+                        }
+                        
+                        .extraction-item .item-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 8px;
+                        }
+                        
+                        .extraction-item .store-name {
+                            font-weight: 600;
+                            color: #1f2937;
+                            font-size: 14px;
+                        }
+                        
+                        .extraction-item .time-ago {
+                            font-size: 12px;
+                            color: #6b7280;
+                        }
+                        
+                        .extraction-item .item-details {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 6px;
+                        }
+                        
+                        .extraction-item .category {
+                            font-size: 12px;
+                            color: #6b7280;
+                        }
+                        
+                        .extraction-item .status {
+                            font-size: 11px;
+                            padding: 3px 8px;
+                            border-radius: 12px;
+                            font-weight: 500;
+                        }
+                        
+                        .extraction-item .status.completed {
+                            background: #dcfce7;
+                            color: #15803d;
+                        }
+                        
+                        .extraction-item .status.processing {
+                            background: #fef3c7;
+                            color: #b45309;
+                        }
+                        
+                        .extraction-item .status.pending {
+                            background: #e0e7ff;
+                            color: #4338ca;
+                        }
+                        
+                        .extraction-item .status.failed {
+                            background: #fee2e2;
+                            color: #dc2626;
+                        }
+                        
+                        .extraction-item .item-metrics {
+                            font-size: 12px;
+                            color: #6b7280;
+                        }
+                        
+                        .no-items {
+                            text-align: center;
+                            color: #6b7280;
+                            padding: 40px 20px;
+                            font-size: 14px;
+                        }
+                        
+                        /* Main content area */
+                        .diagnostics-content {
+                            flex: 1;
+                            overflow-y: auto;
                             padding: 20px;
                         }
                         
@@ -5206,10 +5840,7 @@
                         }
                         
                         .diagnostics-layout {
-                            display: grid;
-                            grid-template-columns: 400px 1fr;
-                            gap: 20px;
-                            height: calc(100vh - 200px);
+                            height: calc(100vh - 100px);
                         }
                         
                         .runs-list {

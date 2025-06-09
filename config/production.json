@@ -1,0 +1,31 @@
+{
+  "api_models": {
+    "primary": "gpt-4o-2024-08-06",
+    "fallback": "gpt-4o-mini",
+    "vision": "gpt-4o-2024-08-06"
+  },
+  "extraction": {
+    "max_retries": 10,
+    "timeout": 120,
+    "enable_caching": true,
+    "cache_ttl": 7200
+  },
+  "monitoring": {
+    "log_api_calls": true,
+    "log_extraction_details": false,
+    "enable_performance_tracking": true,
+    "alert_on_failures": true,
+    "alert_webhook": "${ALERT_WEBHOOK_URL}"
+  },
+  "safety": {
+    "backup_before_updates": true,
+    "require_confirmations": false,
+    "allow_test_data": false,
+    "enable_audit_logging": true
+  },
+  "security": {
+    "restrict_direct_db_access": true,
+    "require_api_authentication": true,
+    "enable_rate_limiting": true
+  }
+}

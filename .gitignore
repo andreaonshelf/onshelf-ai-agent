@@ -202,3 +202,15 @@ api_docs/
 
 # Redis dump
 dump.rdb 
+# Environment files
+.env
+.env.*
+!.env.*.template
+
+# Test databases
+test_db/
+*.test.db
+
+# Backups
+backups/
+*.backup

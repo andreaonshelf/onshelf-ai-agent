@@ -1,0 +1,74 @@
+{
+  "stages": {
+    "product_v1": {
+      "data": [
+        {
+          "name": "Coca Cola Classic",
+          "size": "355ml",
+          "brand": "Coca-Cola",
+          "price": 2.99,
+          "shelf": 1,
+          "facings": 3,
+          "category": "Soft Drinks",
+          "position": 1,
+          "confidence": 0.95
+        },
+        {
+          "name": "Pepsi Regular",
+          "size": "355ml",
+          "brand": "PepsiCo",
+          "price": 2.89,
+          "shelf": 1,
+          "facings": 2,
+          "category": "Soft Drinks",
+          "position": 2,
+          "confidence": 0.92
+        },
+        {
+          "name": "Sprite Lemon-Lime",
+          "size": "355ml",
+          "brand": "Coca-Cola",
+          "price": 2.79,
+          "shelf": 2,
+          "facings": 2,
+          "category": "Soft Drinks",
+          "position": 1,
+          "confidence": 0.88
+        },
+        {
+          "name": "Mountain Dew",
+          "size": "355ml",
+          "brand": "PepsiCo",
+          "price": 2.99,
+          "shelf": 2,
+          "facings": 1,
+          "category": "Soft Drinks",
+          "position": 2,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "structure_v1": {
+      "data": {
+        "sections": 4,
+        "total_width": 120,
+        "shelf_heights": [
+          40,
+          40,
+          35
+        ],
+        "total_shelves": 3
+      }
+    }
+  },
+  "iterations": [
+    {
+      "cost": 0.12,
+      "accuracy": 0.85,
+      "iteration": 1,
+      "products_found": 4
+    }
+  ],
+  "final_accuracy": 0.91,
+  "total_products": 4
+}

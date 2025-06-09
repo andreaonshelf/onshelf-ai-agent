@@ -8,7 +8,12 @@ Version: 1.0.0
 __version__ = "1.0.0"
 
 # Import main components
-from .config import SystemConfig
+try:
+    from .config import SystemConfig
+except ImportError:
+    # Handle module reorganization
+    SystemConfig = None
+    
 from .system import OnShelfAISystem, process_upload
 from .agent.models import AgentResult
 from .extraction.models import CompleteShelfExtraction
