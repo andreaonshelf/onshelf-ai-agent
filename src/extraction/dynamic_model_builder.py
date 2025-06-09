@@ -119,6 +119,11 @@ class DynamicModelBuilder:
                     nested_fields
                 )
                 python_type = List[nested_model]
+                # Enhance description for lists with nested objects
+                required_fields = [f['name'] for f in nested_fields if f.get('required', False)]
+                if required_fields:
+                    structure_instruction = f" Array of objects, each object MUST have fields: {', '.join(required_fields)}"
+                    description = f"{description}.{structure_instruction}"
             elif item_type == 'string':
                 python_type = List[str]
             elif item_type == 'integer':
@@ -134,6 +139,11 @@ class DynamicModelBuilder:
             nested_fields = field_def.get('nested_fields', [])
             if nested_fields:
                 python_type = DynamicModelBuilder._build_nested_model(field_name, nested_fields)
+                # Enhance description with required structure (will be used later)
+                required_fields = [f['name'] for f in nested_fields if f.get('required', False)]
+                if required_fields:
+                    structure_instruction = f" REQUIRED nested object with fields: {', '.join(required_fields)}"
+                    description = f"{description}.{structure_instruction}"
             else:
                 python_type = Dict[str, Any]
         else:

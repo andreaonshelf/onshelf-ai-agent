@@ -96,12 +96,37 @@ async def get_queue_items(
             -(datetime.fromisoformat(x['created_at'].replace('Z', '+00:00')).timestamp())
         ))
         
-        # Enrich items with upload data
+        # Enrich items with upload data and extraction results
         for item in sorted_items:
             try:
                 # Initialize defaults
                 item['store_name'] = 'Unknown Store'
                 item['category'] = 'Unknown Category'
+                
+                # Parse extraction results to get product count
+                if item.get('extraction_result') and isinstance(item['extraction_result'], dict):
+                    extraction_result = item['extraction_result']
+                    total_products = 0
+                    
+                    # Check different possible locations for products
+                    if "stages" in extraction_result:
+                        stages = extraction_result.get("stages", {})
+                        if "products" in stages and isinstance(stages["products"], dict):
+                            products_data = stages["products"].get("data", [])
+                            if isinstance(products_data, list):
+                                total_products = len(products_data)
+                        elif "product_v1" in stages and isinstance(stages["product_v1"], dict):
+                            products_data = stages["product_v1"].get("data", [])
+                            if isinstance(products_data, list):
+                                total_products = len(products_data)
+                    elif "products" in extraction_result:
+                        if isinstance(extraction_result["products"], list):
+                            total_products = len(extraction_result["products"])
+                    
+                    # Add extraction_results summary for sidebar display
+                    item['extraction_results'] = {
+                        'total_products': total_products
+                    }
                 
                 # Skip if no upload_id
                 if not item.get('upload_id'):
@@ -229,18 +254,36 @@ async def start_processing(item_id: int, request_data: Dict[str, Any]):
         # First check if we have a complete extraction_config with field definitions
         extraction_config = request_data.get('extraction_config')
         if not extraction_config:
-            # Build basic config if none provided
-            extraction_config = {
-                "system": system,
-                "max_budget": request_data.get('max_budget', 2.0),
-                "temperature": request_data.get('temperature', 0.1),
-                "orchestrators": request_data.get('orchestrators', {
-                    "master": { "model": "claude-4-opus", "prompt": "" },
-                    "extraction": { "model": "claude-4-sonnet", "prompt": "" },
-                    "planogram": { "model": "gpt-4o-mini", "prompt": "" }
-                }),
-                "stage_models": request_data.get('stage_models', {})
-            }
+            # Try to load the last saved configuration from database
+            try:
+                # Get the most recent configuration that has proper field definitions
+                config_result = supabase.table("ai_extraction_queue").select("extraction_config").not_.is_("extraction_config", "null").order("created_at", desc=True).limit(1).execute()
+                
+                if config_result.data and config_result.data[0].get('extraction_config'):
+                    saved_config = config_result.data[0]['extraction_config']
+                    # Validate that it has stages with fields
+                    if saved_config.get('stages') and all(stage.get('fields') for stage in saved_config['stages'].values()):
+                        extraction_config = saved_config
+                        logger.info(f"Using last saved configuration with {len(saved_config['stages'])} stages", component="queue_api")
+                    else:
+                        raise HTTPException(status_code=400, detail="Last saved configuration has empty fields - please configure extraction fields first")
+                else:
+                    raise HTTPException(status_code=400, detail="No valid configuration found - please configure extraction fields first")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to load saved configuration: {e}", component="queue_api")
+                raise HTTPException(status_code=400, detail="No valid configuration found - please configure extraction fields first")
+        else:
+            # Validate provided configuration has proper field definitions
+            if not extraction_config.get('stages'):
+                raise HTTPException(status_code=400, detail="Configuration must include stages with field definitions")
+            
+            # Check that stages have field definitions
+            empty_stages = [stage_name for stage_name, stage_config in extraction_config['stages'].items() 
+                          if not stage_config.get('fields')]
+            if empty_stages:
+                raise HTTPException(status_code=400, detail=f"Stages {empty_stages} have empty field definitions - configure fields first")
         
         # Log what we received
         logger.info(
@@ -1642,9 +1685,61 @@ async def get_queue_item_results(item_id: int):
                 if isinstance(metadata, dict):
                     store_name = metadata.get('store_name', metadata.get('retailer', 'Unknown Store'))
         
+        # Parse extraction results to extract products
+        products = []
+        total_products = 0
+        iterations_data = []
+        
+        extraction_result = item.get("extraction_result")
+        if extraction_result and isinstance(extraction_result, dict):
+            # Check if we have stages with products
+            if "stages" in extraction_result:
+                stages = extraction_result.get("stages", {})
+                # Look for products in different possible locations
+                if "products" in stages and isinstance(stages["products"], dict):
+                    products_data = stages["products"].get("data", [])
+                    if isinstance(products_data, list):
+                        products = products_data
+                elif "product_v1" in stages and isinstance(stages["product_v1"], dict):
+                    products_data = stages["product_v1"].get("data", [])
+                    if isinstance(products_data, list):
+                        products = products_data
+                # Also check for products at root level
+            elif "products" in extraction_result:
+                if isinstance(extraction_result["products"], list):
+                    products = extraction_result["products"]
+            
+            # Extract iterations data if available
+            if "iterations" in extraction_result:
+                iterations_data = extraction_result.get("iterations", [])
+        
+        total_products = len(products)
+        
+        # Parse planogram result to get SVG
+        planogram_svg = None
+        planogram_result = item.get("planogram_result")
+        if planogram_result and isinstance(planogram_result, dict):
+            planogram_svg = planogram_result.get("svg") or planogram_result.get("planogram_svg")
+        
+        # Get image URL
+        image_url = None
+        if item.get("enhanced_image_path"):
+            # Build the image URL using the queue image endpoint
+            image_url = f"/api/queue/image/{item['id']}"
+        
+        # Format completed time
+        completed_time = None
+        if item.get("completed_at"):
+            try:
+                completed_dt = datetime.fromisoformat(item["completed_at"].replace('Z', '+00:00'))
+                completed_time = completed_dt.strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                completed_time = item.get("completed_at")
+        
         # Build the response matching what the Results page expects
         response = {
             "id": item["id"],
+            "item_id": item["id"],  # Some parts of frontend use item_id
             "upload_id": item.get("upload_id"),
             "ready_media_id": item.get("ready_media_id"),
             "enhanced_image_path": item.get("enhanced_image_path"),
@@ -1653,6 +1748,7 @@ async def get_queue_item_results(item_id: int):
             "category": category,
             "created_at": item.get("created_at"),
             "completed_at": item.get("completed_at"),
+            "completed_time": completed_time,
             "processing_duration_seconds": item.get("processing_duration_seconds"),
             "api_cost": item.get("api_cost"),
             "iterations_completed": item.get("iterations_completed"),
@@ -1663,7 +1759,14 @@ async def get_queue_item_results(item_id: int):
             "current_extraction_system": item.get("current_extraction_system"),
             "comparison_group_id": item.get("comparison_group_id"),
             
-            # The main results data
+            # Parsed results for frontend
+            "products": products,
+            "total_products": total_products,
+            "iterations_data": iterations_data,
+            "planogram_svg": planogram_svg,
+            "original_image_url": image_url,
+            
+            # Keep raw results for debugging
             "extraction_result": item.get("extraction_result"),
             "planogram_result": item.get("planogram_result"),
             

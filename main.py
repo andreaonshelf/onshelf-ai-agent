@@ -96,7 +96,7 @@ app.include_router(field_definitions_router)
 from src.api.extraction_config import router as extraction_config_router
 app.include_router(extraction_config_router)
 
-# Include diagnostics API
+# Include diagnostics API (includes live logs endpoint)
 from src.api.diagnostics import router as diagnostics_router
 app.include_router(diagnostics_router)
 

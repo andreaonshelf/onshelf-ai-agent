@@ -79,13 +79,34 @@ async def process_queue_item(
         monitoring_hooks.register_monitor(item_id, initial_data)
         
         # Build configuration with all the parameters
-        configuration = request.configuration or {}
+        # First check if queue item has a saved extraction_config with fields
+        saved_config = queue_item.get('extraction_config', {})
+        saved_stages = saved_config.get('stages', {})
         
-        logger.info(f"Received configuration from UI: {configuration}")
+        # Check if saved config has fields
+        has_saved_fields = any(
+            stage_config.get('fields', []) 
+            for stage_config in saved_stages.values()
+        )
+        
+        if has_saved_fields:
+            # Use the saved config from database (it has been fixed)
+            configuration = saved_config
+            logger.info(f"Using saved extraction_config from database with fields")
+        else:
+            # Fall back to UI configuration
+            configuration = request.configuration or {}
+            logger.info(f"Using configuration from UI request")
+        
         logger.info(f"Configuration has stages: {'stages' in configuration}")
         if 'stages' in configuration:
             logger.info(f"Stages in configuration: {list(configuration.get('stages', {}).keys())}")
+            # Log if stages have fields
+            for stage_name, stage_config in configuration.get('stages', {}).items():
+                fields = stage_config.get('fields', [])
+                logger.info(f"  Stage '{stage_name}': {len(fields)} field groups")
         
+        # Update with request parameters
         configuration.update({
             "temperature": request.temperature,
             "orchestrator_model": request.orchestrator_model,

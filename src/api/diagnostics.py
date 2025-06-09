@@ -4,7 +4,7 @@ Diagnostics API endpoints for extraction run analysis
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 
 from ..utils import logger
@@ -34,71 +34,35 @@ async def get_extraction_runs(days: int = Query(7, description="Number of days t
             }
         ).execute()
         
-        # If RPC doesn't exist, fall back to direct query
-        if response.data is None:
-            response = supabase.table('extraction_runs') \
-                .select('*') \
-                .gte('started_at', start_date.isoformat()) \
-                .lte('started_at', end_date.isoformat()) \
-                .order('started_at', desc=True) \
-                .execute()
-            
-            runs = []
+        # Use real data from ai_extraction_queue table
+        response = supabase.table('ai_extraction_queue') \
+            .select('*') \
+            .gte('created_at', start_date.isoformat()) \
+            .lte('created_at', end_date.isoformat()) \
+            .order('created_at', desc=True) \
+            .execute()
+        
+        runs = []
+        if response.data:
             for run in response.data:
-                # Get iteration summary for each run
-                iterations_response = supabase.table('iterations') \
-                    .select('*') \
-                    .eq('extraction_run_id', run['run_id']) \
-                    .execute()
-                
-                iterations = iterations_response.data if iterations_response.data else []
-                
-                # Calculate summary metrics
-                total_cost = sum(i.get('api_cost', 0) for i in iterations if i.get('api_cost'))
-                avg_accuracy = sum(i.get('accuracy_score', 0) for i in iterations if i.get('accuracy_score')) / len(iterations) if iterations else 0
-                
                 runs.append({
-                    'run_id': run['run_id'],
-                    'system_type': run.get('system_type', 'unknown'),
-                    'started_at': run['started_at'],
+                    'run_id': f"queue_{run['id']}",
+                    'system_type': run.get('current_extraction_system', 'unknown'),
+                    'started_at': run.get('started_at') or run['created_at'],
                     'status': run.get('status', 'unknown'),
-                    'total_iterations': len(iterations),
-                    'total_cost': total_cost,
-                    'avg_accuracy': avg_accuracy,
-                    'unique_retry_reasons': len(set(i.get('retry_reason', '') for i in iterations if i.get('retry_reason')))
+                    'total_iterations': run.get('iterations_completed', 0),
+                    'total_cost': run.get('api_cost', 0.0),
+                    'avg_accuracy': run.get('final_accuracy', 0.0),
+                    'processing_duration': run.get('processing_duration_seconds', 0),
+                    'upload_id': run.get('upload_id'),
+                    'queue_id': run['id']
                 })
-        else:
-            runs = response.data
         
         return {"runs": runs}
         
     except Exception as e:
         logger.error(f"Failed to get extraction runs: {e}")
-        # Return mock data for testing
-        return {
-            "runs": [
-                {
-                    "run_id": "run_abc123_20240605_1234",
-                    "system_type": "custom_consensus",
-                    "started_at": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
-                    "status": "completed",
-                    "total_iterations": 8,
-                    "total_cost": 1.25,
-                    "avg_accuracy": 0.92,
-                    "unique_retry_reasons": 2
-                },
-                {
-                    "run_id": "run_def456_20240605_0930", 
-                    "system_type": "langgraph",
-                    "started_at": (datetime.utcnow() - timedelta(hours=5)).isoformat(),
-                    "status": "completed",
-                    "total_iterations": 6,
-                    "total_cost": 0.95,
-                    "avg_accuracy": 0.88,
-                    "unique_retry_reasons": 1
-                }
-            ]
-        }
+        return {"runs": [], "error": str(e)}
 
 @router.get("/extraction-run/{run_id}")
 async def get_extraction_run_details(run_id: str):
@@ -108,84 +72,46 @@ async def get_extraction_run_details(run_id: str):
         from supabase import create_client
         supabase = create_client(config.supabase_url, config.supabase_service_key)
         
-        # Get all iterations for this run
-        response = supabase.table('iterations') \
-            .select('*') \
-            .eq('extraction_run_id', run_id) \
-            .order('started_at') \
-            .execute()
-        
-        if not response.data:
-            # Return mock data for demo
-            return {
-                "run_id": run_id,
-                "iterations": [
-                    {
-                        "id": 1,
-                        "stage": "structure",
-                        "model_used": "claude-3-5-sonnet-20241022",
-                        "iteration_number": 1,
-                        "retry_reason": None,
-                        "accuracy_score": 0.95,
-                        "products_found": None,
-                        "duration_ms": 2500,
-                        "api_cost": 0.12,
-                        "visual_feedback_received": None,
-                        "retry_blocks_activated": [],
-                        "actual_prompt": "Extract the shelf structure from this retail image...\n\nIdentify:\n1. Number of shelves\n2. Shelf dimensions\n3. Product layout"
-                    },
-                    {
-                        "id": 2,
-                        "stage": "products",
-                        "model_used": "claude-3-5-sonnet-20241022",
-                        "iteration_number": 1,
-                        "retry_reason": None,
-                        "accuracy_score": 0.88,
-                        "products_found": 12,
-                        "duration_ms": 4200,
-                        "api_cost": 0.25,
-                        "visual_feedback_received": None,
-                        "retry_blocks_activated": [],
-                        "actual_prompt": "Extract products from shelf 1...\n\nFor each product identify:\n- Brand and product name\n- Price\n- Position"
-                    },
-                    {
-                        "id": 3,
-                        "stage": "products",
-                        "model_used": "gpt-4o-2024-11-20",
-                        "iteration_number": 2,
-                        "retry_reason": "missing_products",
-                        "accuracy_score": 0.92,
-                        "products_found": 15,
-                        "duration_ms": 3800,
-                        "api_cost": 0.28,
-                        "visual_feedback_received": {
-                            "issues_found": 3,
-                            "critical_issues": ["Missing 3 products on left side of shelf"]
-                        },
-                        "retry_blocks_activated": ["retry_2_edges", "visual_feedback_context"],
-                        "actual_prompt": "Extract products from shelf 1...\n\n{IF_RETRY 2}\nFocus on edges and partially visible products\n{/IF_RETRY}\n\nVISUAL FEEDBACK FROM PREVIOUS MODEL:\n⚠️ HIGH CONFIDENCE ISSUES:\n- Missing 3 products on left side of shelf"
-                    }
-                ]
-            }
-        
-        # Process iterations data
-        iterations = []
-        for iter_data in response.data:
-            iteration = {
-                "id": iter_data['id'],
-                "stage": iter_data['stage'],
-                "model_used": iter_data['model_used'],
-                "iteration_number": iter_data['iteration_number'],
-                "retry_reason": iter_data.get('retry_reason'),
-                "accuracy_score": iter_data.get('accuracy_score', 0),
-                "products_found": iter_data.get('products_found'),
-                "duration_ms": iter_data.get('duration_ms'),
-                "api_cost": iter_data.get('api_cost'),
-                "visual_feedback_received": json.loads(iter_data['visual_feedback_received']) if iter_data.get('visual_feedback_received') else None,
-                "retry_blocks_activated": iter_data.get('retry_blocks_activated', []),
-                "actual_prompt": iter_data.get('actual_prompt', '')
-            }
-            iterations.append(iteration)
+        # Extract queue_id from run_id (format: queue_{id})
+        if run_id.startswith("queue_"):
+            queue_id = run_id.replace("queue_", "")
+            
+            # Get queue item details
+            queue_result = supabase.table('ai_extraction_queue') \
+                .select('*') \
+                .eq('id', queue_id) \
+                .execute()
+            
+            if not queue_result.data:
+                raise HTTPException(status_code=404, detail="Queue item not found")
+            
+            queue_item = queue_result.data[0]
+            
+            # Get extraction result details
+            extraction_result = queue_item.get('extraction_result', {})
+            
+            # Build iterations from queue item data
+            iterations = []
+            
+            # Add basic processing iteration
+            iterations.append({
+                "id": 1,
+                "stage": queue_item.get('current_extraction_system', 'unknown'),
+                "model_used": "Multiple models",
+                "iteration_number": queue_item.get('iterations_completed', 1),
+                "retry_reason": queue_item.get('error_message') if queue_item.get('status') == 'failed' else None,
+                "accuracy_score": queue_item.get('final_accuracy', 0.0),
+                "products_found": len(extraction_result.get('products', [])) if extraction_result else 0,
+                "duration_ms": (queue_item.get('processing_duration_seconds', 0) * 1000),
+                "api_cost": queue_item.get('api_cost', 0.0),
+                "visual_feedback_received": None,
+                "retry_blocks_activated": [],
+                "actual_prompt": "Real extraction with configured system and prompts",
+                "queue_item_data": queue_item
+            })
+        else:
+            # Handle other run_id formats or return empty
+            iterations = []
         
         # Calculate visual feedback summary
         visual_feedback_summary = {
@@ -214,17 +140,13 @@ async def get_prompt_execution_history(
     try:
         analytics = get_extraction_analytics()
         
-        if run_id:
-            # Get history for specific run
-            orchestration_analytics = OrchestrationAnalytics(run_id, 0)  # queue_item_id not needed for read
-            history = await orchestration_analytics.get_prompt_execution_history(stage, model)
-        else:
-            # Get recent history across all runs
-            history = await analytics.get_recent_prompt_executions(
-                days=7,
-                stage=stage,
-                model=model
-            )
+        # Get recent history across all runs
+        history = await analytics.get_recent_prompt_executions(
+            days=7,
+            stage=stage,
+            model=model,
+            run_id=run_id
+        ) if hasattr(analytics, 'get_recent_prompt_executions') else []
         
         return {"executions": history}
         
@@ -272,3 +194,110 @@ async def get_visual_feedback_analysis(run_id: str):
     except Exception as e:
         logger.error(f"Failed to get visual feedback analysis: {e}")
         return {"feedback_analysis": None}
+
+@router.get("/extraction-logs/{queue_item_id}")
+async def get_extraction_logs(
+    queue_item_id: int,
+    lines: int = Query(100, description="Number of recent log lines to return"),
+    level: Optional[str] = Query(None, description="Filter by log level")
+):
+    """Get real-time extraction logs for a specific queue item"""
+    import os
+    from collections import deque
+    
+    # Use current date for log file
+    current_date = datetime.now().strftime("%Y%m%d")
+    log_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "logs",
+        f"onshelf_ai_{current_date}.log"
+    )
+    
+    if not os.path.exists(log_file):
+        return {"logs": [], "error": "Log file not found"}
+    
+    relevant_logs = []
+    
+    # Read the last N lines of the log file
+    with open(log_file, 'r') as f:
+        tail_lines = deque(f, lines * 10)  # Read more lines to filter
+    
+    # Parse and filter logs
+    for line in tail_lines:
+        try:
+            log_entry = json.loads(line.strip())
+            
+            # Check if this log is related to our queue item
+            queue_id = log_entry.get('extra', {}).get('queue_item_id')
+            message = log_entry.get('message', '')
+            
+            # Also check if the message mentions our item
+            if (queue_id == queue_item_id or 
+                f"item {queue_item_id}" in message or 
+                f"item_id={queue_item_id}" in message or
+                f"queue_item_id={queue_item_id}" in message):
+                
+                # Apply level filter if specified
+                if level and log_entry.get('level') != level:
+                    continue
+                
+                # Format the log entry
+                timestamp = log_entry.get('timestamp', '')
+                if timestamp:
+                    try:
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        time_str = dt.strftime('%H:%M:%S')
+                    except:
+                        time_str = timestamp[:19].split('T')[1] if 'T' in timestamp else '??:??:??'
+                else:
+                    time_str = '??:??:??'
+                
+                relevant_logs.append({
+                    "time": time_str,
+                    "level": log_entry.get('level', 'INFO'),
+                    "component": log_entry.get('component', 'unknown'),
+                    "message": log_entry.get('message', ''),
+                    "extra": {k: v for k, v in log_entry.get('extra', {}).items() 
+                             if k in ['iteration', 'stage', 'model', 'accuracy', 'cost', 'error', 'duration']}
+                })
+                
+        except:
+            # Not a JSON log line, skip
+            pass
+    
+    # If no specific logs found, get general extraction activity
+    if not relevant_logs:
+        for line in tail_lines[-50:]:
+            try:
+                log_entry = json.loads(line.strip())
+                component = log_entry.get('component', '')
+                
+                if component in ['extraction_engine', 'langgraph_system', 'orchestrator', 'system_dispatcher']:
+                    timestamp = log_entry.get('timestamp', '')
+                    if timestamp:
+                        try:
+                            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            time_str = dt.strftime('%H:%M:%S')
+                        except:
+                            time_str = timestamp[:19].split('T')[1] if 'T' in timestamp else '??:??:??'
+                    else:
+                        time_str = '??:??:??'
+                    
+                    relevant_logs.append({
+                        "time": time_str,
+                        "level": log_entry.get('level', 'INFO'),
+                        "component": log_entry.get('component', 'unknown'),
+                        "message": log_entry.get('message', '')[:200],  # Truncate long messages
+                        "extra": {}
+                    })
+            except:
+                pass
+    
+    # Limit to requested number of lines
+    relevant_logs = relevant_logs[-lines:]
+    
+    return {
+        "queue_item_id": queue_item_id,
+        "total_logs": len(relevant_logs),
+        "logs": relevant_logs
+    }

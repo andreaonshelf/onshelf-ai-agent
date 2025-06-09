@@ -1,4 +1,4 @@
-#\!/usr/bin/env python3
+#!/usr/bin/env python3
 """Fix queue item 9 by resetting it and trying to process it again"""
 
 import os
@@ -97,7 +97,7 @@ async def fix_queue_item_9():
             configuration=configuration
         )
         
-        print(f"✅ Processing completed successfully\!")
+        print(f"✅ Processing completed successfully!")
         print(f"Final accuracy: {getattr(result, 'final_accuracy', 'N/A')}")
         
         # Mark as completed

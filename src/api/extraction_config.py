@@ -258,6 +258,11 @@ async def get_current_extraction_config():
         import json
         import os
         
+        # Get the project root directory where JSON files are located
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # src/api/
+        src_dir = os.path.dirname(current_dir)  # src/
+        project_root = os.path.dirname(src_dir)  # project root
+        
         field_files = {
             'structure': 'ui_schema_structure_v1.json',
             'products': 'ui_schema_product_v1.json',
@@ -287,11 +292,15 @@ async def get_current_extraction_config():
                     # Load field definitions from JSON file
                     if stage_name in field_files:
                         try:
-                            field_file_path = field_files[stage_name]
+                            # Use absolute path to find the JSON file
+                            field_file_path = os.path.join(project_root, field_files[stage_name])
                             if os.path.exists(field_file_path):
                                 with open(field_file_path, 'r') as f:
                                     fields = json.load(f)
                                     stage_config["fields"] = [fields]  # Wrap in list as expected
+                                logger.info(f"Loaded field definitions for {stage_name} from {field_file_path}")
+                            else:
+                                logger.error(f"Field definition file not found: {field_file_path}")
                         except Exception as e:
                             logger.warning(f"Could not load field definitions from {field_files[stage_name]}: {e}")
                     

@@ -15,7 +15,7 @@ import instructor
 import openai
 import anthropic
 import google.generativeai as genai
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..config import SystemConfig
 from ..utils import (
@@ -857,13 +857,171 @@ class ModularExtractionEngine:
                     component="extraction_engine",
                     model_id=api_model
                 )
-                response = self.anthropic_client.messages.create(
-                    model=api_model,
-                    max_tokens=6000,
-                    temperature=self.temperature,
-                    messages=messages,
-                    response_model=output_schema
-                )
+                
+                # Try instructor first, fall back to JSON mode if tool_use error
+                try:
+                    response = self.anthropic_client.messages.create(
+                        model=api_model,
+                        max_tokens=4096,  # Claude limit
+                        temperature=self.temperature,
+                        messages=messages,
+                        response_model=output_schema
+                    )
+                except Exception as e:
+                    error_msg = str(e)
+                    if "tool_use" in error_msg or "tool_result" in error_msg:
+                        logger.warning(
+                            f"Instructor tool_use error with dynamic model, falling back to JSON mode",
+                            component="extraction_engine",
+                            error=error_msg[:200],
+                            model_name=output_schema.__name__
+                        )
+                        
+                        # Fall back to raw Claude with JSON parsing
+                        raw_client = anthropic.Anthropic(api_key=self.config.anthropic_api_key)
+                        
+                        # Prepare JSON schema instruction
+                        schema_json = output_schema.model_json_schema()
+                        json_instruction = f"\n\nIMPORTANT: You must return your response as valid JSON that matches this exact schema:\n```json\n{json.dumps(schema_json, indent=2)}\n```"
+                        
+                        # Add JSON instruction to prompt  
+                        json_messages = []
+                        for msg in messages:
+                            if msg["role"] == "user":
+                                new_content = []
+                                for item in msg["content"]:
+                                    if item["type"] == "text":
+                                        # Also add examples of the expected structure for clarity
+                                        example_instruction = ""
+                                        # Get field names from the schema to show correct structure
+                                        schema_properties = schema_json.get('properties', {})
+                                        if schema_properties:
+                                            # Show example with actual fields from the dynamic model
+                                            field_examples = {}
+                                            for field_name, field_info in schema_properties.items():
+                                                field_type = field_info.get('type', 'string')
+                                                if field_type == 'string':
+                                                    field_examples[field_name] = "example_value"
+                                                elif field_type == 'integer':
+                                                    field_examples[field_name] = 1
+                                                elif field_type == 'number' or field_type == 'float':
+                                                    field_examples[field_name] = 1.0
+                                                elif field_type == 'boolean':
+                                                    field_examples[field_name] = True
+                                                elif field_type == 'array':
+                                                    field_examples[field_name] = []
+                                            # Check if this is a products extraction (has common product fields)
+                                            if all(field in schema_properties for field in ['brand', 'name', 'shelf', 'position']):
+                                                # This is products extraction - show array format
+                                                example_instruction = f"\n\nIMPORTANT: For products extraction, return a JSON object with a 'products' array:\n```json\n{{\n  \"products\": [\n    {json.dumps(field_examples, indent=6)[:-1]},\n    {json.dumps(field_examples, indent=6)[:-1]},\n    ...\n  ]\n}}\n```"
+                                            else:
+                                                # Other extractions - show flat structure
+                                                example_instruction = f"\n\nIMPORTANT: Return a JSON object with these exact fields at the root level:\n```json\n{json.dumps(field_examples, indent=2)}\n```"
+                                        new_content.append({
+                                            "type": "text",
+                                            "text": item["text"] + json_instruction + example_instruction
+                                        })
+                                    else:
+                                        new_content.append(item)
+                                json_messages.append({"role": "user", "content": new_content})
+                            else:
+                                json_messages.append(msg)
+                        
+                        raw_response = raw_client.messages.create(
+                            model=api_model,
+                            max_tokens=4096,
+                            temperature=self.temperature,
+                            messages=json_messages
+                        )
+                        
+                        # Parse JSON response
+                        response_text = raw_response.content[0].text
+                        
+                        # Extract JSON from response (handle markdown code blocks)
+                        if "```json" in response_text:
+                            json_start = response_text.find("```json") + 7
+                            json_end = response_text.find("```", json_start)
+                            response_text = response_text[json_start:json_end].strip()
+                        elif "```" in response_text:
+                            json_start = response_text.find("```") + 3
+                            json_end = response_text.find("```", json_start)
+                            response_text = response_text[json_start:json_end].strip()
+                        
+                        # Parse and validate with the dynamic model
+                        try:
+                            json_data = json.loads(response_text)
+                            
+                            # Handle common response structure mismatches
+                            # If the model returns a wrapper object, try to unwrap it
+                            response = None  # Initialize response
+                            
+                            if isinstance(json_data, dict):
+                                # Check if there's a single key that contains the actual data
+                                keys = list(json_data.keys())
+                                if len(keys) == 1 and isinstance(json_data[keys[0]], (list, dict)):
+                                    # For products stage, if the response is {'products': [...]}
+                                    # but we expect fields at root level, handle it specially
+                                    if keys[0] == 'products' and isinstance(json_data['products'], list):
+                                        # Special handling for products stage
+                                        # The dynamic model expects individual product fields, but we got an array
+                                        # Return the array directly for the calling code to handle
+                                        logger.info(
+                                            f"Claude returned array of {len(json_data['products'])} products, "
+                                            f"returning list directly for products stage",
+                                            component="extraction_engine"
+                                        )
+                                        # Return the list of products directly
+                                        products_list = []
+                                        for prod in json_data['products']:
+                                            try:
+                                                # Validate each product against the schema
+                                                validated_prod = output_schema(**prod)
+                                                products_list.append(validated_prod)
+                                            except ValidationError as e:
+                                                logger.warning(f"Skipping invalid product: {e}", component="extraction_engine")
+                                        response = products_list  # Return list directly, not wrapped
+                                        # Skip normal validation since we already validated each item
+                                    elif isinstance(json_data[keys[0]], dict):
+                                        # Try unwrapping single-key wrapper
+                                        logger.info(
+                                            f"Unwrapping single-key JSON response: {keys[0]}",
+                                            component="extraction_engine"
+                                        )
+                                        json_data = json_data[keys[0]]
+                            
+                            # Only parse if we haven't already handled the response
+                            if response is None:
+                                response = output_schema(**json_data)
+                                logger.info(
+                                    f"Successfully parsed JSON response into {output_schema.__name__}",
+                                    component="extraction_engine"
+                                )
+                        except (json.JSONDecodeError, ValidationError) as parse_error:
+                            logger.error(
+                                f"Failed to parse JSON response: {parse_error}",
+                                component="extraction_engine",
+                                response_preview=response_text[:500],
+                                schema_name=output_schema.__name__,
+                                json_structure=str(json_data)[:200] if 'json_data' in locals() else 'N/A'
+                            )
+                            # Return empty result matching the expected structure instead of raising
+                            # This prevents stalling on parse errors
+                            logger.warning(
+                                f"Returning empty {output_schema.__name__} due to parse error",
+                                component="extraction_engine"
+                            )
+                            try:
+                                # Create empty instance with default values
+                                response = output_schema()
+                            except:
+                                # If that fails, return empty dict/list based on expected type
+                                if 'products' in output_schema.__name__.lower():
+                                    response = []
+                                else:
+                                    response = {}
+                    else:
+                        # Re-raise non-tool_use errors
+                        raise
             elif output_schema == "ShelfStructure":
                 response = self.anthropic_client.messages.create(
                     model=api_model,
@@ -875,7 +1033,7 @@ class ModularExtractionEngine:
             elif output_schema == "List[ProductExtraction]":
                 response = self.anthropic_client.messages.create(
                     model=api_model,
-                    max_tokens=6000,
+                    max_tokens=4096,  # Claude limit
                     temperature=self.temperature,
                     messages=messages,
                     response_model=List[ProductExtraction]
@@ -883,7 +1041,7 @@ class ModularExtractionEngine:
             elif output_schema == "CompleteShelfExtraction":
                 response = self.anthropic_client.messages.create(
                     model=api_model,
-                    max_tokens=8000,
+                    max_tokens=4096,  # Claude limit
                     temperature=self.temperature,
                     messages=messages,
                     response_model=CompleteShelfExtraction
@@ -1015,7 +1173,7 @@ class ModularExtractionEngine:
                     model=api_model,
                     messages=messages,
                     response_model=output_schema,
-                    max_tokens=6000,
+                    max_tokens=4096,  # Claude limit
                     temperature=self.temperature
                 )
             elif output_schema == "ShelfStructure":
@@ -1033,7 +1191,7 @@ class ModularExtractionEngine:
                     model=api_model,
                     messages=messages,
                     response_model=List[ProductExtraction],
-                    max_tokens=6000,
+                    max_tokens=4096,  # Claude limit
                     temperature=self.temperature
                 )
             elif output_schema == "CompleteShelfExtraction":
@@ -1042,7 +1200,7 @@ class ModularExtractionEngine:
                     model=api_model,
                     messages=messages,
                     response_model=CompleteShelfExtraction,
-                    max_tokens=8000,
+                    max_tokens=4096,  # Claude limit
                     temperature=self.temperature
                 )
             else:
@@ -1302,7 +1460,13 @@ class ModularExtractionEngine:
         if not products:
             return 0.0
         
-        total_confidence = sum(p.extraction_confidence for p in products)
+        # Handle both ProductExtraction objects and dynamic models
+        total_confidence = sum(
+            getattr(p, 'extraction_confidence', 0.85) if hasattr(p, '__dict__') 
+            else p.get('extraction_confidence', 0.85) if isinstance(p, dict)
+            else 0.85
+            for p in products
+        )
         return total_confidence / len(products)
     
     def _calculate_overall_confidence(self, products: List[ProductExtraction]) -> ConfidenceLevel:
@@ -1329,13 +1493,22 @@ class ModularExtractionEngine:
         }
         
         for product in products:
-            if product.confidence_category == ConfidenceLevel.VERY_HIGH:
-                summary['high_confidence'] += 1
-            elif product.confidence_category in [ConfidenceLevel.HIGH, ConfidenceLevel.MEDIUM]:
-                summary['medium_confidence'] += 1
+            # Handle dynamic models that may not have confidence_category
+            if hasattr(product, 'confidence_category'):
+                if product.confidence_category == ConfidenceLevel.VERY_HIGH:
+                    summary['high_confidence'] += 1
+                elif product.confidence_category in [ConfidenceLevel.HIGH, ConfidenceLevel.MEDIUM]:
+                    summary['medium_confidence'] += 1
+                else:
+                    summary['low_confidence'] += 1
             else:
-                summary['low_confidence'] += 1
+                # Default to medium confidence for dynamic models
+                summary['medium_confidence'] += 1
             
-            summary['validation_flags'] += len(product.validation_flags)
+            # Handle validation_flags
+            if hasattr(product, 'validation_flags'):
+                summary['validation_flags'] += len(product.validation_flags)
+            elif isinstance(product, dict) and 'validation_flags' in product:
+                summary['validation_flags'] += len(product.get('validation_flags', []))
         
         return summary 

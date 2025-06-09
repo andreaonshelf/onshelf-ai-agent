@@ -761,11 +761,13 @@ class HybridConsensusSystem(BaseExtractionSystem):
                 models = getattr(self, 'stage_models', {}).get('quantities', ['gpt-4o'])
                 
                 for model in models[:1]:  # Use one model to save costs
+                    # Use proper schema method instead of hardcoded fallback
+                    output_schema = self._get_output_schema_for_stage('quantities')
                     result, cost = await self.extraction_engine.execute_with_model_id(
                         model_id=model,
                         prompt=prompt,
                         images={'enhanced': image_data},
-                        output_schema='Dict[str, Any]',
+                        output_schema=output_schema,
                         agent_id=f"hybrid_quantities_{model}"
                     )
                     
@@ -1077,15 +1079,9 @@ class HybridConsensusSystem(BaseExtractionSystem):
             )
             return DynamicModelBuilder.build_model_from_config(stage, stage_config)
         
-        # Fallback to generic schemas
-        if stage == 'structure':
-            return 'Dict[str, Any]'
-        elif stage == 'products':
-            return 'List[Dict[str, Any]]'
-        elif stage == 'details':
-            return 'Dict[str, Any]'
-        else:
-            return 'Dict[str, Any]'
+        # NO FALLBACK SCHEMAS - MUST HAVE FIELD CONFIGURATION
+        logger.error(f"No field configuration found for {stage} - this should never happen!", component="hybrid_system")
+        raise ValueError(f"No field definitions found for stage {stage}. Check database configuration.")
     
     def _extract_shelf_count_from_result(self, result) -> int:
         """Extract shelf count from extraction result"""

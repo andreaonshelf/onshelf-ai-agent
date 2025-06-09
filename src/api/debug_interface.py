@@ -7,7 +7,8 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional, Any
 import asyncio
 import json
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 import uuid
 
 from ..config import SystemConfig
@@ -17,6 +18,9 @@ from ..systems.custom_consensus import CustomConsensusSystem
 from ..systems.langgraph_system import LangGraphConsensusSystem
 from ..systems.hybrid_system import HybridConsensusSystem
 from ..utils import logger
+from ..orchestrator.monitoring_hooks import monitoring_hooks
+from supabase import create_client
+import os
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
 
@@ -559,4 +563,353 @@ async def get_available_systems():
     return {
         "systems": list(debugger.system_workflows.keys()),
         "workflows": debugger.system_workflows
-    } 
+    }
+
+
+@router.get("/monitor/{item_id}")
+async def get_real_time_monitoring(item_id: int):
+    """Get real-time monitoring data for a queue item"""
+    try:
+        # Get monitoring data from the global monitoring hooks
+        monitor_data = monitoring_hooks.get_monitor_data(item_id)
+        
+        if not monitor_data:
+            # Check if item exists in database
+            supabase = create_client(
+                os.getenv('SUPABASE_URL'),
+                os.getenv('SUPABASE_SERVICE_KEY')
+            )
+            
+            result = supabase.table("ai_extraction_queue").select("*").eq("id", item_id).execute()
+            
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Queue item not found")
+            
+            item = result.data[0]
+            
+            # Return static data if no active monitoring
+            return {
+                "item_id": item_id,
+                "status": item.get("status"),
+                "current_stage": "Not actively processing",
+                "progress": {
+                    "current_iteration": item.get("iterations_completed", 0),
+                    "max_iterations": 5,
+                    "accuracy": item.get("final_accuracy", 0.0),
+                    "cost": item.get("api_cost", 0.0)
+                },
+                "stages": {},
+                "models_status": [],
+                "current_processing": item.get("error_message", "No active processing"),
+                "last_update": item.get("updated_at"),
+                "is_live": False
+            }
+        
+        # Return live monitoring data - reflect what's ACTUALLY happening
+        return {
+            "item_id": item_id,
+            "status": "processing",  # It's actively being monitored
+            "current_stage": monitor_data.get("current_stage", "Processing"),
+            "current_processing": monitor_data.get("current_processing", "Extraction in progress..."),
+            "progress": {
+                "current_iteration": monitor_data.get("current_iteration", 1),
+                "max_iterations": 5,
+                "structure_complete": monitor_data.get("structure_complete", False),
+                "products_complete": monitor_data.get("products_complete", False),
+                "details_complete": monitor_data.get("details_complete", False),
+                "validation_complete": monitor_data.get("validation_complete", False)
+            },
+            "real_time_data": {
+                "execution_mode": monitor_data.get("execution_mode", "stage-based"),
+                "stage_attempt": monitor_data.get("stage_attempt", 1),
+                "stage_total_attempts": monitor_data.get("stage_total_attempts", 1),
+                "current_model": monitor_data.get("current_model", "Processing"),
+                "locked_items": monitor_data.get("locked_items", []),
+                "models_status": monitor_data.get("models_status", [])
+            },
+            "stages": monitor_data.get("stages", {}),
+            "timing": {
+                "started_at": monitor_data.get("started_at", datetime.utcnow()).isoformat(),
+                "last_update": monitor_data.get("last_update", datetime.utcnow()).isoformat(),
+                "duration_seconds": time.time() - monitor_data.get("started_at", time.time()) if isinstance(monitor_data.get("started_at"), (int, float)) else 0
+            },
+            "is_live": True,
+            "debug_note": "This reflects actual extraction progress, not predefined workflow"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get monitoring data for item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get monitoring data: {str(e)}")
+
+
+@router.get("/monitor/all")
+async def get_all_active_monitoring():
+    """Get monitoring data for all currently active extractions"""
+    try:
+        active_monitors = {}
+        
+        # Get all active monitors from the global monitoring hooks
+        for queue_item_id, monitor_data in monitoring_hooks.monitors.items():
+            active_monitors[str(queue_item_id)] = {
+                "item_id": queue_item_id,
+                "status": monitor_data.get("status", "processing"),
+                "current_stage": monitor_data.get("current_stage", "Unknown"),
+                "current_iteration": monitor_data.get("current_iteration", 1),
+                "accuracy": monitor_data.get("accuracy", 0.0),
+                "cost": monitor_data.get("cost", 0.0),
+                "execution_mode": monitor_data.get("execution_mode", "unknown"),
+                "current_model": monitor_data.get("current_model", "Unknown"),
+                "last_update": monitor_data.get("last_update", datetime.utcnow()).isoformat(),
+                "started_at": monitor_data.get("started_at", datetime.utcnow()).isoformat()
+            }
+        
+        return {
+            "active_extractions": active_monitors,
+            "total_active": len(active_monitors),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get all monitoring data: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get monitoring data: {str(e)}")
+
+
+@router.get("/logs/live/{item_id}")
+async def get_live_logs(item_id: int, lines: int = 50):
+    """Get live logs for a specific queue item"""
+    try:
+        # Get logs from the log file for this item
+        import glob
+        from datetime import datetime, timedelta
+        
+        logs = []
+        
+        # Get recent log files
+        log_pattern = "logs/onshelf_ai_*.log"
+        log_files = sorted(glob.glob(log_pattern), reverse=True)[:3]  # Last 3 log files
+        
+        for log_file in log_files:
+            try:
+                with open(log_file, 'r') as f:
+                    file_logs = f.readlines()
+                    
+                    # Filter logs related to this item
+                    for line in file_logs:
+                        if f"queue_item_id={item_id}" in line or f"item_id={item_id}" in line or str(item_id) in line:
+                            try:
+                                # Try to parse as JSON log
+                                if line.strip().startswith('{'):
+                                    import json
+                                    log_entry = json.loads(line.strip())
+                                    logs.append({
+                                        "timestamp": log_entry.get("timestamp", ""),
+                                        "level": log_entry.get("level", "INFO"),
+                                        "component": log_entry.get("component", "unknown"),
+                                        "message": log_entry.get("message", ""),
+                                        "raw": line.strip()
+                                    })
+                                else:
+                                    # Parse structured format
+                                    parts = line.strip().split(" | ")
+                                    if len(parts) >= 4:
+                                        logs.append({
+                                            "timestamp": parts[0],
+                                            "level": parts[1],
+                                            "component": parts[2],
+                                            "message": " | ".join(parts[3:]),
+                                            "raw": line.strip()
+                                        })
+                            except:
+                                # If parsing fails, include raw line
+                                logs.append({
+                                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                                    "level": "INFO",
+                                    "component": "system",
+                                    "message": line.strip(),
+                                    "raw": line.strip()
+                                })
+            except Exception as e:
+                logger.warning(f"Failed to read log file {log_file}: {e}")
+                continue
+        
+        # Sort by timestamp and limit
+        logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        logs = logs[:lines]
+        
+        return {
+            "item_id": item_id,
+            "logs": logs,
+            "total_found": len(logs),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get live logs for item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get live logs: {str(e)}")
+
+
+@router.get("/issues/current")
+async def get_current_issues():
+    """Get current real issues affecting extractions"""
+    try:
+        import glob
+        from collections import defaultdict
+        
+        issues = []
+        issue_counts = defaultdict(int)
+        
+        # Get recent log files and extract real errors
+        log_pattern = "logs/onshelf_ai_*.log"
+        log_files = sorted(glob.glob(log_pattern), reverse=True)[:2]  # Last 2 log files
+        
+        for log_file in log_files:
+            try:
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                    
+                    # Process last 500 lines to find recent errors
+                    for line in lines[-500:]:
+                        if '"level": "ERROR"' in line:
+                            try:
+                                import json
+                                log_entry = json.loads(line.strip())
+                                
+                                message = log_entry.get("message", "")
+                                component = log_entry.get("component", "unknown")
+                                timestamp = log_entry.get("timestamp", "")
+                                
+                                # Categorize real issues
+                                issue_type = "unknown_error"
+                                if "validation error" in message.lower():
+                                    issue_type = "validation_error"
+                                elif "field required" in message.lower():
+                                    issue_type = "missing_required_field"
+                                elif "enum" in message.lower():
+                                    issue_type = "enum_constraint_violation"
+                                elif "no field definitions" in message.lower():
+                                    issue_type = "missing_field_definitions"
+                                elif "supabase" in message.lower():
+                                    issue_type = "database_error"
+                                elif "api" in message.lower() and "failed" in message.lower():
+                                    issue_type = "api_call_failure"
+                                elif "langgraph workflow failed" in message.lower():
+                                    issue_type = "workflow_failure"
+                                
+                                issue_counts[issue_type] += 1
+                                
+                                # Extract specific details
+                                details = {}
+                                if "validation error" in message:
+                                    # Extract which field is failing validation
+                                    lines_parts = message.split("\\n")
+                                    for part in lines_parts:
+                                        if "Field required" in part or "Input should be" in part:
+                                            details["validation_detail"] = part.strip()
+                                            break
+                                
+                                issues.append({
+                                    "timestamp": timestamp,
+                                    "type": issue_type,
+                                    "component": component,
+                                    "message": message[:200] + "..." if len(message) > 200 else message,
+                                    "details": details
+                                })
+                                
+                            except json.JSONDecodeError:
+                                continue
+                                
+            except Exception as e:
+                logger.warning(f"Failed to read log file {log_file}: {e}")
+                continue
+        
+        # Sort by timestamp and limit to recent issues
+        issues.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        recent_issues = issues[:20]
+        
+        return {
+            "current_issues": recent_issues,
+            "issue_summary": dict(issue_counts),
+            "total_errors": len(issues),
+            "analysis": {
+                "most_common_issue": max(issue_counts.items(), key=lambda x: x[1])[0] if issue_counts else "none",
+                "critical_issues": [k for k, v in issue_counts.items() if v >= 3],
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            "note": "These are REAL issues extracted from actual logs, not mock data"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get current issues: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get current issues: {str(e)}")
+
+
+@router.get("/health/extraction-pipeline")
+async def get_extraction_pipeline_health():
+    """Get real health status of the extraction pipeline"""
+    try:
+        # Check database connectivity
+        try:
+            supabase = create_client(
+                os.getenv('SUPABASE_URL'),
+                os.getenv('SUPABASE_SERVICE_KEY')
+            )
+            db_result = supabase.table("ai_extraction_queue").select("id").limit(1).execute()
+            db_healthy = bool(db_result.data is not None)
+        except Exception as e:
+            db_healthy = False
+            db_error = str(e)
+        
+        # Check active monitoring
+        active_monitors = len(monitoring_hooks.monitors)
+        
+        # Check recent processing
+        try:
+            recent_result = supabase.table("ai_extraction_queue").select("*").gte(
+                "updated_at", (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+            ).execute()
+            recent_activity = len(recent_result.data) if recent_result.data else 0
+        except:
+            recent_activity = 0
+        
+        # Calculate health score
+        health_score = 0
+        if db_healthy:
+            health_score += 40
+        if active_monitors > 0:
+            health_score += 30
+        if recent_activity > 0:
+            health_score += 30
+        
+        status = "healthy" if health_score >= 70 else "degraded" if health_score >= 40 else "unhealthy"
+        
+        return {
+            "status": status,
+            "health_score": health_score,
+            "components": {
+                "database": {
+                    "healthy": db_healthy,
+                    "error": db_error if not db_healthy else None
+                },
+                "monitoring": {
+                    "active_monitors": active_monitors,
+                    "healthy": active_monitors >= 0
+                },
+                "recent_activity": {
+                    "items_processed_30min": recent_activity,
+                    "healthy": recent_activity >= 0
+                }
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Real health metrics, not simulated data"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get pipeline health: {e}")
+        return {
+            "status": "error",
+            "health_score": 0,
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        } 

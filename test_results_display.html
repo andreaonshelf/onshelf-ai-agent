@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Results Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .products-table th, .products-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .products-table th {
+            background: #f0f0f0;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.completed { background: #d4f4dd; color: #16a34a; }
+        .status.failed { background: #fee; color: #dc2626; }
+        .status.processing { background: #fef3c7; color: #f59e0b; }
+        .status.pending { background: #f1f5f9; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Results Display</h1>
+        
+        <div class="section">
+            <h2>Queue Items</h2>
+            <div id="queue-items">Loading...</div>
+        </div>
+        
+        <div class="section">
+            <h2>Selected Item Results</h2>
+            <div id="item-results">Select an item from above to view results</div>
+        </div>
+        
+        <div class="section">
+            <h2>Test Data</h2>
+            <button onclick="createTestData()">Create Test Extraction Data</button>
+            <div id="test-status"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        
+        async function loadQueueItems() {
+            try {
+                const response = await fetch(`${API_BASE}/queue/items?limit=10`);
+                const data = await response.json();
+                
+                const container = document.getElementById('queue-items');
+                if (data.items && data.items.length > 0) {
+                    let html = '<table class="products-table"><thead><tr>';
+                    html += '<th>ID</th><th>Store</th><th>Category</th><th>Status</th><th>Products</th><th>Action</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.items.forEach(item => {
+                        const productCount = item.extraction_results?.total_products || 0;
+                        html += '<tr>';
+                        html += `<td>${item.id}</td>`;
+                        html += `<td>${item.store_name || 'Unknown'}</td>`;
+                        html += `<td>${item.category || 'Unknown'}</td>`;
+                        html += `<td><span class="status ${item.status}">${item.status}</span></td>`;
+                        html += `<td>${productCount}</td>`;
+                        html += `<td><button onclick="loadItemResults(${item.id})">View Results</button></td>`;
+                        html += '</tr>';
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = 'No queue items found';
+                }
+            } catch (error) {
+                document.getElementById('queue-items').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        async function loadItemResults(itemId) {
+            try {
+                const response = await fetch(`${API_BASE}/queue/results/${itemId}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('item-results');
+                let html = `<h3>Results for Item ${itemId}</h3>`;
+                
+                html += '<div style="margin: 10px 0;">';
+                html += `<strong>Store:</strong> ${data.store_name || 'Unknown'}<br>`;
+                html += `<strong>Category:</strong> ${data.category || 'Unknown'}<br>`;
+                html += `<strong>Status:</strong> <span class="status ${data.status}">${data.status}</span><br>`;
+                html += `<strong>Total Products:</strong> ${data.total_products || 0}<br>`;
+                html += `<strong>Processing Time:</strong> ${data.processing_duration_seconds || 'N/A'} seconds<br>`;
+                html += `<strong>Cost:</strong> $${data.api_cost || 0}<br>`;
+                html += '</div>';
+                
+                if (data.products && data.products.length > 0) {
+                    html += '<h4>Products</h4>';
+                    html += '<table class="products-table"><thead><tr>';
+                    html += '<th>Name</th><th>Brand</th><th>Price</th><th>Position</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.products.forEach(product => {
+                        html += '<tr>';
+                        html += `<td>${product.name || 'Unknown'}</td>`;
+                        html += `<td>${product.brand || 'Unknown'}</td>`;
+                        html += `<td>${product.price ? '$' + product.price : '-'}</td>`;
+                        html += `<td>Shelf ${product.shelf || '?'}, Pos ${product.position || '?'}</td>`;
+                        html += '</tr>';
+                    });
+                    
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p>No products found in extraction results</p>';
+                }
+                
+                // Show raw data for debugging
+                html += '<h4>Raw Data (Debug)</h4>';
+                html += '<pre style="background: #f0f0f0; padding: 10px; overflow: auto;">';
+                html += JSON.stringify({
+                    has_extraction_result: !!data.extraction_result,
+                    has_planogram_result: !!data.planogram_result,
+                    products_count: data.products?.length || 0,
+                    extraction_result_keys: data.extraction_result ? Object.keys(data.extraction_result) : []
+                }, null, 2);
+                html += '</pre>';
+                
+                container.innerHTML = html;
+            } catch (error) {
+                document.getElementById('item-results').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        async function createTestData() {
+            const testExtraction = {
+                stages: {
+                    product_v1: {
+                        data: [
+                            {
+                                name: "Coca Cola",
+                                brand: "Coca-Cola",
+                                price: 2.99,
+                                shelf: 1,
+                                position: 1,
+                                facings: 3,
+                                confidence: 0.95
+                            },
+                            {
+                                name: "Pepsi",
+                                brand: "PepsiCo",
+                                price: 2.89,
+                                shelf: 1,
+                                position: 2,
+                                facings: 2,
+                                confidence: 0.92
+                            },
+                            {
+                                name: "Sprite",
+                                brand: "Coca-Cola",
+                                price: 2.79,
+                                shelf: 2,
+                                position: 1,
+                                facings: 2,
+                                confidence: 0.88
+                            }
+                        ]
+                    }
+                },
+                total_products: 3
+            };
+            
+            document.getElementById('test-status').innerHTML = `
+                <p>Test extraction data created with ${testExtraction.stages.product_v1.data.length} products.</p>
+                <p>To use this data:</p>
+                <ol>
+                    <li>Update a queue item in the database with this extraction_result</li>
+                    <li>Refresh this page to see the results</li>
+                </ol>
+                <pre style="background: #f0f0f0; padding: 10px; overflow: auto;">
+UPDATE ai_extraction_queue 
+SET extraction_result = '${JSON.stringify(testExtraction)}'::jsonb
+WHERE id = 9;
+                </pre>
+            `;
+        }
+        
+        // Load items on page load
+        loadQueueItems();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(loadQueueItems, 10000);
+    </script>
+</body>
+</html>

@@ -134,6 +134,16 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             upload_id=upload_id
         )
         
+        # Extract stage configurations from extraction_data
+        if extraction_data and 'stages' in extraction_data:
+            self.stage_configs = extraction_data['stages']
+            logger.info(
+                f"LangGraph configured with {len(self.stage_configs)} stages: {list(self.stage_configs.keys())}",
+                component="langgraph_system"
+            )
+        else:
+            logger.warning("No stage configurations provided to LangGraph system", component="langgraph_system")
+        
         initial_state = LangGraphExtractionState(
             image_data=image_data,
             upload_id=upload_id,
@@ -248,9 +258,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         # Get configured stages from the system
         configured_stages = getattr(self, 'stage_configs', {})
         if not configured_stages:
-            # Fallback to traditional stages if no configuration
-            stages_to_process = ['structure', 'products', 'details']
-            logger.warning("No stage configurations found, using default stages", component="langgraph_system")
+            # NO FALLBACK ALLOWED - MUST HAVE STAGE CONFIGURATIONS
+            logger.error("No stage configurations found - this should never happen!", component="langgraph_system")
+            raise ValueError("No stage configurations found. Check database configuration.")
         else:
             stages_to_process = list(configured_stages.keys())
             logger.info(f"Processing configured stages: {stages_to_process}", component="langgraph_system")
@@ -380,8 +390,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         """Check if all configured stages have been completed"""
         configured_stages = getattr(self, 'stage_configs', {})
         if not configured_stages:
-            # Default stages check
-            required_stages = ['structure', 'products', 'details']
+            # NO FALLBACK ALLOWED - MUST HAVE STAGE CONFIGURATIONS
+            logger.error("No stage configurations found during completion check - this should never happen!", component="langgraph_system")
+            raise ValueError("No stage configurations found. Check database configuration.")
         else:
             required_stages = list(configured_stages.keys())
         
@@ -689,9 +700,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             
             # Basic validation: check if we have data
             has_structure = bool(structure)
-            has_positions = len(positions) > 0 if isinstance(positions, (dict, list)) else False
-            has_quantities = len(quantities) > 0 if isinstance(quantities, (dict, list)) else False
-            has_details = len(details) > 0 if isinstance(details, (dict, list)) else False
+            has_positions = bool(positions) and len(positions) > 0 if positions and isinstance(positions, (dict, list)) else False
+            has_quantities = bool(quantities) and len(quantities) > 0 if quantities and isinstance(quantities, (dict, list)) else False
+            has_details = bool(details) and len(details) > 0 if details and isinstance(details, (dict, list)) else False
             
             # Calculate accuracy based on what we have
             components = [has_structure, has_positions, has_quantities, has_details]
@@ -748,8 +759,8 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             issues.append({'type': 'missing_structure', 'severity': 'high'})
         
         # Check positions
-        positions = state.get('position_consensus', {})
-        if len(positions) < 10:  # Expecting at least 10 products
+        positions = state.get('position_consensus', {}) or {}
+        if positions and len(positions) < 10:  # Expecting at least 10 products
             issues.append({
                 'type': 'low_product_count',
                 'found': len(positions),
@@ -974,12 +985,25 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         # Get results from new stage-based structure
         stage_results = state.get('stage_results', {})
         
+        # Convert products list to positions dict if needed
+        products_data = stage_results.get('products', state.get('position_consensus', {}))
+        if isinstance(products_data, list):
+            # Convert list of products to positions dictionary
+            positions_dict = {}
+            for product in products_data:
+                if isinstance(product, dict):
+                    shelf = product.get('shelf', 1)
+                    position = product.get('position', 1)
+                    key = f"shelf_{shelf}_pos_{position}"
+                    positions_dict[key] = product
+            products_data = positions_dict
+        
         return ExtractionResult(
             system_type="langgraph",
             upload_id=state['upload_id'],
             structure=stage_results.get('structure', state.get('structure_consensus', {})),
-            positions=stage_results.get('products', state.get('position_consensus', {})),
-            quantities=state.get('quantity_consensus', {}),  # Keep existing for backward compatibility
+            positions=products_data,
+            quantities=state.get('quantity_consensus') or {},  # Keep existing for backward compatibility
             details=stage_results.get('details', state.get('detail_consensus', {})),
             overall_accuracy=accuracy,
             consensus_reached=avg_consensus_rate >= 0.7,
@@ -1095,45 +1119,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             )
             return DynamicModelBuilder.build_model_from_config(stage, stage_config)
         
-        # Fallback to basic structured schemas
-        from pydantic import BaseModel, Field
-        from typing import List, Optional
-        
-        logger.info(f"No field configuration found for {stage}, using basic fallback schema", component="langgraph_system")
-        
-        if stage == 'structure':
-            class BasicStructure(BaseModel):
-                shelf_count: int = Field(description="Total number of shelves")
-                orientation: Optional[str] = Field(description="Shelf orientation", default="vertical")
-                shelf_details: Optional[List[dict]] = Field(description="Details about each shelf", default=[])
-            return BasicStructure
-            
-        elif stage == 'products':
-            class BasicProduct(BaseModel):
-                brand: str = Field(description="Product brand name")
-                name: str = Field(description="Product name")
-                shelf: int = Field(description="Shelf number (1-based)")
-                position: int = Field(description="Position on shelf (1-based)")
-                facings: Optional[int] = Field(description="Number of facings", default=1)
-                color: Optional[str] = Field(description="Primary package color", default="")
-            
-            class BasicProducts(BaseModel):
-                products: List[BasicProduct] = Field(description="List of all products found")
-                total_products: int = Field(description="Total number of products")
-            return BasicProducts
-            
-        elif stage == 'details':
-            class BasicDetails(BaseModel):
-                product_details: List[dict] = Field(description="Enhanced product details", default=[])
-                completeness_score: Optional[float] = Field(description="Completeness score", default=0.8)
-            return BasicDetails
-            
-        else:
-            # Generic fallback
-            class BasicResult(BaseModel):
-                data: dict = Field(description="Extracted data")
-                status: str = Field(description="Extraction status", default="complete")
-            return BasicResult
+        # NO FALLBACK SCHEMAS - MUST HAVE FIELD CONFIGURATION
+        logger.error(f"No field configuration found for {stage} - this should never happen!", component="langgraph_system")
+        raise ValueError(f"No field definitions found for stage {stage}. Check database configuration.")
     
     def _extract_shelf_count_from_result(self, result) -> int:
         """Extract shelf count from extraction result"""
@@ -1309,7 +1297,7 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         # Get configuration for this stage
         stage_config = getattr(self, 'stage_configs', {}).get(stage, {})
         
-        # Build dynamic model from user's field definitions
+        # Build dynamic model from user's field definitions - NO FALLBACKS ALLOWED
         output_schema = None
         if stage_config and 'fields' in stage_config:
             logger.info(
@@ -1320,8 +1308,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             )
             output_schema = DynamicModelBuilder.build_model_from_config(stage, stage_config)
         else:
-            # Use the basic schemas
-            output_schema = self._get_output_schema_for_stage(stage)
+            # NO FALLBACK SCHEMAS - MUST HAVE FIELD CONFIGURATION
+            logger.error(f"No field configuration found for LangGraph {stage} stage - this should never happen!", component="langgraph_system")
+            raise ValueError(f"No field definitions found for stage {stage}. Check database configuration.")
         
         # Use the actual extraction engine
         result, cost = await self.extraction_engine.execute_with_model_id(
@@ -1339,6 +1328,14 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         if hasattr(result, 'model_dump'):
             # Convert Pydantic model to dict
             return result.model_dump()
+        elif isinstance(result, list):
+            # Handle list results (e.g., products returned as array from fallback)
+            if stage == 'products':
+                # For products stage, a list is expected from the fallback
+                return result
+            else:
+                logger.warning(f"Unexpected list result for {stage} stage", component="langgraph_system")
+                return result
         elif isinstance(result, dict):
             return result
         else:
@@ -1497,7 +1494,9 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
             
             return best_result or {'shelf_count': most_common_count}
         
-        return {'shelf_count': 4}  # Default fallback
+        # No fallback - return error structure if no results
+        logger.error("No structure model results available for consensus", component="langgraph_system")
+        raise ValueError("No structure extraction results available for consensus")
     
     async def _consensus_products_langgraph(self, model_results: List[Dict]) -> List[Dict]:
         """Apply consensus for products using position voting"""
@@ -1508,9 +1507,22 @@ class LangGraphConsensusSystem(BaseExtractionSystem):
         for result in model_results:
             products = result['result']
             if isinstance(products, list):
-                all_products.extend(products)
-            elif isinstance(products, dict) and 'products' in products:
-                all_products.extend(products['products'])
+                # Direct list of products (from fallback or proper extraction)
+                for prod in products:
+                    if isinstance(prod, dict):
+                        all_products.append(prod)
+                    elif hasattr(prod, 'model_dump'):
+                        # Pydantic model instance
+                        all_products.append(prod.model_dump())
+            elif isinstance(products, dict):
+                if 'products' in products:
+                    # Wrapped in products key
+                    prod_list = products['products']
+                    if isinstance(prod_list, list):
+                        all_products.extend(prod_list)
+                else:
+                    # Single product as dict
+                    all_products.append(products)
         
         # Simple deduplication by position
         position_map = {}

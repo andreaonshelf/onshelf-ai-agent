@@ -282,6 +282,187 @@
         }
         
         /* Results Page Styles */
+        .results-page-wrapper {
+            display: flex;
+            gap: 20px;
+            height: 100%;
+        }
+        
+        .results-sidebar {
+            width: 320px;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .results-sidebar.collapsed {
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .sidebar-toggle {
+            position: absolute;
+            right: -20px;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-toggle:hover {
+            background: #f1f5f9;
+            transform: scale(1.1);
+        }
+        
+        .sidebar-toggle.collapsed {
+            right: -30px;
+        }
+        
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.05em;
+        }
+        
+        .filter-group {
+            margin-bottom: 16px;
+        }
+        
+        .filter-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #475569;
+        }
+        
+        .filter-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .date-range-inputs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .date-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .extraction-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .extraction-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .extraction-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+        }
+        
+        .extraction-item.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        
+        .extraction-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        
+        .extraction-item-title {
+            font-weight: 500;
+            font-size: 14px;
+            color: #1e293b;
+        }
+        
+        .extraction-item-date {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .extraction-item-details {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .extraction-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .results-main-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .results-sidebar {
+                width: 280px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .results-sidebar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                z-index: 100;
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            }
+            
+            .results-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         .results-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -3043,6 +3224,19 @@
             const [loading, setLoading] = useState(false);
             const [corrections, setCorrections] = useState({});
             const [showCorrectionModal, setShowCorrectionModal] = useState(null);
+            const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+            const [extractionsList, setExtractionsList] = useState([]);
+            const [filters, setFilters] = useState({
+                status: 'all',
+                store: 'all',
+                category: 'all',
+                dateFrom: '',
+                dateTo: '',
+                sortBy: 'date_desc'
+            });
+            const [availableStores, setAvailableStores] = useState([]);
+            const [availableCategories, setAvailableCategories] = useState([]);
+            const [sidebarLoading, setSidebarLoading] = useState(true);
             
             // Check URL hash for item ID
             useEffect(() => {
@@ -3069,6 +3263,53 @@
                 window.addEventListener('hashchange', checkUrlHash);
                 return () => window.removeEventListener('hashchange', checkUrlHash);
             }, []);
+            
+            // Fetch extractions list
+            useEffect(() => {
+                fetchExtractionsList();
+                // Refresh list every 10 seconds
+                const interval = setInterval(fetchExtractionsList, 10000);
+                return () => clearInterval(interval);
+            }, [filters]);
+            
+            const fetchExtractionsList = async () => {
+                setSidebarLoading(true);
+                try {
+                    // Build query params based on filters
+                    const params = new URLSearchParams();
+                    if (filters.status !== 'all') params.append('status', filters.status);
+                    if (filters.store !== 'all') params.append('store_name', filters.store);
+                    if (filters.category !== 'all') params.append('category', filters.category);
+                    if (filters.dateFrom) params.append('date_from', filters.dateFrom);
+                    if (filters.dateTo) params.append('date_to', filters.dateTo);
+                    params.append('limit', '100');
+                    
+                    const response = await fetch(`${API_BASE}/queue/items?${params}`);
+                    const data = await response.json();
+                    
+                    // Sort the items based on filter
+                    let sortedItems = [...(data.items || [])];
+                    if (filters.sortBy === 'date_desc') {
+                        sortedItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    } else if (filters.sortBy === 'date_asc') {
+                        sortedItems.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    } else if (filters.sortBy === 'store') {
+                        sortedItems.sort((a, b) => (a.store_name || '').localeCompare(b.store_name || ''));
+                    }
+                    
+                    setExtractionsList(sortedItems);
+                    
+                    // Extract unique stores and categories for filters
+                    const stores = [...new Set(sortedItems.map(item => item.store_name).filter(Boolean))];
+                    const categories = [...new Set(sortedItems.map(item => item.category).filter(Boolean))];
+                    setAvailableStores(stores);
+                    setAvailableCategories(categories);
+                } catch (error) {
+                    console.error('Failed to fetch extractions list:', error);
+                } finally {
+                    setSidebarLoading(false);
+                }
+            };
             
             const fetchFirstCompletedItem = async () => {
                 try {
@@ -3146,6 +3387,25 @@
                 });
             };
             
+            const formatTimestamp = (timestamp) => {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                
+                if (diffHours < 1) {
+                    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                    return `${diffMinutes}m ago`;
+                } else if (diffHours < 24) {
+                    return `${diffHours}h ago`;
+                } else if (diffDays < 7) {
+                    return `${diffDays}d ago`;
+                } else {
+                    return date.toLocaleDateString();
+                }
+            };
+            
             if (loading) {
                 return (
                     <div className="loading">
@@ -3158,14 +3418,225 @@
             // Always show the structure, even without results
             
             return (
-                <div className="results-page">
-                    <div className="card">
-                        <div className="card-header">
-                            {results ? 
-                                `${results?.store_name || 'Unknown Store'} - ${results?.category || 'Unknown Category'} | Completed ${results?.completed_time || 'N/A'}` :
-                                'Results View - Select an item from the queue to process'
-                            }
+                <div className="results-page-wrapper">
+                    {/* Sidebar */}
+                    <div className={`results-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+                        <div 
+                            className={`sidebar-toggle ${sidebarCollapsed ? 'collapsed' : ''}`}
+                            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                            title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                        >
+                            {sidebarCollapsed ? '→' : '←'}
                         </div>
+                        
+                        {!sidebarCollapsed && (
+                            <>
+                                {/* Filters Section */}
+                                <div className="sidebar-section">
+                                    <h3>Filters</h3>
+                                    
+                                    {(filters.status !== 'all' || filters.store !== 'all' || filters.category !== 'all' || 
+                                      filters.dateFrom || filters.dateTo || filters.sortBy !== 'date_desc') && (
+                                        <button
+                                            onClick={() => setFilters({
+                                                status: 'all',
+                                                store: 'all',
+                                                category: 'all',
+                                                dateFrom: '',
+                                                dateTo: '',
+                                                sortBy: 'date_desc'
+                                            })}
+                                            style={{
+                                                fontSize: '12px',
+                                                color: '#3b82f6',
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                marginBottom: '12px',
+                                                textDecoration: 'underline'
+                                            }}
+                                        >
+                                            Clear all filters
+                                        </button>
+                                    )}
+                                    
+                                    <div className="filter-group">
+                                        <label>Status</label>
+                                        <select 
+                                            className="filter-select"
+                                            value={filters.status}
+                                            onChange={(e) => setFilters({...filters, status: e.target.value})}
+                                        >
+                                            <option value="all">All Status</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="processing">Processing</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="failed">Failed</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Store</label>
+                                        <select 
+                                            className="filter-select"
+                                            value={filters.store}
+                                            onChange={(e) => setFilters({...filters, store: e.target.value})}
+                                        >
+                                            <option value="all">All Stores</option>
+                                            {availableStores.map(store => (
+                                                <option key={store} value={store}>{store}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Category</label>
+                                        <select 
+                                            className="filter-select"
+                                            value={filters.category}
+                                            onChange={(e) => setFilters({...filters, category: e.target.value})}
+                                        >
+                                            <option value="all">All Categories</option>
+                                            {availableCategories.map(category => (
+                                                <option key={category} value={category}>{category}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Date Range</label>
+                                        <div className="date-range-inputs">
+                                            <input 
+                                                type="date" 
+                                                className="date-input"
+                                                value={filters.dateFrom}
+                                                onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+                                                placeholder="From"
+                                            />
+                                            <input 
+                                                type="date" 
+                                                className="date-input"
+                                                value={filters.dateTo}
+                                                onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+                                                placeholder="To"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="filter-group">
+                                        <label>Sort By</label>
+                                        <select 
+                                            className="filter-select"
+                                            value={filters.sortBy}
+                                            onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+                                        >
+                                            <option value="date_desc">Newest First</option>
+                                            <option value="date_asc">Oldest First</option>
+                                            <option value="store">Store Name</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                {/* Extractions List */}
+                                <div className="sidebar-section">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                        <h3 style={{ margin: 0 }}>Extractions ({extractionsList.length})</h3>
+                                        <button
+                                            onClick={() => fetchExtractionsList()}
+                                            disabled={sidebarLoading}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: sidebarLoading ? 'not-allowed' : 'pointer',
+                                                color: '#64748b',
+                                                fontSize: '14px',
+                                                padding: '4px',
+                                                borderRadius: '4px',
+                                                transition: 'background 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.background = '#f1f5f9'}
+                                            onMouseLeave={(e) => e.target.style.background = 'none'}
+                                            title="Refresh list"
+                                        >
+                                            🔄
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="extraction-list">
+                                        {sidebarLoading ? (
+                                            <div style={{ 
+                                                textAlign: 'center', 
+                                                color: '#64748b', 
+                                                padding: '20px',
+                                                fontSize: '14px'
+                                            }}>
+                                                <div className="spinner" style={{ margin: '0 auto 8px' }}></div>
+                                                Loading extractions...
+                                            </div>
+                                        ) : extractionsList.map(item => (
+                                            <div 
+                                                key={item.id}
+                                                className={`extraction-item ${selectedItemId === item.id ? 'selected' : ''}`}
+                                                onClick={() => {
+                                                    setSelectedItemId(item.id);
+                                                    fetchResults(item.id);
+                                                }}
+                                            >
+                                                <div className="extraction-item-header">
+                                                    <div className="extraction-item-title">
+                                                        {item.store_name || 'Unknown Store'}
+                                                    </div>
+                                                    <div className="extraction-item-date">
+                                                        {formatTimestamp(item.created_at)}
+                                                    </div>
+                                                </div>
+                                                <div className="extraction-item-details">
+                                                    <div className="extraction-stat">
+                                                        <span>{item.category || 'N/A'}</span>
+                                                    </div>
+                                                    <div className="extraction-stat">
+                                                        <span style={{
+                                                            color: item.status === 'completed' ? '#16a34a' :
+                                                                   item.status === 'failed' ? '#dc2626' :
+                                                                   item.status === 'processing' ? '#f59e0b' : '#64748b'
+                                                        }}>
+                                                            {item.status}
+                                                        </span>
+                                                    </div>
+                                                    {item.status === 'completed' && item.extraction_results && (
+                                                        <div className="extraction-stat">
+                                                            <span>{item.extraction_results.total_products || 0} products</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        
+                                        {extractionsList.length === 0 && (
+                                            <div style={{ 
+                                                textAlign: 'center', 
+                                                color: '#64748b', 
+                                                padding: '20px',
+                                                fontSize: '14px'
+                                            }}>
+                                                No extractions found
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                    
+                    {/* Main Content */}
+                    <div className="results-main-content">
+                        <div className="card">
+                            <div className="card-header">
+                                {results ? 
+                                    `${results?.store_name || 'Unknown Store'} - ${results?.category || 'Unknown Category'} | Completed ${results?.completed_time || 'N/A'}` :
+                                    'Results View - Select an item from the sidebar to view details'
+                                }
+                            </div>
                         
                         <div className="results-container">
                             <div className="image-container">
@@ -3570,6 +4041,7 @@
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
             );
         };
@@ -4419,6 +4891,10 @@
             const [runDetails, setRunDetails] = useState(null);
             const [loading, setLoading] = useState(true);
             const [timeRange, setTimeRange] = useState('7d');
+            const [activeDetailsTab, setActiveDetailsTab] = useState('timeline');
+            const [logs, setLogs] = useState([]);
+            const [logsLoading, setLogsLoading] = useState(false);
+            const [autoRefresh, setAutoRefresh] = useState(true);
             
             useEffect(() => {
                 fetchExtractionRuns();
@@ -4473,6 +4949,36 @@
                 };
                 return colors[stage] || '#6b7280';
             };
+            
+            const fetchLogs = async (runId) => {
+                if (!runId) return;
+                
+                setLogsLoading(true);
+                try {
+                    // Extract queue ID from run ID (format: queue_9)
+                    const queueId = runId.replace('queue_', '');
+                    const response = await fetch(`${API_BASE}/diagnostics/extraction-logs/${queueId}?lines=100`);
+                    const data = await response.json();
+                    setLogs(data.logs || []);
+                } catch (error) {
+                    console.error('Failed to fetch logs:', error);
+                    setLogs([]);
+                } finally {
+                    setLogsLoading(false);
+                }
+            };
+            
+            // Auto-refresh effect for logs
+            useEffect(() => {
+                if (activeDetailsTab === 'logs' && selectedRun && autoRefresh) {
+                    fetchLogs(selectedRun);
+                    const interval = setInterval(() => {
+                        fetchLogs(selectedRun);
+                    }, 3000); // Refresh every 3 seconds
+                    
+                    return () => clearInterval(interval);
+                }
+            }, [activeDetailsTab, selectedRun, autoRefresh]);
             
             return (
                 <div className="diagnostics-page">
@@ -4529,8 +5035,25 @@
                         <div className="run-details">
                             {runDetails ? (
                                 <>
-                                    <h3>Extraction Flow Timeline</h3>
-                                    <div className="timeline-container">
+                                    <div className="details-tabs">
+                                        <button 
+                                            className={activeDetailsTab === 'timeline' ? 'active' : ''}
+                                            onClick={() => setActiveDetailsTab('timeline')}
+                                        >
+                                            Extraction Timeline
+                                        </button>
+                                        <button 
+                                            className={activeDetailsTab === 'logs' ? 'active' : ''}
+                                            onClick={() => setActiveDetailsTab('logs')}
+                                        >
+                                            Live Logs
+                                        </button>
+                                    </div>
+                                    
+                                    {activeDetailsTab === 'timeline' && (
+                                        <>
+                                            <h3>Extraction Flow Timeline</h3>
+                                            <div className="timeline-container">
                                         {runDetails.iterations && runDetails.iterations.length > 0 ? (
                                             runDetails.iterations.map((iteration, idx) => (
                                             <div key={iteration.id} className="timeline-item">
@@ -4592,14 +5115,61 @@
                                         )}
                                     </div>
                                     
-                                    <h3>Visual Feedback Impact</h3>
-                                    <div className="feedback-analysis">
-                                        {runDetails.visual_feedback_summary && (
-                                            <div className="feedback-chart">
-                                                <canvas id="feedbackChart"></canvas>
+                                            <h3>Visual Feedback Impact</h3>
+                                            <div className="feedback-analysis">
+                                                {runDetails.visual_feedback_summary && (
+                                                    <div className="feedback-chart">
+                                                        <canvas id="feedbackChart"></canvas>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </>
+                                    )}
+                                    
+                                    {activeDetailsTab === 'logs' && (
+                                        <div className="logs-container">
+                                            <div className="logs-header">
+                                                <h3>Live Extraction Logs</h3>
+                                                <div className="logs-controls">
+                                                    <label>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={autoRefresh}
+                                                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                                                        />
+                                                        Auto-refresh
+                                                    </label>
+                                                    <button onClick={() => fetchLogs(selectedRun)}>
+                                                        Refresh Now
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="logs-view">
+                                                {logsLoading ? (
+                                                    <div className="loading">Loading logs...</div>
+                                                ) : logs.length > 0 ? (
+                                                    logs.map((log, idx) => (
+                                                        <div key={idx} className={`log-entry log-${log.level}`}>
+                                                            <span className="log-time">{log.time}</span>
+                                                            <span className="log-level">{log.level}</span>
+                                                            <span className="log-component">[{log.component}]</span>
+                                                            <span className="log-message">{log.message}</span>
+                                                            {log.extra && Object.keys(log.extra).length > 0 && (
+                                                                <div className="log-extra">
+                                                                    {Object.entries(log.extra).map(([k, v]) => (
+                                                                        <span key={k}>{k}: {v}</span>
+                                                                    )).join(' | ')}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="no-logs">No logs found for this extraction run</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <div className="no-selection">
@@ -4609,7 +5179,7 @@
                         </div>
                     </div>
                     
-                    <style jsx>{`
+                    <style>{`
                         .diagnostics-page {
                             padding: 20px;
                         }
@@ -4775,6 +5345,144 @@
                             font-size: 12px;
                             max-height: 300px;
                             overflow-y: auto;
+                        }
+                        
+                        /* Logs styles */
+                        .details-tabs {
+                            display: flex;
+                            gap: 10px;
+                            margin-bottom: 20px;
+                            border-bottom: 2px solid #e2e8f0;
+                        }
+                        
+                        .details-tabs button {
+                            padding: 10px 20px;
+                            background: none;
+                            border: none;
+                            cursor: pointer;
+                            color: #64748b;
+                            font-weight: 500;
+                            transition: all 0.2s;
+                        }
+                        
+                        .details-tabs button.active {
+                            color: #3b82f6;
+                            border-bottom: 2px solid #3b82f6;
+                            margin-bottom: -2px;
+                        }
+                        
+                        .logs-container {
+                            height: 100%;
+                            display: flex;
+                            flex-direction: column;
+                        }
+                        
+                        .logs-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 20px;
+                        }
+                        
+                        .logs-controls {
+                            display: flex;
+                            gap: 15px;
+                            align-items: center;
+                        }
+                        
+                        .logs-controls label {
+                            display: flex;
+                            align-items: center;
+                            gap: 5px;
+                            color: #64748b;
+                        }
+                        
+                        .logs-controls button {
+                            padding: 6px 12px;
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                        }
+                        
+                        .logs-view {
+                            flex: 1;
+                            background: #f8fafc;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 6px;
+                            padding: 12px;
+                            overflow-y: auto;
+                            font-family: 'Monaco', 'Consolas', monospace;
+                            font-size: 12px;
+                        }
+                        
+                        .log-entry {
+                            margin-bottom: 8px;
+                            padding: 6px 10px;
+                            border-radius: 4px;
+                            background: white;
+                            border: 1px solid #e2e8f0;
+                        }
+                        
+                        .log-entry.log-ERROR {
+                            background: #fee2e2;
+                            border-color: #fca5a5;
+                        }
+                        
+                        .log-entry.log-WARNING {
+                            background: #fef3c7;
+                            border-color: #fcd34d;
+                        }
+                        
+                        .log-time {
+                            color: #6b7280;
+                            margin-right: 10px;
+                        }
+                        
+                        .log-level {
+                            font-weight: bold;
+                            margin-right: 10px;
+                            padding: 2px 6px;
+                            border-radius: 3px;
+                            font-size: 11px;
+                        }
+                        
+                        .log-entry.log-ERROR .log-level {
+                            background: #dc2626;
+                            color: white;
+                        }
+                        
+                        .log-entry.log-WARNING .log-level {
+                            background: #f59e0b;
+                            color: white;
+                        }
+                        
+                        .log-entry.log-INFO .log-level {
+                            background: #10b981;
+                            color: white;
+                        }
+                        
+                        .log-component {
+                            color: #8b5cf6;
+                            margin-right: 10px;
+                        }
+                        
+                        .log-message {
+                            color: #1f2937;
+                        }
+                        
+                        .log-extra {
+                            margin-top: 4px;
+                            padding-left: 20px;
+                            color: #6b7280;
+                            font-size: 11px;
+                        }
+                        
+                        .no-logs {
+                            text-align: center;
+                            color: #6b7280;
+                            padding: 40px;
                         }
                     `}</style>
                 </div>

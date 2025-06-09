@@ -604,7 +604,7 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
             )
             dynamic_model = DynamicModelBuilder.build_model_from_config(stage, stage_config)
         
-        # Determine output schema
+        # Determine output schema - NO FALLBACKS ALLOWED
         if dynamic_model:
             # Use the dynamic model built from user's fields
             output_schema = dynamic_model
@@ -614,21 +614,16 @@ class CustomConsensusVisualSystem(CustomConsensusSystem):
                 model_name=dynamic_model.__name__
             )
         else:
-            # Fallback to generic schemas (should not happen with proper config)
-            logger.warning(
-                f"❌ No dynamic model built for stage {stage} - no field definitions found",
+            # NO FALLBACK SCHEMAS - MUST HAVE FIELD CONFIGURATION
+            logger.error(
+                f"No field configuration found for {stage} stage - this should never happen!",
                 component="custom_consensus_visual",
                 stage=stage,
                 has_stage_config=bool(stage_config),
                 stage_config_keys=list(stage_config.keys()) if stage_config else [],
                 has_fields=bool(stage_config.get('fields')) if stage_config else False
             )
-            if stage == 'structure':
-                output_schema = 'Dict[str, Any]'
-            elif stage == 'products':
-                output_schema = 'List[Dict[str, Any]]'
-            else:  # details
-                output_schema = 'Dict[str, Any]'
+            raise ValueError(f"No field definitions found for stage {stage}. Check database configuration.")
         
         # Use the actual extraction engine
         result, cost = await self.extraction_engine.execute_with_model_id(
